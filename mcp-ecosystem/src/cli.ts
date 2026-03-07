@@ -20,7 +20,7 @@ const program = new Command();
 program
   .name("mcp-ecosystem")
   .description(
-    "Provisioning and runtime tooling for a personal MCP ecosystem backed by Auth0"
+    "Provisioning and runtime tooling for a personal MCP ecosystem that uses Auth0 for OAuth"
   )
   .version("0.1.0")
   .option("-d, --dir <path>", "Root directory of the ecosystem", ".")
