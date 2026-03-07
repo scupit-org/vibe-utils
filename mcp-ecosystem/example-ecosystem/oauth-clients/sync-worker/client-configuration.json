@@ -1,0 +1,15 @@
+{
+  "client_key": "sync-worker",
+  "display_name": "Sync Worker",
+  "descriptor": "service-worker",
+  "profile": "service_m2m",
+  "auth0": {
+    "create_if_missing": true
+  },
+  "application_settings": {
+    "token_endpoint_auth_method": "client_secret_post"
+  },
+  "token_settings": {
+    "use_refresh_tokens": false
+  }
+}

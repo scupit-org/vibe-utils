@@ -1,0 +1,13 @@
+{
+  "descriptor_key": "service-worker",
+  "display_name": "Background Service Worker",
+  "profile": "service_m2m",
+  "access_mode": "machine",
+  "supports_pkce": false,
+  "supports_device_flow": false,
+  "requires_refresh_tokens": false,
+  "callback_urls": [],
+  "logout_urls": [],
+  "web_origins": [],
+  "reuse_policy": "never_share"
+}

@@ -1,0 +1,212 @@
+# Updates to the Guide and Provisioning Contract
+
+This document records every deviation between the original `guide-and-provisioning-contract.md` specification and the actual implementation in `@scupit/mcp-ecosystem`. Each entry explains what the guide said, what we did instead, and why.
+
+The guide itself has been partially updated (sections 6, 7.4, 20.3) to reflect structural changes, but the rest of the guide remains as-written. This document is the canonical record of all differences.
+
+---
+
+## Structural / architectural changes
+
+### 1. Tool vs ecosystem separation
+
+**Guide assumed:** A single repository where the provisioning script and ecosystem config files live together.
+
+**Implementation:** The toolkit is an npm package (`@scupit/mcp-ecosystem`) with its own `src/`, `package.json`, and `dist/`. User ecosystem configs live in a completely separate directory. The CLI operates on an ecosystem via `--dir <path>`.
+
+**Why:** Making the tool reusable across many ecosystems required separating the tool from the data it operates on. The tool is generic and publishable; ecosystem configs are personal and portable. An `example-ecosystem/` directory in the repo demonstrates the expected layout.
+
+### 2. MCP servers live under `mcps/`
+
+**Guide originally said (section 6):** Server folders at the ecosystem root (`files/`, `git/`, `calendar/`).
+
+**Implementation:** All server directories are under `mcps/` (`mcps/files/`, `mcps/git/`).
+
+**Why:** The flat layout becomes unworkable with more than a handful of servers. Client descriptors and OAuth client folders are already namespaced (`client-descriptors/`, `oauth-clients/`), so servers should be too. The guide's section 6, 7.4, and 20.3 have been updated to reflect this.
+
+### 3. Runtime config derived at startup (no generated file)
+
+**Guide said (section 16 Phase 5):** "Generate any runtime config file your MCP server needs" without specifying a format.
+
+**Implementation:** Rather than generating a static `runtime-config.generated.json` file, `createMcpServer(import.meta.url)` derives the `RuntimeConfig` at startup by reading the source configs (`ecosystem-configuration.json` + `mcp-configuration.json`) and applying the standard derivation functions internally.
+
+**Why:** A generated file is an unnecessary intermediary — it introduces staleness risk (ecosystem config changes but `generate-artifacts` isn't re-run) and bakes deployment-dependent values (tenant domain) into files. Since the toolkit already exports the derivation functions and the MCP servers already depend on the toolkit, deriving at startup is simpler, always fresh, and eliminates a whole class of "forgot to regenerate" bugs.
+
+### 4. Server bootstrap as `@scupit/mcp-ecosystem/server`
+
+**Guide said (section 14):** The MCP server must implement Protected Resource Metadata, 401 challenges, and token validation. No reusable bootstrap was specified.
+
+**Implementation:** `createMcpServer()` wires the selected MCP transport, Protected Resource Metadata, and auth/runtime bootstrap into a single function call. Exported as a subpath import: `import { ... } from "@scupit/mcp-ecosystem/server"`.
+
+**Why:** Every MCP server needs the same HTTP boilerplate, auth middleware, and metadata endpoint. Extracting this into the package prevents copy-paste drift and makes new server creation a 10-line file.
+
+---
+
+## Auth0 provisioning changes
+
+### 5. `managed_by` metadata value
+
+**Guide said (section 18):** `managed_by = mcp-ecosystem-script`
+
+**Implementation:** `managed_by = @scupit/mcp-ecosystem`
+
+**Why:** The guide was written before the package was scoped. Using the real package name makes the metadata tag more useful for identifying which tool owns the Auth0 objects.
+
+### 6. Access policy reconciliation is direct
+
+**Guide said (section 12.2):** "Immediately reconcile API access policy" to `subject_type_authorization` values.
+
+**Implementation:** Sends `subject_type_authorization` directly in the Auth0 Management API update for the resource server.
+
+**Why:** The current implementation treats access policy as part of normal desired-state reconciliation and updates it through the Management API alongside the other API settings.
+
+### 7. Management token scope verification not proactive
+
+**Guide said (sections 9.3, 15.2):** "Verify it has enough scopes for the operations it plans to perform" and "fail fast if required scopes are missing."
+
+**Implementation:** Acquires a Management API token but does not introspect its scopes before use. If a scope is missing, Auth0 returns a 403 which surfaces as an `Auth0ApiError`.
+
+**Why:** Token introspection would require decoding the management JWT and mapping each planned operation to its required Auth0 scope, which is non-trivial. The current behavior is functionally correct -- missing scopes produce clear errors -- but it's reactive rather than proactive.
+
+### 8. Authentication flow
+
+**Guide said (section 16 Phase 1):** "Authenticate to Management API" as a discrete step.
+
+**Implementation:** `verifyTenant()` owns its own `authenticate()` call internally. Other commands trigger auto-authentication via `ensureAuthenticated()` in the Management client, which re-authenticates when the token is expired or absent.
+
+**Why:** The token auto-refresh mechanism makes explicit authentication calls mostly unnecessary. `verifyTenant` is the only function that explicitly calls `authenticate()` because it's the natural first-contact point with Auth0.
+
+---
+
+## Data model changes
+
+### 9. Cursor callback URL corrected
+
+**Guide said (section 7.2):** `http://127.0.0.1:45123/callback` as the callback URL for the cursor-like descriptor.
+
+**Implementation:** `cursor://anysphere.cursor-mcp/oauth/callback`
+
+**Why:** The guide's URL was a placeholder. Cursor's documentation specifies a fixed redirect URI using the `cursor://` custom scheme. Corrected after cross-referencing with Cursor's actual MCP client documentation.
+
+### 10. Single-character slugs allowed
+
+**Guide said (section 7.4):** "Slug should be DNS-safe, lowercase, and hyphenated" with no explicit minimum length beyond "explicitly supplied."
+
+**Implementation:** Regex `^[a-z]([a-z0-9-]*[a-z0-9])?$` allows single characters like `a`.
+
+**Why:** A DNS label can be a single character. There's no reason to artificially require 2+ characters.
+
+---
+
+## Guide features not implemented
+
+### 11. No `--apply` mode distinction
+
+**Guide said (section 16 Phase 5):** "The script should never silently overwrite human-edited custom fields unless it is operating in an explicit `--apply` or reconciliation mode."
+
+**Implementation:** Every run is a reconciliation. The `--dry-run` flag provides the safety valve.
+
+**Why:** The reconciliation-by-default approach is simpler and matches how the tool is actually used. Adding a separate `--apply` mode would add complexity without clear benefit for a personal ecosystem tool.
+
+### 12. `add-scope` does not auto-patch grants
+
+**Guide said (section 21.5):** "Optionally patch grants if the new scope should be granted to specific clients."
+
+**Implementation:** `add-scope` updates local config and Auth0 API scopes but does not automatically add the new scope to existing client grants.
+
+**Why:** Automatically adding a new scope to grants is a policy decision that shouldn't be implicit. The user should explicitly run `grant-client` or `reconcile-server` to update grants.
+
+### 13. No explicit drift detection report
+
+**Guide said (section 17 Rule 3):** "Treat local config as the desired state" (implies drift detection).
+
+**Implementation:** Reconciles toward the desired state but doesn't produce a separate drift report.
+
+**Why:** Reconciliation *is* drift correction. The `--dry-run` mode partially serves the "show me what's different" purpose. A dedicated drift report command would be a useful future addition.
+
+---
+
+## Features added beyond the guide
+
+### 14. `generate-artifacts` as a standalone command
+
+**Guide said:** Artifact generation is part of the Phase 5 workflow.
+
+**Implementation:** First-class CLI command that works without Auth0 credentials.
+
+**Why:** Generating `.env.example` is useful independently of Auth0 provisioning, especially during initial setup.
+
+### 15. Auth opt-out for local development
+
+**Guide said (section 14):** MCP servers must validate tokens (no opt-out mentioned).
+
+**Implementation:** `createMcpServer()` accepts `{ transport: { ..., auth: { enabled: false } } }` to skip token validation for local development on HTTP transports.
+
+**Why:** Local development and testing require running servers without a real Auth0 tenant. The startup banner prints a warning when auth is disabled.
+
+### 16. Management token auto-refresh
+
+**Guide said (section 9.3):** "Obtain a Management API access token before any provisioning operation."
+
+**Implementation:** The Management client stores `expires_in` from the token response and automatically re-authenticates when the token is expired or within 60 seconds of expiry.
+
+**Why:** Long-running `reconcile-all` operations could outlive the token's TTL. Auto-refresh prevents silent failures partway through.
+
+### 17. `client_id` write-back to local config
+
+**Guide said (section 16 Phase 2 step 6):** "Persist `existing_client_id` or created `client_id` back into local config if desired."
+
+**Implementation:** After creating or reusing an Auth0 Application, the `client_id` is written to the root `.env` managed block so subsequent runs use a direct lookup.
+
+**Why:** Without write-back, every run searches Auth0 by metadata. With the managed `.env` cache, the second run is a fast direct fetch while keeping the value in a tool-owned location.
+
+### 18. Stale grant cleanup
+
+**Guide said (section 16 Phase 4 step 5):** "Optionally remove stale grants that are no longer declared."
+
+**Implementation:** After reconciling grants, `reconcile-server` lists existing grants for the audience and removes any that aren't in the desired set.
+
+**Why:** Without cleanup, removing a client from a group leaves the old grant lingering in Auth0.
+
+### 19. Cursor Agent Skill
+
+**Guide said (section 20):** "Exact guidance for an AI coding agent" as prose within the guide.
+
+**Implementation:** Distilled into a Cursor Agent Skill at `.cursor/skills/mcp-ecosystem-provisioning/` with `SKILL.md` (192 lines) and `reference.md` (detailed schemas). Includes decision trees, field references, known client patterns (Cursor's actual callback URL, `mcp.json` format), and the real import paths.
+
+**Why:** The guide is 1400 lines of justification-heavy prose optimized for human understanding. The skill is a concise, codebase-aware operational playbook optimized for agent execution.
+
+### 20. Slim ecosystem config with hardcoded defaults and env vars
+
+**Guide said (sections 7.1, 9.3):** `ecosystem-configuration.json` must contain `schema_version`, `ecosystem_name`, the full `auth0` block (tenant domain, management audience, env var names, verify flag), the full `defaults` block (API settings, scope profiles, client profiles), and `client_groups`.
+
+**Implementation:** The config file now contains only `domain` (required) and optionally `client_groups`, `ecosystem_name`, and `defaults` overrides. Auth0 tenant identity (`AUTH0_TENANT_DOMAIN`) and Management API credentials (`AUTH0_MGMT_CLIENT_ID`, `AUTH0_MGMT_CLIENT_SECRET`) are environment variables. The management audience is derived from the tenant domain. All API settings, scope profiles, and client profiles are hardcoded in `src/config/defaults.ts` and merged with any user overrides at load time.
+
+**Why:** The original config file was 75 lines, of which ~6 were real configuration and the rest were restating the guide's non-negotiable defaults. For a toolkit whose purpose is making MCP creation cheap and repeatable, requiring users to maintain a large boilerplate config file works against the goal. Secrets and tenant identity belong in environment variables, not JSON. The hardcoded defaults are documented in `docs/02-ecosystem-defaults.md`.
+
+---
+
+## Summary
+
+| # | Guide section | Change | Category |
+| --- | --- | --- | --- |
+| 1 | 6 (layout) | Tool/ecosystem split | Structural |
+| 2 | 6 (layout) | Servers in `mcps/` | Structural |
+| 3 | 16.5 (artifacts) | Runtime config derived at startup (no generated file) | Structural |
+| 4 | 14 (runtime) | Server bootstrap as npm subpath export | Structural |
+| 5 | 18 (metadata) | `managed_by` uses package name | Auth0 |
+| 6 | 12.2 (access policy) | Direct Management API reconciliation | Auth0 |
+| 7 | 9.3, 15.2 (scope check) | Reactive instead of proactive | Auth0 |
+| 8 | 16.1 (auth) | Auto-refresh, self-contained verify-tenant | Auth0 |
+| 9 | 7.2 (callback) | Corrected to Cursor's actual URI | Data model |
+| 10 | 7.4 (slug) | Single-char slugs allowed | Data model |
+| 11 | 16.5 (overwrite) | No `--apply` mode, `--dry-run` instead | Not implemented |
+| 12 | 21.5 (add-scope) | No auto-patch of grants | Not implemented |
+| 13 | 17.3 (drift) | No separate drift report | Not implemented |
+| 14 | -- | `generate-artifacts` standalone command | Added |
+| 15 | -- | Auth opt-out for local dev | Added |
+| 16 | -- | Management token auto-refresh | Added |
+| 17 | 16.2.6 | `client_id` write-back | Added |
+| 18 | 16.4.5 | Stale grant cleanup | Added |
+| 19 | 20 | Cursor Agent Skill | Added |
+| 20 | 7.1, 9.3 | Slim config file, hardcoded defaults, env vars for auth0 | Structural |

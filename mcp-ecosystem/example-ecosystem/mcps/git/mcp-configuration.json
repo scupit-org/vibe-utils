@@ -1,0 +1,21 @@
+{
+  "name": "Git MCP",
+  "slug": "git",
+  "scope_profile": "standard",
+  "extra_scopes": [
+    "git.commit"
+  ],
+  "auth0": {
+    "create_api_if_missing": true,
+    "existing_api_id": null
+  },
+  "grants": {
+    "client_groups": [
+      "interactive-default"
+    ]
+  },
+  "access_policy": {
+    "user": "require_client_grant",
+    "client": "deny_all"
+  }
+}

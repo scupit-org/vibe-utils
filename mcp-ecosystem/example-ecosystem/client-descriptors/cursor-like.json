@@ -1,0 +1,16 @@
+{
+  "descriptor_key": "cursor-like",
+  "display_name": "Cursor-like Native Client",
+  "profile": "native_interactive",
+  "access_mode": "user",
+  "supports_pkce": true,
+  "supports_device_flow": false,
+  "requires_refresh_tokens": true,
+  "requires_refresh_token_rotation": true,
+  "callback_urls": [
+    "cursor://anysphere.cursor-mcp/oauth/callback"
+  ],
+  "logout_urls": [],
+  "web_origins": [],
+  "reuse_policy": "share_if_exact_match"
+}

@@ -1,0 +1,16 @@
+{
+  "descriptor_key": "inspector-local",
+  "display_name": "MCP Inspector (Local)",
+  "profile": "native_interactive",
+  "access_mode": "user",
+  "supports_pkce": true,
+  "supports_device_flow": false,
+  "requires_refresh_tokens": true,
+  "requires_refresh_token_rotation": true,
+  "callback_urls": [
+    "http://127.0.0.1:6274/callback"
+  ],
+  "logout_urls": [],
+  "web_origins": [],
+  "reuse_policy": "patch_if_safe"
+}

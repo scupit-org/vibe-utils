@@ -1,0 +1,21 @@
+{
+  "client_key": "inspector-local",
+  "display_name": "MCP Inspector (Local)",
+  "descriptor": "inspector-local",
+  "profile": "native_interactive",
+  "auth0": {
+    "create_if_missing": true
+  },
+  "application_settings": {
+    "callback_urls": [
+      "http://127.0.0.1:6274/callback"
+    ],
+    "logout_urls": [],
+    "web_origins": [],
+    "token_endpoint_auth_method": "none"
+  },
+  "token_settings": {
+    "use_refresh_tokens": true,
+    "refresh_token_rotation": true
+  }
+}

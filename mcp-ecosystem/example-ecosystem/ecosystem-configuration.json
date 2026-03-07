@@ -1,0 +1,14 @@
+{
+  "domain": {
+    "server_host_pattern": "{slug}-mcp.{base_domain}"
+  },
+  "client_groups": {
+    "interactive-default": [
+      "cursor-primary",
+      "inspector-local"
+    ],
+    "automation-default": [
+      "sync-worker"
+    ]
+  }
+}

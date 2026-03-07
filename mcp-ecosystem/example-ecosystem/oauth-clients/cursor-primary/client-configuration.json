@@ -1,0 +1,21 @@
+{
+  "client_key": "cursor-primary",
+  "display_name": "Cursor Primary",
+  "descriptor": "cursor-like",
+  "profile": "native_interactive",
+  "auth0": {
+    "create_if_missing": true
+  },
+  "application_settings": {
+    "callback_urls": [
+      "cursor://anysphere.cursor-mcp/oauth/callback"
+    ],
+    "logout_urls": [],
+    "web_origins": [],
+    "token_endpoint_auth_method": "none"
+  },
+  "token_settings": {
+    "use_refresh_tokens": true,
+    "refresh_token_rotation": true
+  }
+}
