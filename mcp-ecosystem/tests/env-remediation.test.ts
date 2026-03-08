@@ -466,7 +466,8 @@ test("createMcpServer keeps the accepted bootstrap env boundary", async () => {
 
     await createMcpServer(
       pathToFileURL(join(temp.dir, "mcps", "demo", "server.ts")).href,
-      { transport: { type: "stdio" } }
+      { transport: { type: "stdio" } },
+      () => {},
     );
 
     assert.equal(process.env.AUTH0_MGMT_CLIENT_SECRET, undefined);

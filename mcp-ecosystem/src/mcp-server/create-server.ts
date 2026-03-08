@@ -17,7 +17,6 @@ import {
 } from "../config/index.js";
 import { EnvManager } from "../utils/env-manager.js";
 import type {
-  ConfigureMcpServer,
   McpConfiguration,
   CreateMcpServerOptions,
 } from "./mcp-configuration.js";
@@ -182,32 +181,29 @@ type RejectPromiseReturningSetup<TSetup extends (server: McpServer) => unknown> 
  * ```
  */
 export async function createMcpServer<
-  TSetup extends ((server: McpServer) => unknown)
+  TSetup extends (server: McpServer) => unknown,
 >(
   importMetaUrl: string,
-  options?: CreateMcpServerOptions,
-  setup?: TSetup extends (server: McpServer) => unknown
-    ? RejectPromiseReturningSetup<TSetup>
-    : undefined,
+  options: CreateMcpServerOptions,
+  setup: RejectPromiseReturningSetup<TSetup>,
 ): Promise<McpConfiguration> {
   const mcpDir = dirname(fileURLToPath(importMetaUrl));
-  const transport = options?.transport ?? DEFAULT_TRANSPORT;
+  const transport = options.transport ?? DEFAULT_TRANSPORT;
   const requireTenantDomain =
     transport.type !== "stdio" &&
     ("auth" in transport ? transport.auth?.enabled !== false : false);
   const config = await loadServerConfig(mcpDir, { requireTenantDomain });
-  const configureServer = setup as ConfigureMcpServer | undefined;
 
   const createConfiguredServer = (): McpServer => {
     const server = new McpServer({
       name: config.server.name,
-      version: options?.version ?? "0.1.0",
+      version: options.version ?? "0.1.0",
     });
     // Setup is intentionally synchronous today. Promise-returning setup
     // callbacks are rejected at the type level; if we ever support async
     // setup, we must explicitly await it here before connecting the server
     // to its transport.
-    configureServer?.(server);
+    setup(server);
     return server;
   };
 
