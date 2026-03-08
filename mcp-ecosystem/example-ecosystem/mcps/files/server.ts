@@ -43,18 +43,18 @@ function configureMcp(server: Parameters<ConfigureMcpServer>[0]) {
   );
 }
 
-const transport = resolveTransportSelection({
-  configuredTransports: {
-    stdio: stdioTransport({}),
-    streamable_http_stateless: streamableHttpStatelessTransport({
-      port: portFromEnvOr(3002),
-      auth: { enabled: false },
-    }),
-  },
-  argv: process.argv,
-  env: process.env,
-});
-
-const mcp = await createMcpServer(import.meta.url, { transport }, configureMcp);
+const mcp = await createMcpServer(import.meta.url, {
+  transport: resolveTransportSelection({
+    configuredTransports: {
+      stdio: stdioTransport({}),
+      streamable_http_stateless: streamableHttpStatelessTransport({
+        port: portFromEnvOr(3002),
+        auth: { enabled: false },
+      }),
+    },
+    argv: process.argv,
+    env: process.env,
+  }),
+}, configureMcp);
 
 await mcp.begin();
