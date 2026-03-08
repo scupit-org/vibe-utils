@@ -6,11 +6,10 @@ import type { OriginValidator } from "./origin-validation.js";
  */
 interface StreamableHttpBaseTransportConfig {
   /**
-   * TCP port to listen on.
-   *
-   * @default parseInt(process.env.PORT ?? "3000", 10)
+   * TCP port to listen on. Use `portFromEnvOr(defaultPort)` to read from
+   * `process.env.PORT` with a fallback.
    */
-  port?: number;
+  port: number;
 
   /**
    * Address to bind the HTTP server to.

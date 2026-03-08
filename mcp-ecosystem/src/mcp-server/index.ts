@@ -19,6 +19,7 @@ export {
   resolveTransportSelection,
   normalizeTransportName,
 } from "./transport-selection.js";
+export { portFromEnvOr } from "./port-utils.js";
 export type {
   TransportConfig,
   StreamableHttpStatelessTransportConfig,

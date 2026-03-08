@@ -22,7 +22,7 @@ test("stdioTransport returns config with canonical type", () => {
 });
 
 test("streamableHttpStatelessTransport returns config with canonical type", () => {
-  const config = streamableHttpStatelessTransport({});
+  const config = streamableHttpStatelessTransport({ port: 3000 });
   assert.equal(config.type, "streamable_http_stateless");
 });
 
@@ -37,7 +37,7 @@ test("streamableHttpStatelessTransport preserves config options", () => {
 });
 
 test("streamableHttpStatefulTransport returns config with canonical type", () => {
-  const config = streamableHttpStatefulTransport({});
+  const config = streamableHttpStatefulTransport({ port: 3000 });
   assert.equal(config.type, "streamable_http_stateful");
 });
 
@@ -183,7 +183,7 @@ test("invalid CLI name throws", () => {
     () =>
       resolveTransportSelection({
         configuredTransports: {
-          streamable_http_stateless: streamableHttpStatelessTransport({}),
+          streamable_http_stateless: streamableHttpStatelessTransport({ port: 3000 }),
         },
         argv: ["node", "script.js", "--transport=invalid"],
       }),
@@ -196,7 +196,7 @@ test("invalid env name throws", () => {
     () =>
       resolveTransportSelection({
         configuredTransports: {
-          streamable_http_stateless: streamableHttpStatelessTransport({}),
+          streamable_http_stateless: streamableHttpStatelessTransport({ port: 3000 }),
         },
         env: { MCP_TRANSPORT: "invalid" },
       }),
@@ -210,7 +210,7 @@ test("multiple configured transports with no selection throws", () => {
       resolveTransportSelection({
         configuredTransports: {
           stdio: stdioTransport({}),
-          streamable_http_stateless: streamableHttpStatelessTransport({}),
+          streamable_http_stateless: streamableHttpStatelessTransport({ port: 3000 }),
         },
       }),
     /No transport selected/
@@ -271,7 +271,7 @@ test("custom cliFlagName and envVarName work", () => {
   const result = resolveTransportSelection({
     configuredTransports: {
       stdio: stdioTransport({}),
-      streamable_http_stateless: streamableHttpStatelessTransport({}),
+      streamable_http_stateless: streamableHttpStatelessTransport({ port: 3000 }),
     },
     argv: ["node", "script.js", "--mcp-transport=stdio"],
     cliFlagName: "mcp-transport",

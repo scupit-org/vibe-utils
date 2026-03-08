@@ -50,7 +50,7 @@ export class StreamableHttpStatefulMcp implements McpConfiguration {
   ) {
     this._createConfiguredServer = createConfiguredServer;
     this.config = config;
-    this._port = transportConfig.port ?? parseInt(process.env["PORT"] ?? "3000", 10);
+    this._port = transportConfig.port;
     this._host = transportConfig.host ?? DEFAULT_HOST;
     this._authEnabled = transportConfig.auth?.enabled !== false;
     this._transportConfig = transportConfig;

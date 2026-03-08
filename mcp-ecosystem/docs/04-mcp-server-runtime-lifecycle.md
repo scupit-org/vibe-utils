@@ -197,6 +197,7 @@ import {
 
 const mcp = await createMcpServer(import.meta.url, {
   transport: streamableHttpStatelessTransport({
+    port: 3001,
     origin: allowLocalOrigins(),
   }),
 }, setup);

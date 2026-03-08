@@ -191,7 +191,7 @@ The server bootstrap. `@modelcontextprotocol/sdk` is required. `express` is requ
 
 The optional `setup` callback receives the real SDK `McpServer` instance and is where you register tools, resources, and prompts. It is called once per fresh server instance: once per request for stateless HTTP, once per session for stateful HTTP, and once per process for stdio. Setup must be synchronous; async setup callbacks are rejected at the type level.
 
-For HTTP transports, auth is enabled by default. For local development without Auth0, pass `streamableHttpStatelessTransport({ auth: { enabled: false } })` or the equivalent stateful transport config. `stdio` has no HTTP auth layer.
+For HTTP transports, auth is enabled by default. For local development without Auth0, pass `streamableHttpStatelessTransport({ port: portFromEnvOr(3000), auth: { enabled: false } })` or the equivalent stateful transport config. `stdio` has no HTTP auth layer.
 
 **Transport selection:** Use `resolveTransportSelection()` when you want to support multiple transports (e.g. stdio for local CLI and HTTP for remote clients). Resolution order: (1) `selectedTransport` override, (2) `--transport=<name>` CLI flag, (3) `MCP_TRANSPORT` env var. No default or auto-selection; explicit selection is required. Accepted values: `stdio`, `streamable_http_stateless`, `streamable_http_stateful`, or hyphenated variants (`streamable-http-stateless`, `streamable-http-stateful`).
 

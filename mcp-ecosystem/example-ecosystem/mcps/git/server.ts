@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   createMcpServer,
   mcpToolHandler,
+  portFromEnvOr,
   resolveTransportSelection,
   stdioTransport,
   streamableHttpStatelessTransport,
@@ -31,7 +32,7 @@ const transport = resolveTransportSelection({
   configuredTransports: {
     stdio: stdioTransport({}),
     streamable_http_stateless: streamableHttpStatelessTransport({
-      port: parseInt(process.env["PORT"] ?? "3001", 10),
+      port: portFromEnvOr(3001),
       auth: { enabled: false },
     }),
   },

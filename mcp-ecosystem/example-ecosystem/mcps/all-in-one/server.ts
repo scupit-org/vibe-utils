@@ -7,6 +7,7 @@ import {
   mcpToolHandler,
   mcpResourceHandler,
   mcpPromptHandler,
+  portFromEnvOr,
   resolveTransportSelection,
   stdioTransport,
   streamableHttpStatelessTransport,
@@ -64,7 +65,7 @@ const transport = resolveTransportSelection({
   configuredTransports: {
     stdio: stdioTransport({}),
     streamable_http_stateless: streamableHttpStatelessTransport({
-      port: parseInt(process.env["PORT"] ?? "3003", 10),
+      port: portFromEnvOr(3003),
       auth: { enabled: false },
     }),
   },
