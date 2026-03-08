@@ -1,0 +1,4 @@
+All-in-One MCP Server - Sample Resource
+=======================================
+This file is used by the "readme" resource for testing.
+It demonstrates that registerResource works correctly.

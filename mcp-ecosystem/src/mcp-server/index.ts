@@ -1,4 +1,9 @@
 export { createMcpServer } from "./create-server.js";
+export {
+  mcpToolHandler,
+  mcpResourceHandler,
+  mcpPromptHandler,
+} from "./mcp-handler.js";
 export type { RuntimeConfig } from "./create-server.js";
 export type {
   ConfigureMcpServer,

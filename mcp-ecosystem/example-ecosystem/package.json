@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start:files": "tsx mcps/files/server.ts",
-    "start:git": "tsx mcps/git/server.ts"
+    "start:git": "tsx mcps/git/server.ts",
+    "start:all-in-one": "tsx mcps/all-in-one/server.ts"
   },
   "dependencies": {
     "@scupit/mcp-ecosystem": "file:..",
