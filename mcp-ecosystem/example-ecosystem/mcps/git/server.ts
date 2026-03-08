@@ -1,15 +1,9 @@
 import { execSync } from "node:child_process";
 import { z } from "zod";
 import { createMcpServer } from "@scupit/mcp-ecosystem/server";
+import type { ConfigureMcpServer } from "@scupit/mcp-ecosystem/server";
 
-const mcp = await createMcpServer(import.meta.url, {
-  transport: {
-    type: "streamable-http-stateless",
-    port: parseInt(process.env["PORT"] ?? "3001", 10),
-    // Auth disabled for local development. Remove this override in production.
-    auth: { enabled: false },
-  },
-}, (server) => {
+function configureMcp(server: Parameters<ConfigureMcpServer>[0]) {
   server.registerTool(
     "git_status",
     {
@@ -33,6 +27,15 @@ const mcp = await createMcpServer(import.meta.url, {
       }
     }
   );
-});
+}
+
+const mcp = await createMcpServer(import.meta.url, {
+  transport: {
+    type: "streamable-http-stateless",
+    port: parseInt(process.env["PORT"] ?? "3001", 10),
+    // Auth disabled for local development. Remove this override in production.
+    auth: { enabled: false },
+  },
+}, configureMcp);
 
 await mcp.begin();

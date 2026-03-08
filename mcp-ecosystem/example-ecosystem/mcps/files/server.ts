@@ -2,15 +2,9 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { z } from "zod";
 import { createMcpServer } from "@scupit/mcp-ecosystem/server";
+import type { ConfigureMcpServer } from "@scupit/mcp-ecosystem/server";
 
-const mcp = await createMcpServer(import.meta.url, {
-  transport: {
-    type: "streamable-http-stateless",
-    port: parseInt(process.env["PORT"] ?? "3002", 10),
-    // Auth disabled for local development. Remove this override in production.
-    auth: { enabled: false },
-  },
-}, (server) => {
+function configureMcp(server: Parameters<ConfigureMcpServer>[0]) {
   server.registerTool(
     "read_file",
     {
@@ -56,6 +50,15 @@ const mcp = await createMcpServer(import.meta.url, {
       }
     }
   );
-});
+}
+
+const mcp = await createMcpServer(import.meta.url, {
+  transport: {
+    type: "streamable-http-stateless",
+    port: parseInt(process.env["PORT"] ?? "3002", 10),
+    // Auth disabled for local development. Remove this override in production.
+    auth: { enabled: false },
+  },
+}, configureMcp);
 
 await mcp.begin();

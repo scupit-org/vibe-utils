@@ -22,6 +22,9 @@ import type {
   CreateMcpServerOptions,
 } from "./mcp-configuration.js";
 import type { TransportConfig } from "./transport-config.js";
+import { StreamableHttpStatelessMcp } from "./streamable-http-stateless-mcp.js";
+import { StreamableHttpStatefulMcp } from "./streamable-http-stateful-mcp.js";
+import { StdioMcp } from "./stdio-mcp.js";
 
 export interface RuntimeConfig {
   server: {
@@ -209,22 +212,12 @@ export async function createMcpServer<
   };
 
   switch (transport.type) {
-    case "streamable-http-stateless": {
-      const { StreamableHttpStatelessMcp } = await import(
-        "./streamable-http-stateless-mcp.js"
-      );
+    case "streamable-http-stateless":
       return new StreamableHttpStatelessMcp(createConfiguredServer, config, transport);
-    }
-    case "streamable-http-stateful": {
-      const { StreamableHttpStatefulMcp } = await import(
-        "./streamable-http-stateful-mcp.js"
-      );
+    case "streamable-http-stateful":
       return new StreamableHttpStatefulMcp(createConfiguredServer, config, transport);
-    }
-    case "stdio": {
-      const { StdioMcp } = await import("./stdio-mcp.js");
+    case "stdio":
       return new StdioMcp(createConfiguredServer, config);
-    }
     default: {
       const _exhaustive: never = transport;
       throw new Error(`Unknown transport type: ${(_exhaustive as TransportConfig).type}`);
