@@ -113,14 +113,24 @@ node dist/cli.js reconcile-server <slug> --dir <ecosystem-path>
 ```typescript
 import { createMcpServer } from "@scupit/mcp-ecosystem/server";
 
-const mcp = await createMcpServer(import.meta.url, {
-  transport: { type: "streamable-http-stateless", port: 3001 },
-});
+const mcp = await createMcpServer(
+  import.meta.url,
+  { transport: { type: "streamable-http-stateless", port: 3001 } },
+  (server) => {
+    server.registerTool("my-tool", { description: "..." }, async (args) => {
+      return { content: [{ type: "text", text: "result" }] };
+    });
+  },
+);
 
 await mcp.begin();
 ```
 
-`createMcpServer(import.meta.url)` reads `ecosystem-configuration.json` and `mcp-configuration.json` at startup and derives the full `RuntimeConfig` (hostname, resource URI, issuer, audience, scopes) automatically.
+`createMcpServer()` reads `ecosystem-configuration.json` and `mcp-configuration.json` at startup and derives the full `RuntimeConfig` (hostname, resource URI, issuer, audience, scopes) automatically.
+
+The third argument is a synchronous `setup(server)` callback that receives the real SDK `McpServer`. Register tools, resources, and prompts here. This callback is called once per fresh server instance (per request for stateless HTTP, per session for stateful HTTP, once for stdio). Do not use async setup callbacks; they are rejected at the type level.
+
+There is no `.builder` property on the returned handle. The setup callback is the only configuration entry point.
 
 See `example-ecosystem/mcps/git/server.ts` or `example-ecosystem/mcps/files/server.ts` for complete patterns.
 

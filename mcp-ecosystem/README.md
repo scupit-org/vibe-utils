@@ -130,20 +130,24 @@ npx mcp-ecosystem reconcile-server my-server --dir ./my-ecosystem
 import { createMcpServer } from "@scupit/mcp-ecosystem/server";
 import { z } from "zod";
 
-const mcp = await createMcpServer(import.meta.url, {
-  transport: { type: "streamable-http-stateless", port: 3000 },
-});
-
-mcp.builder.registerTool(
-  "hello",
+const mcp = await createMcpServer(
+  import.meta.url,
   {
-    description: "Say hello",
-    inputSchema: { name: z.string() },
+    transport: { type: "streamable-http-stateless", port: 3000 },
   },
-  async ({ name }) => {
-    return {
-      content: [{ type: "text", text: `Hello, ${name}!` }],
-    };
+  (server) => {
+    server.registerTool(
+      "hello",
+      {
+        description: "Say hello",
+        inputSchema: { name: z.string() },
+      },
+      async ({ name }) => {
+        return {
+          content: [{ type: "text", text: `Hello, ${name}!` }],
+        };
+      }
+    );
   }
 );
 
@@ -180,9 +184,15 @@ The main entry point. Types, config loading, Auth0 Management API client, and li
 
 The server bootstrap. `@modelcontextprotocol/sdk` is required. `express` is required for the HTTP transports and optional for `stdio`. Provides:
 
-- `createMcpServer(importMetaUrl, options?)` -- loads config from source files, derives runtime env/config, creates the selected MCP transport, and returns a ready-to-configure server wrapper with `.builder` and `.begin()`.
+- `createMcpServer(importMetaUrl, options?, setup?)` -- loads config from source files, derives runtime env/config, creates the selected MCP transport, and returns a lifecycle handle with `.config`, `.begin()`, and `.stop()`.
+
+The optional `setup` callback receives the real SDK `McpServer` instance and is where you register tools, resources, and prompts. It is called once per fresh server instance: once per request for stateless HTTP, once per session for stateful HTTP, and once per process for stdio. Setup must be synchronous; async setup callbacks are rejected at the type level.
 
 For HTTP transports, auth is enabled by default. For local development without Auth0, pass `transport: { type: "streamable-http-stateless", auth: { enabled: false } }` or the equivalent stateful transport config. `stdio` has no HTTP auth layer.
+
+HTTP transports bind to `127.0.0.1` by default. Set `host: "0.0.0.0"` in the transport config only for intentional network exposure behind a reverse proxy. Origin validation is enabled by default and rejects all browser `Origin` headers unless you configure a custom origin validator via the `origin` transport config field. See [MCP Server Runtime Lifecycle](docs/04-mcp-server-runtime-lifecycle.md) for full details.
+
+Shutdown is initiated through `server.close()`, which closes the active transport internally. Stateless mode tracks active in-flight request servers so `stop()` can terminate them. Stateful mode stores per-session server+transport pairs and closes them through the server on shutdown.
 
 The current server bootstrap assumes a single ecosystem/server context per Node process. If you need to host multiple different ecosystem contexts in one process, do not rely on the current `process.env` loading behavior to isolate them.
 
@@ -271,6 +281,7 @@ Cursor discovers the authorization server automatically via `/.well-known/oauth-
 - [Updates to Guide](docs/01-updates-to-guide.md) -- every deviation from the original spec, with rationale
 - [Ecosystem Defaults](docs/02-ecosystem-defaults.md) -- all hardcoded defaults, with override examples
 - [Managed Env And Reconciliation Lifecycle](docs/03-managed-env-and-reconciliation-lifecycle.md) -- how `.env`, `.env.example`, client caches, and bootstrap fit together
+- [MCP Server Runtime Lifecycle](docs/04-mcp-server-runtime-lifecycle.md) -- server factory model, transport lifecycles, shutdown semantics, error handling, origin validation, and host binding
 - [Implementation Plan](implementation-plan.md) -- the phased plan used to build the system
 
 ## Requirements

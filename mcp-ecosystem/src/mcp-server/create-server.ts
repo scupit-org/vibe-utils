@@ -16,7 +16,11 @@ import {
   resolveScopes,
 } from "../config/index.js";
 import { EnvManager } from "../utils/env-manager.js";
-import type { McpConfiguration, CreateMcpServerOptions } from "./mcp-configuration.js";
+import type {
+  ConfigureMcpServer,
+  McpConfiguration,
+  CreateMcpServerOptions,
+} from "./mcp-configuration.js";
 import type { TransportConfig } from "./transport-config.js";
 
 export interface RuntimeConfig {
@@ -146,6 +150,14 @@ function scrubServerProcessEnv(): void {
 
 const DEFAULT_TRANSPORT: TransportConfig = { type: "streamable-http-stateless" };
 
+// TODO: This type-level guard only rejects promise-returning setup callbacks
+// when the callback's return type is inferred directly at the createMcpServer()
+// callsite. If a callback is pre-typed as ConfigureMcpServer, TypeScript will
+// widen its return type to void and an async implementation can still slip
+// through. Tighten this in the near future if we need stricter enforcement.
+type RejectPromiseReturningSetup<TSetup extends (server: McpServer) => unknown> =
+  ReturnType<TSetup> extends PromiseLike<unknown> ? never : TSetup;
+
 /**
  * Create an MCP server configured with the given transport.
  *
@@ -155,18 +167,25 @@ const DEFAULT_TRANSPORT: TransportConfig = { type: "streamable-http-stateless" }
  *
  * Usage:
  * ```ts
- * const mcp = await createMcpServer(import.meta.url, {
- *   transport: { type: "streamable-http-stateless", port: 3001, auth: { enabled: false } },
- * });
- *
- * mcp.mcpServer.registerTool("my-tool", { ... }, async (args) => { ... });
+ * const mcp = await createMcpServer(
+ *   import.meta.url,
+ *   { transport: { type: "streamable-http-stateless", port: 3001, auth: { enabled: false } } },
+ *   (server) => {
+ *     server.registerTool("my-tool", { ... }, async (args) => { ... });
+ *   },
+ * );
  *
  * await mcp.begin();
  * ```
  */
-export async function createMcpServer(
+export async function createMcpServer<
+  TSetup extends ((server: McpServer) => unknown)
+>(
   importMetaUrl: string,
   options?: CreateMcpServerOptions,
+  setup?: TSetup extends (server: McpServer) => unknown
+    ? RejectPromiseReturningSetup<TSetup>
+    : undefined,
 ): Promise<McpConfiguration> {
   const mcpDir = dirname(fileURLToPath(importMetaUrl));
   const transport = options?.transport ?? DEFAULT_TRANSPORT;
@@ -174,28 +193,37 @@ export async function createMcpServer(
     transport.type !== "stdio" &&
     ("auth" in transport ? transport.auth?.enabled !== false : false);
   const config = await loadServerConfig(mcpDir, { requireTenantDomain });
+  const configureServer = setup as ConfigureMcpServer | undefined;
 
-  const mcpServer = new McpServer({
-    name: config.server.name,
-    version: options?.version ?? "0.1.0",
-  });
+  const createConfiguredServer = (): McpServer => {
+    const server = new McpServer({
+      name: config.server.name,
+      version: options?.version ?? "0.1.0",
+    });
+    // Setup is intentionally synchronous today. Promise-returning setup
+    // callbacks are rejected at the type level; if we ever support async
+    // setup, we must explicitly await it here before connecting the server
+    // to its transport.
+    configureServer?.(server);
+    return server;
+  };
 
   switch (transport.type) {
     case "streamable-http-stateless": {
       const { StreamableHttpStatelessMcp } = await import(
         "./streamable-http-stateless-mcp.js"
       );
-      return new StreamableHttpStatelessMcp(mcpServer, config, transport);
+      return new StreamableHttpStatelessMcp(createConfiguredServer, config, transport);
     }
     case "streamable-http-stateful": {
       const { StreamableHttpStatefulMcp } = await import(
         "./streamable-http-stateful-mcp.js"
       );
-      return new StreamableHttpStatefulMcp(mcpServer, config, transport);
+      return new StreamableHttpStatefulMcp(createConfiguredServer, config, transport);
     }
     case "stdio": {
       const { StdioMcp } = await import("./stdio-mcp.js");
-      return new StdioMcp(mcpServer, config);
+      return new StdioMcp(createConfiguredServer, config);
     }
     default: {
       const _exhaustive: never = transport;

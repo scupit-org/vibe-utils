@@ -58,5 +58,10 @@ export type {
   AuthMiddlewareOptions,
 } from "./mcp-runtime/index.js";
 
-// Public API: RuntimeConfig type (server bootstrap lives at mcp-ecosystem/server)
-export type { RuntimeConfig } from "./mcp-server/index.js";
+// Public API: MCP server types and origin validation helpers
+export type {
+  RuntimeConfig,
+  ConfigureMcpServer,
+  OriginValidator,
+} from "./mcp-server/index.js";
+export { denyAllOrigins, allowLocalOrigins, allowOrigins } from "./mcp-server/index.js";

@@ -1,4 +1,5 @@
 import type { EventStore } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type { OriginValidator } from "./origin-validation.js";
 
 /**
  * Options shared by all Streamable HTTP transport variants.
@@ -12,11 +13,39 @@ interface StreamableHttpBaseTransportConfig {
   port?: number;
 
   /**
+   * Address to bind the HTTP server to.
+   *
+   * Defaults to `"127.0.0.1"` (loopback only) per the MCP spec guidance for
+   * locally hosted servers. Set to `"0.0.0.0"` when the server is
+   * intentionally network-accessible behind a reverse proxy or load balancer.
+   *
+   * @default "127.0.0.1"
+   */
+  host?: string;
+
+  /**
    * Auth configuration. When enabled (the default), bearer token validation
    * is enforced on the `/mcp` endpoint using Auth0 JWKS verification.
    * Set `{ enabled: false }` only for local development without a real Auth0 tenant.
    */
   auth?: { enabled: boolean };
+
+  /**
+   * Origin validation policy for DNS rebinding protection (MCP spec
+   * requirement). Called with the `Origin` header value when one is present;
+   * return `true` to allow, `false` to reject with 403.
+   *
+   * Requests without an `Origin` header (non-browser MCP clients) are always
+   * allowed through regardless of this setting.
+   *
+   * Use the pre-built helpers for common cases:
+   * - `denyAllOrigins()` — reject all browser origins (the **default**)
+   * - `allowLocalOrigins()` — allow `localhost` / `127.0.0.1` origins
+   * - `allowOrigins([...])` — explicit allowlist
+   *
+   * @default denyAllOrigins()
+   */
+  origin?: OriginValidator;
 
   /**
    * When `true`, POST responses are plain `application/json` instead of

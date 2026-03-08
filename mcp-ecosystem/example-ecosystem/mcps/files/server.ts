@@ -10,52 +10,52 @@ const mcp = await createMcpServer(import.meta.url, {
     // Auth disabled for local development. Remove this override in production.
     auth: { enabled: false },
   },
-});
-
-mcp.builder.registerTool(
-  "read_file",
-  {
-    description: "Read the contents of a file at the given absolute path.",
-    inputSchema: { path: z.string().describe("Absolute path to the file to read") },
-  },
-  async ({ path }) => {
-    try {
-      const content = await readFile(path, "utf-8");
-      return { content: [{ type: "text", text: content }] };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return {
-        content: [{ type: "text", text: `Error reading file: ${message}` }],
-        isError: true,
-      };
-    }
-  }
-);
-
-mcp.builder.registerTool(
-  "write_file",
-  {
-    description: "Write content to a file at the given absolute path. Creates parent directories if needed.",
-    inputSchema: {
-      path: z.string().describe("Absolute path to the file to write"),
-      content: z.string().describe("Content to write to the file"),
+}, (server) => {
+  server.registerTool(
+    "read_file",
+    {
+      description: "Read the contents of a file at the given absolute path.",
+      inputSchema: { path: z.string().describe("Absolute path to the file to read") },
     },
-  },
-  async ({ path, content }) => {
-    try {
-      await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, content, "utf-8");
-      return {
-        content: [{ type: "text", text: `Successfully wrote ${content.length} characters to ${path}` }],
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return {
-        content: [{ type: "text", text: `Error writing file: ${message}` }],
-        isError: true,
-      };
+    async ({ path }) => {
+      try {
+        const content = await readFile(path, "utf-8");
+        return { content: [{ type: "text", text: content }] };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: [{ type: "text", text: `Error reading file: ${message}` }],
+          isError: true,
+        };
+      }
     }
-  }
-);
+  );
+
+  server.registerTool(
+    "write_file",
+    {
+      description: "Write content to a file at the given absolute path. Creates parent directories if needed.",
+      inputSchema: {
+        path: z.string().describe("Absolute path to the file to write"),
+        content: z.string().describe("Content to write to the file"),
+      },
+    },
+    async ({ path, content }) => {
+      try {
+        await mkdir(dirname(path), { recursive: true });
+        await writeFile(path, content, "utf-8");
+        return {
+          content: [{ type: "text", text: `Successfully wrote ${content.length} characters to ${path}` }],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: [{ type: "text", text: `Error writing file: ${message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+});
 
 await mcp.begin();

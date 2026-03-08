@@ -186,6 +186,75 @@ The guide itself has been partially updated (sections 6, 7.4, 20.3) to reflect s
 
 ---
 
+---
+
+## Runtime architecture changes (added in McpServer reuse fix session)
+
+### 21. Setup callback replaces builder proxy
+
+**Guide said (section 14):** MCP servers must implement token validation and metadata. No specific server configuration API was prescribed.
+
+**Initial implementation:** `createMcpServer()` returned a handle with a `.builder` property — a custom recording proxy that captured `registerTool()` / `registerResource()` / `registerPrompt()` calls and replayed them onto each fresh `McpServer` instance.
+
+**Current implementation:** `createMcpServer()` accepts an optional third argument: `setup(server)`, a synchronous callback that receives the real SDK `McpServer` instance. The recording proxy / `McpServerBuilder` / `McpServerRecorder` abstraction has been removed entirely.
+
+**Why:** The recording proxy required mirroring the SDK's registration method signatures, introduced replay correctness risks (including detached-method `this` binding issues), and generated disproportionate type complexity. The setup-callback model is simpler, gives callers direct SDK access, and avoids maintaining a custom registration system.
+
+### 22. Fresh McpServer per HTTP request/session
+
+**Guide said (section 14):** MCP servers must validate tokens. No server instance lifecycle was prescribed.
+
+**Initial implementation:** A single shared `McpServer` instance was created once in `createMcpServer()` and reused across all HTTP requests and sessions.
+
+**Current implementation:** HTTP transports create a fresh `McpServer` instance at the correct lifecycle boundary:
+- **Stateless HTTP:** one `McpServer` per request.
+- **Stateful HTTP:** one `McpServer` per session.
+- **Stdio:** one `McpServer` per process (unchanged).
+
+**Why:** The MCP SDK security advisory (GHSA-345p-7cg4-v4c7) explicitly identifies reusing a single `McpServer` across multiple transports as unsafe, because `connect()` overwrites the server's internal transport reference. The corrected lifecycle prevents cross-request and cross-session message misrouting.
+
+### 23. Origin validation on HTTP transports
+
+**Guide said (section 14):** MCP servers must validate tokens. Origin validation was not mentioned.
+
+**Implementation:** `buildHttpApp()` now validates the `Origin` header on `/mcp` before auth middleware. The default policy rejects all browser origins (`denyAllOrigins()`). Configurable via the `origin` field in the HTTP transport config, with pre-built helpers: `denyAllOrigins()`, `allowLocalOrigins()`, `allowOrigins([...])`.
+
+**Why:** The MCP spec requires origin validation for Streamable HTTP to prevent DNS rebinding attacks. Without it, a malicious website could drive a local MCP server through the user's browser.
+
+### 24. Localhost-default host binding
+
+**Guide said:** Not addressed.
+
+**Implementation:** HTTP transports now default to binding on `127.0.0.1` (loopback only). Broader binding like `0.0.0.0` requires explicit opt-in via the `host` transport config field. The startup banner prints the actual bound address.
+
+**Why:** The MCP spec recommends localhost-only binding for local servers. The previous implementation called `app.listen(port)` without a host, which could bind to all interfaces depending on Node/Express defaults, contradicting the banner that claimed `127.0.0.1`.
+
+### 25. Canonical shutdown through `server.close()`
+
+**Guide said:** Not addressed. Initial external guidance incorrectly stated `McpServer.close()` does not exist.
+
+**Implementation:** All shutdown paths now use `server.close()`, which closes the active transport internally. Direct `transport.close()` is not the initiated shutdown path. Stateless mode tracks active per-request servers so `stop()` can terminate in-flight work. Stateful mode uses an idempotent `closing` guard to prevent recursive shutdown.
+
+**Why:** The SDK's `McpServer.close()` method delegates to the transport's close internally. Using it as the canonical shutdown path is cleaner and prevents the server and transport lifecycles from getting out of sync.
+
+### 26. Machine-readable `/mcp` error responses
+
+**Guide said:** Not addressed.
+
+**Implementation:** Async HTTP route handlers are wrapped with `asyncExpressHandler(...)` to forward rejections into Express's error pipeline. A terminal `/mcp` error responder is registered after all transport routes and returns deliberate machine-readable responses: JSON-RPC internal errors for POST, structured JSON for other methods.
+
+**Why:** Without this, failures in setup, connection, or request handling would produce Express's default HTML 500 response, which is not useful for MCP clients.
+
+### 27. Sync-only setup with known type loophole
+
+**Guide said:** Not addressed.
+
+**Implementation:** `createMcpServer()` uses a generic type constraint to reject promise-returning setup callbacks at the callsite. A known loophole exists: callbacks pre-typed as `ConfigureMcpServer` can bypass the check because TypeScript widens the return type to `void`. This is documented in code with a TODO.
+
+**Why:** Setup is intentionally synchronous because `createConfiguredServer()` does not await the callback before connecting the server to its transport. Allowing async setup without awaiting it would create a race between configuration and connection.
+
+---
+
 ## Summary
 
 | # | Guide section | Change | Category |
@@ -210,3 +279,10 @@ The guide itself has been partially updated (sections 6, 7.4, 20.3) to reflect s
 | 18 | 16.4.5 | Stale grant cleanup | Added |
 | 19 | 20 | Cursor Agent Skill | Added |
 | 20 | 7.1, 9.3 | Slim config file, hardcoded defaults, env vars for auth0 | Structural |
+| 21 | 14 (runtime) | Setup callback replaces builder proxy | Runtime |
+| 22 | 14 (runtime) | Fresh McpServer per HTTP request/session | Runtime |
+| 23 | 14 (runtime) | Origin validation on HTTP transports | Runtime |
+| 24 | -- | Localhost-default host binding | Runtime |
+| 25 | -- | Canonical shutdown through `server.close()` | Runtime |
+| 26 | -- | Machine-readable `/mcp` error responses | Runtime |
+| 27 | -- | Sync-only setup with known type loophole | Runtime |

@@ -18,7 +18,7 @@ A **user's ecosystem** is a separate directory (or repo) that depends on `@scupi
 | Import path | Contents |
 |---|---|
 | `@scupit/mcp-ecosystem` | Types, config loading, Auth0 client, runtime helpers (token validation, 401 challenges) |
-| `@scupit/mcp-ecosystem/server` | `createMcpServer` (requires `@modelcontextprotocol/sdk`; `express` is needed for HTTP transports) |
+| `@scupit/mcp-ecosystem/server` | `createMcpServer(importMetaUrl, options?, setup?)` (requires `@modelcontextprotocol/sdk`; `express` is needed for HTTP transports). The `setup` callback receives the real SDK `McpServer` and must be synchronous. |
 
 ### Example ecosystem structure
 
@@ -41,7 +41,7 @@ Most fields are optional. The toolkit applies sensible defaults from `src/config
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `domain.base_domain` | string | Yes | e.g. `"example.com"` |
+| `domain.base_domain` | string | No | **Deprecated in JSON config.** Set `ECOSYSTEM_BASE_DOMAIN` in `.env` instead. If present in JSON, it is used as a fallback. |
 | `domain.server_host_pattern` | string | Yes | e.g. `"{slug}-mcp.{base_domain}"` |
 | `ecosystem_name` | string | No | Default `"mcp-ecosystem"`. Used in Auth0 metadata. |
 | `defaults.api.signing_alg` | string | No | Default `"RS256"` |

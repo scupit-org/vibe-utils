@@ -168,6 +168,24 @@ This is an intentional, pragmatic boundary rather than an attempt to fully isola
 
 ---
 
+## Server Runtime Model
+
+After environment bootstrap, `createMcpServer()` builds a server factory that creates fresh SDK `McpServer` instances on demand. If the caller provided a `setup(server)` callback as the third argument, it is called on each fresh instance before the instance is connected to a transport.
+
+The setup callback must be synchronous. It is the only configuration entry point for tools, resources, and prompts. There is no `.builder` property on the returned handle.
+
+How often the factory runs depends on the transport:
+
+- **Stateless HTTP:** once per incoming POST request.
+- **Stateful HTTP:** once per new session (on initialize).
+- **Stdio:** once per process (in `begin()`).
+
+This model exists because the MCP SDK's `connect()` overwrites the server's internal transport reference, making it unsafe to reuse a single `McpServer` across multiple transports. The factory approach ensures each transport gets an isolated server instance.
+
+For full runtime lifecycle details including shutdown semantics, error handling, origin validation, and host binding, see [MCP Server Runtime Lifecycle](./04-mcp-server-runtime-lifecycle.md).
+
+---
+
 ## Current Accepted Constraints
 
 - The current runtime model assumes one ecosystem/server context per Node process.
