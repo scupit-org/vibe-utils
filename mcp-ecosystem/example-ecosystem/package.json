@@ -5,19 +5,24 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start:files": "tsx mcps/files/server.ts",
-    "start:git": "tsx mcps/git/server.ts",
-    "start:all-in-one": "tsx mcps/all-in-one/server.ts"
+    "pm2:start:http_stateless": "pm2 start ecosystem.config.cjs --env http_stateless",
+    "pm2:start:stdio": "pm2 start ecosystem.config.cjs --env stdio",
+    "pm2:stop": "pm2 stop ecosystem.config.cjs",
+    "pm2:restart": "pm2 restart ecosystem.config.cjs",
+    "pm2:delete": "pm2 delete ecosystem.config.cjs",
+    "pm2:logs": "pm2 logs",
+    "pm2:status": "pm2 list"
   },
   "dependencies": {
-    "@scupit/mcp-ecosystem": "file:..",
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@scupit/mcp-ecosystem": "file:..",
     "express": "^4.21.2",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.10",
+    "pm2": "^6.0.14",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2"
   }

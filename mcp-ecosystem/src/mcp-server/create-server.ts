@@ -150,8 +150,6 @@ function scrubServerProcessEnv(): void {
   }
 }
 
-const DEFAULT_TRANSPORT: TransportConfig = { type: "streamable-http-stateless" };
-
 // TODO: This type-level guard only rejects promise-returning setup callbacks
 // when the callback's return type is inferred directly at the createMcpServer()
 // callsite. If a callback is pre-typed as ConfigureMcpServer, TypeScript will
@@ -171,7 +169,7 @@ type RejectPromiseReturningSetup<TSetup extends (server: McpServer) => unknown> 
  * ```ts
  * const mcp = await createMcpServer(
  *   import.meta.url,
- *   { transport: { type: "streamable-http-stateless", port: 3001, auth: { enabled: false } } },
+ *   { transport: streamableHttpStatelessTransport({ port: 3001, auth: { enabled: false } }) },
  *   (server) => {
  *     server.registerTool("my-tool", { ... }, async (args) => { ... });
  *   },
@@ -188,7 +186,12 @@ export async function createMcpServer<
   setup: RejectPromiseReturningSetup<TSetup>,
 ): Promise<McpConfiguration> {
   const mcpDir = dirname(fileURLToPath(importMetaUrl));
-  const transport = options.transport ?? DEFAULT_TRANSPORT;
+  const transport = options.transport;
+  if (!transport) {
+    throw new Error(
+      "Transport is required. Pass a transport config (e.g. stdioTransport({}), streamableHttpStatelessTransport({ port: 3000 })) or use resolveTransportSelection() for multi-transport selection."
+    );
+  }
   const requireTenantDomain =
     transport.type !== "stdio" &&
     ("auth" in transport ? transport.auth?.enabled !== false : false);
@@ -208,9 +211,9 @@ export async function createMcpServer<
   };
 
   switch (transport.type) {
-    case "streamable-http-stateless":
+    case "streamable_http_stateless":
       return new StreamableHttpStatelessMcp(createConfiguredServer, config, transport);
-    case "streamable-http-stateful":
+    case "streamable_http_stateful":
       return new StreamableHttpStatefulMcp(createConfiguredServer, config, transport);
     case "stdio":
       return new StdioMcp(createConfiguredServer, config);

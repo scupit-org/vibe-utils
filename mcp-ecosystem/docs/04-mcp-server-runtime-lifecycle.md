@@ -9,11 +9,14 @@ For the environment/bootstrap boundary and `.env` handling, see [Managed Env And
 ## The `createMcpServer()` API
 
 ```ts
-import { createMcpServer } from "@scupit/mcp-ecosystem/server";
+import {
+  createMcpServer,
+  streamableHttpStatelessTransport,
+} from "@scupit/mcp-ecosystem/server";
 
 const mcp = await createMcpServer(
   import.meta.url,
-  { transport: { type: "streamable-http-stateless", port: 3001 } },
+  { transport: streamableHttpStatelessTransport({ port: 3001 }) },
   (server) => {
     server.registerTool("my-tool", { ... }, async (args) => { ... });
   },
@@ -25,8 +28,18 @@ await mcp.begin();
 The three arguments are:
 
 1. `importMetaUrl` — used to locate the server's `mcp-configuration.json` and ecosystem root.
-2. `options?` — transport selection, version override.
+2. `options?` — transport config (or result of `resolveTransportSelection()`), version override.
 3. `setup?` — a synchronous callback that receives the real SDK `McpServer` instance.
+
+### Transport selection
+
+**Single transport:** Use the helper functions for ergonomics:
+
+- `stdioTransport({})` — stdio transport
+- `streamableHttpStatelessTransport(config)` — stateless HTTP
+- `streamableHttpStatefulTransport(config)` — stateful HTTP
+
+**Multiple transports:** Use `resolveTransportSelection()` when you want to support stdio and HTTP and select at runtime. Resolution order: (1) `selectedTransport` override, (2) `--transport=<name>` CLI flag, (3) `MCP_TRANSPORT` env var. No default or auto-selection; explicit selection is required. Accepted values: `stdio`, `streamable_http_stateless`, `streamable_http_stateful`, or hyphenated variants (`streamable-http-stateless`, `streamable-http-stateful`).
 
 The returned handle exposes:
 
@@ -176,13 +189,16 @@ If no `origin` validator is configured, the default policy is `denyAllOrigins()`
 Configure via the `origin` field in the HTTP transport config:
 
 ```ts
-import { allowLocalOrigins } from "@scupit/mcp-ecosystem/server";
+import {
+  createMcpServer,
+  allowLocalOrigins,
+  streamableHttpStatelessTransport,
+} from "@scupit/mcp-ecosystem/server";
 
 const mcp = await createMcpServer(import.meta.url, {
-  transport: {
-    type: "streamable-http-stateless",
+  transport: streamableHttpStatelessTransport({
     origin: allowLocalOrigins(),
-  },
+  }),
 }, setup);
 ```
 

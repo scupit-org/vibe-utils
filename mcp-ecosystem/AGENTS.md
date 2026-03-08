@@ -40,3 +40,20 @@ The `example-ecosystem/` references the toplevel package via `"@scupit/mcp-ecosy
 2. **Pack** the package: `npm pack` (in `mcp-ecosystem/`)
 3. **Install** in the example: `npm install` (in `example-ecosystem/`)
 4. **Typecheck** the example: `npx tsc --noEmit` (in `example-ecosystem/`)
+
+## Managing Example Servers with PM2
+
+Use PM2 to run and manage the example MCP servers during testing. Install the latest PM2 with `npm install pm2 --save-dev` (in `example-ecosystem/`). Transport must be explicitly chosen; there is no default.
+
+| Command | Action |
+|---------|--------|
+| `npm run pm2:start:http_stateless` | Start all servers with streamable_http_stateless |
+| `npm run pm2:start:stdio` | Start all servers with stdio |
+| `npm run pm2:status` | List running processes |
+| `npm run pm2:logs` | Stream logs from all servers |
+| `npm run pm2:stop` | Stop all servers |
+| `npm run pm2:delete` | Remove from PM2 (run after stop to fully clean up) |
+| `pm2 start ecosystem.config.cjs --env stdio` | Platform-agnostic: all servers use stdio |
+| `pm2 start ecosystem.config.cjs --env http_stateless` | Platform-agnostic: all servers use HTTP stateless |
+
+The ecosystem config is `example-ecosystem/ecosystem.config.cjs`. To act on a single server: `pm2 stop mcp-git`, `pm2 restart mcp-files`, etc.

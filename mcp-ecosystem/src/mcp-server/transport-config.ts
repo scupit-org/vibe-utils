@@ -64,7 +64,7 @@ interface StreamableHttpBaseTransportConfig {
  */
 export interface StreamableHttpStatelessTransportConfig
   extends StreamableHttpBaseTransportConfig {
-  type: "streamable-http-stateless";
+  type: "streamable_http_stateless";
 }
 
 /**
@@ -76,7 +76,7 @@ export interface StreamableHttpStatelessTransportConfig
  */
 export interface StreamableHttpStatefulTransportConfig
   extends StreamableHttpBaseTransportConfig {
-  type: "streamable-http-stateful";
+  type: "streamable_http_stateful";
 
   /**
    * Event store for resumability. When provided, the server persists SSE
@@ -110,10 +110,39 @@ export interface StdioTransportConfig {
 
 /**
  * Tagged union describing how the MCP server communicates with clients.
- *
- * @default `{ type: "streamable-http-stateless" }`
+ * Transport must be explicitly specified; there is no default.
  */
 export type TransportConfig =
   | StreamableHttpStatelessTransportConfig
   | StreamableHttpStatefulTransportConfig
   | StdioTransportConfig;
+
+/**
+ * Helper to create a stdio transport config. Injects the canonical `type`
+ * automatically so you don't need to specify it.
+ */
+export function stdioTransport(
+  config: Omit<StdioTransportConfig, "type">
+): StdioTransportConfig {
+  return { type: "stdio", ...config };
+}
+
+/**
+ * Helper to create a streamable HTTP stateless transport config. Injects the
+ * canonical `type` automatically so you don't need to specify it.
+ */
+export function streamableHttpStatelessTransport(
+  config: Omit<StreamableHttpStatelessTransportConfig, "type">
+): StreamableHttpStatelessTransportConfig {
+  return { type: "streamable_http_stateless", ...config };
+}
+
+/**
+ * Helper to create a streamable HTTP stateful transport config. Injects the
+ * canonical `type` automatically so you don't need to specify it.
+ */
+export function streamableHttpStatefulTransport(
+  config: Omit<StreamableHttpStatefulTransportConfig, "type">
+): StreamableHttpStatefulTransportConfig {
+  return { type: "streamable_http_stateful", ...config };
+}

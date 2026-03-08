@@ -13,7 +13,10 @@ import { grantClient } from "../src/commands/grant-client.js";
 import { reconcileClient } from "../src/commands/reconcile-client.js";
 import { reconcileServer } from "../src/commands/reconcile-server.js";
 import { assertNoManagedClientCredentialsOutsideManagedBlock } from "../src/commands/env-root-validation.js";
-import { createMcpServer } from "../src/mcp-server/create-server.js";
+import {
+  createMcpServer,
+  stdioTransport,
+} from "../src/mcp-server/index.js";
 import { EnvManager } from "../src/utils/env-manager.js";
 
 interface TempEnvContext {
@@ -466,7 +469,7 @@ test("createMcpServer keeps the accepted bootstrap env boundary", async () => {
 
     await createMcpServer(
       pathToFileURL(join(temp.dir, "mcps", "demo", "server.ts")).href,
-      { transport: { type: "stdio" } },
+      { transport: stdioTransport({}) },
       () => {},
     );
 

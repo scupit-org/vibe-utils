@@ -127,13 +127,16 @@ npx mcp-ecosystem reconcile-server my-server --dir ./my-ecosystem
 ### Write the server
 
 ```typescript
-import { createMcpServer } from "@scupit/mcp-ecosystem/server";
+import {
+  createMcpServer,
+  streamableHttpStatelessTransport,
+} from "@scupit/mcp-ecosystem/server";
 import { z } from "zod";
 
 const mcp = await createMcpServer(
   import.meta.url,
   {
-    transport: { type: "streamable-http-stateless", port: 3000 },
+    transport: streamableHttpStatelessTransport({ port: 3000 }),
   },
   (server) => {
     server.registerTool(
@@ -188,7 +191,9 @@ The server bootstrap. `@modelcontextprotocol/sdk` is required. `express` is requ
 
 The optional `setup` callback receives the real SDK `McpServer` instance and is where you register tools, resources, and prompts. It is called once per fresh server instance: once per request for stateless HTTP, once per session for stateful HTTP, and once per process for stdio. Setup must be synchronous; async setup callbacks are rejected at the type level.
 
-For HTTP transports, auth is enabled by default. For local development without Auth0, pass `transport: { type: "streamable-http-stateless", auth: { enabled: false } }` or the equivalent stateful transport config. `stdio` has no HTTP auth layer.
+For HTTP transports, auth is enabled by default. For local development without Auth0, pass `streamableHttpStatelessTransport({ auth: { enabled: false } })` or the equivalent stateful transport config. `stdio` has no HTTP auth layer.
+
+**Transport selection:** Use `resolveTransportSelection()` when you want to support multiple transports (e.g. stdio for local CLI and HTTP for remote clients). Resolution order: (1) `selectedTransport` override, (2) `--transport=<name>` CLI flag, (3) `MCP_TRANSPORT` env var. No default or auto-selection; explicit selection is required. Accepted values: `stdio`, `streamable_http_stateless`, `streamable_http_stateful`, or hyphenated variants (`streamable-http-stateless`, `streamable-http-stateful`).
 
 HTTP transports bind to `127.0.0.1` by default. Set `host: "0.0.0.0"` in the transport config only for intentional network exposure behind a reverse proxy. Origin validation is enabled by default and rejects all browser `Origin` headers unless you configure a custom origin validator via the `origin` transport config field. See [MCP Server Runtime Lifecycle](docs/04-mcp-server-runtime-lifecycle.md) for full details.
 
@@ -224,19 +229,33 @@ Four built-in profiles cover the standard OAuth application types:
 
 The `example-ecosystem/` directory contains a complete working example with:
 
-- Two MCP servers: **Git** (`git_status` tool) and **Files** (`read_file`, `write_file` tools)
+- Three MCP servers: **Git** (`git_status` tool), **Files** (`read_file`, `write_file` tools), and **All-in-one** (tools, resources, prompts with multi-transport selection)
 - Three client descriptors: Cursor, MCP Inspector, service worker
 - Three concrete client configs
 - Full ecosystem configuration
 
-Run the example servers:
+Run the example servers with [PM2](https://pm2.keymetrics.io/). Transport must be explicitly chosen:
 
 ```bash
 cd example-ecosystem
 npm install
-npm run start:git    # http://127.0.0.1:3001
-npm run start:files  # http://127.0.0.1:3002
+npm run pm2:start:http_stateless   # All servers use streamable_http_stateless
+npm run pm2:start:stdio  # All servers use stdio
+npm run pm2:status       # List running processes
+npm run pm2:logs         # Stream logs from all servers
+npm run pm2:stop         # Stop all servers
+npm run pm2:delete       # Remove from PM2 (use after stop to fully clean up)
+npm run pm2:restart      # Restart all servers
 ```
+
+Use `--env` to select the transport (platform-agnostic; required — running without `--env` will fail):
+
+```bash
+pm2 start ecosystem.config.cjs --env http_stateless   # All servers via HTTP stateless
+pm2 start ecosystem.config.cjs --env stdio   # All servers via stdio
+```
+
+To install the latest PM2: `npm install pm2 --save-dev` (in `example-ecosystem/`).
 
 ## Connecting Cursor
 

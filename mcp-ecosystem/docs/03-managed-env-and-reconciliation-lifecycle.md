@@ -162,7 +162,7 @@ During bootstrap:
 After bootstrap:
 
 - Auth0 management credentials and tool-managed client credential vars are no longer part of `process.env`
-- the server continues with the selected transport (`streamable-http-stateless`, `streamable-http-stateful`, or `stdio`)
+- the server continues with the selected transport (`streamable_http_stateless`, `streamable_http_stateful`, or `stdio`)
 
 This is an intentional, pragmatic boundary rather than an attempt to fully isolate all possible process state.
 

@@ -39,8 +39,8 @@ export interface CreateMcpServerOptions {
 
   /**
    * Transport configuration. Determines how clients connect to this server.
-   *
-   * @default `{ type: "streamable-http-stateless" }`
+   * Required. Use the transport helpers (stdioTransport, streamableHttpStatelessTransport,
+   * streamableHttpStatefulTransport) or resolveTransportSelection() for multi-transport.
    */
-  transport?: TransportConfig;
+  transport: TransportConfig;
 }

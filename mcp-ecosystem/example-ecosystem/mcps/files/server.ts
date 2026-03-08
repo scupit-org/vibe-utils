@@ -1,7 +1,13 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { z } from "zod";
-import { createMcpServer, mcpToolHandler } from "@scupit/mcp-ecosystem/server";
+import {
+  createMcpServer,
+  mcpToolHandler,
+  resolveTransportSelection,
+  stdioTransport,
+  streamableHttpStatelessTransport,
+} from "@scupit/mcp-ecosystem/server";
 import type { ConfigureMcpServer } from "@scupit/mcp-ecosystem/server";
 
 function configureMcp(server: Parameters<ConfigureMcpServer>[0]) {
@@ -36,13 +42,18 @@ function configureMcp(server: Parameters<ConfigureMcpServer>[0]) {
   );
 }
 
-const mcp = await createMcpServer(import.meta.url, {
-  transport: {
-    type: "streamable-http-stateless",
-    port: parseInt(process.env["PORT"] ?? "3002", 10),
-    // Auth disabled for local development. Remove this override in production.
-    auth: { enabled: false },
+const transport = resolveTransportSelection({
+  configuredTransports: {
+    stdio: stdioTransport({}),
+    streamable_http_stateless: streamableHttpStatelessTransport({
+      port: parseInt(process.env["PORT"] ?? "3002", 10),
+      auth: { enabled: false },
+    }),
   },
-}, configureMcp);
+  argv: process.argv,
+  env: process.env,
+});
+
+const mcp = await createMcpServer(import.meta.url, { transport }, configureMcp);
 
 await mcp.begin();

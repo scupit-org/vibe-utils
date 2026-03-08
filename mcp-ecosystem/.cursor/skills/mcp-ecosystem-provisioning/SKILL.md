@@ -111,11 +111,15 @@ node dist/cli.js reconcile-server <slug> --dir <ecosystem-path>
 4. Implement the server in `mcps/<slug>/server.ts`. Import from the published package:
 
 ```typescript
-import { createMcpServer, mcpToolHandler } from "@scupit/mcp-ecosystem/server";
+import {
+  createMcpServer,
+  mcpToolHandler,
+  streamableHttpStatelessTransport,
+} from "@scupit/mcp-ecosystem/server";
 
 const mcp = await createMcpServer(
   import.meta.url,
-  { transport: { type: "streamable-http-stateless", port: 3001 } },
+  { transport: streamableHttpStatelessTransport({ port: 3001 }) },
   (server) => {
     server.registerTool("my-tool", { description: "..." }, mcpToolHandler(async (args) => {
       return { content: [{ type: "text", text: "result" }] };

@@ -29,7 +29,7 @@ example-ecosystem/
   mcps/git/                        # Git MCP (git_status)
 ```
 
-Run example servers: `npm run start:git` or `npm run start:files` from `example-ecosystem/`.
+Run example servers from `example-ecosystem/`: `npm run pm2:start:http_stateless` or `npm run pm2:start:stdio`. Transport must be explicitly chosen; use `pm2 start ecosystem.config.cjs --env stdio` or `--env http_stateless`.
 
 ---
 
