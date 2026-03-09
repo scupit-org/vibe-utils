@@ -168,15 +168,17 @@ This gives you:
 
 All commands support `--dry-run`, `--verbose`, `--json`, and `--dir <path>`.
 
-| Command | What it does |
-| --- | --- |
-| `verify-tenant` | Checks Auth0 tenant prerequisites (Resource Parameter Compatibility Profile, DCR status) |
-| `reconcile-client <key>` | Creates or reuses an Auth0 Application for a software client |
-| `reconcile-server <slug>` | Reconciles the Auth0 API, scopes, access policy, and client grants for an MCP server |
-| `reconcile-all` | Full ecosystem reconciliation: tenant, then all clients, then all servers |
-| `add-scope <slug> <scope>` | Adds a scope to local config and updates the Auth0 API |
-| `grant-client <slug> <key> [scopes...]` | Creates or updates a client grant for a specific client/server pair |
-| `generate-artifacts` | Refreshes the managed `.env.example` block with placeholders |
+
+| Command                                 | What it does                                                                             |
+| --------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `verify-tenant`                         | Checks Auth0 tenant prerequisites (Resource Parameter Compatibility Profile, DCR status) |
+| `reconcile-client <key>`                | Creates or reuses an Auth0 Application for a software client                             |
+| `reconcile-server <slug>`               | Reconciles the Auth0 API, scopes, access policy, and client grants for an MCP server     |
+| `reconcile-all`                         | Full ecosystem reconciliation: tenant, then all clients, then all servers                |
+| `add-scope <slug> <scope>`              | Adds a scope to local config and updates the Auth0 API                                   |
+| `grant-client <slug> <key> [scopes...]` | Creates or updates a client grant for a specific client/server pair                      |
+| `generate-artifacts`                    | Refreshes the managed `.env.example` block with placeholders                             |
+
 
 ## Package exports
 
@@ -221,12 +223,14 @@ Each MCP server validates tokens at runtime by checking the RS256 signature, iss
 
 Four built-in profiles cover the standard OAuth application types:
 
-| Profile | For | Auth method | Public? |
-| --- | --- | --- | --- |
-| `native_interactive` | Desktop apps (Cursor), local tools | `none` | Yes |
-| `spa_interactive` | Browser frontends | `none` | Yes |
-| `regular_web_interactive` | Backend web apps | `client_secret_post` | No |
-| `service_m2m` | Cron jobs, daemons, workers | `client_secret_post` | No |
+
+| Profile                   | For                                | Auth method          | Public? |
+| ------------------------- | ---------------------------------- | -------------------- | ------- |
+| `native_interactive`      | Desktop apps (Cursor), local tools | `none`               | Yes     |
+| `spa_interactive`         | Browser frontends                  | `none`               | Yes     |
+| `regular_web_interactive` | Backend web apps                   | `client_secret_post` | No      |
+| `service_m2m`             | Cron jobs, daemons, workers        | `client_secret_post` | No      |
+
 
 ## Example ecosystem
 
@@ -261,6 +265,59 @@ pm2 start ecosystem.config.cjs --env stdio
 ```
 
 To install the latest PM2: `npm install pm2 --save-dev` (in `example-ecosystem/`).
+
+### Docker deployment
+
+You can run the example ecosystem (or a subset of servers) in Docker for deployment on a VPS. The included `Dockerfile` and `docker-compose.yml` run only the **Live Monitor** server (stateful HTTP) as an example.
+
+**Prerequisites**
+
+1. Clone this repository on your server.
+2. Add `example-ecosystem/.env` with your Auth0 credentials and `ECOSYSTEM_BASE_DOMAIN`. Copy from `example-ecosystem/.env.example` and replace placeholders.
+3. Create a `.env` file in the repository root (gitignored) with `DOCKER_NETWORK_NAME=<your-reverse-proxy-network>`. Docker Compose reads this for variable substitution. The network must exist (e.g. `docker network create <name>`).
+
+**Environment variables for `example-ecosystem/.env`**
+
+
+| Variable                          | Required | Set by | Description                                                                                              |
+| --------------------------------- | -------- | ------ | -------------------------------------------------------------------------------------------------------- |
+| `ECOSYSTEM_BASE_DOMAIN`           | Yes      | You    | Base domain for server hostnames (e.g. `example.com`). Hostnames become `{slug}-mcp.{base_domain}`.      |
+| `AUTH0_TENANT_DOMAIN`             | Yes      | You    | Auth0 tenant domain (e.g. `your-tenant.auth0.com`).                                                      |
+| `AUTH0_MGMT_CLIENT_ID`            | Yes      | You    | Client ID of the Auth0 M2M application used for the Management API (provisioning).                       |
+| `AUTH0_MGMT_CLIENT_SECRET`        | Yes      | You    | Client secret of that M2M application.                                                                   |
+| `AUTH0_CURSOR_PRIMARY_CLIENT_ID`  | Yes      | CLI    | Written by `reconcile-client` / `reconcile-all`. Used by Cursor in `mcp.json`.                           |
+| `AUTH0_INSPECTOR_LOCAL_CLIENT_ID` | Yes      | CLI    | Written by reconciliation. Used by MCP Inspector.                                                        |
+| `AUTH0_SYNC_WORKER_CLIENT_ID`     | Yes      | CLI    | Written by reconciliation. Used by sync-worker M2M client.                                               |
+| `AUTH0_SYNC_WORKER_CLIENT_SECRET` | Yes      | CLI    | Written once when sync-worker is created. **Do not delete** — unrecoverable without credential rotation. |
+| `PORT`                            | No       | Docker | Overridden by `docker-compose.yml` (3004 for Live Monitor).                                              |
+| `MCP_TRANSPORT`                   | No       | Docker | Overridden by `docker-compose.yml` (`streamable_http_stateful`).                                         |
+
+
+Run `npx mcp-ecosystem reconcile-all --dir example-ecosystem` locally (or on the server) before deploying to populate the auto-written client IDs and secrets. The first four variables must be set manually before reconciliation.
+
+**Build and run**
+
+From the repository root:
+
+```bash
+docker compose up -d --build
+```
+
+This builds the image and starts the `mcp-live-monitor` container. The server listens on port 3004 inside the container.
+
+**Reverse proxy (Nginx Proxy Manager)**
+
+Configure a proxy host for your Live Monitor server. The hostname **must** match the Auth0 API identifier:
+
+- Hostname: `live-monitor-mcp.<your-base-domain>` (e.g. `live-monitor-mcp.example.com`)
+- Forward to: `mcp-live-monitor` container, port `3004`
+- Enable SSL (Let's Encrypt recommended)
+
+The MCP endpoint will be `https://live-monitor-mcp.<your-base-domain>/mcp`. Cursor and other clients discover the authorization server via `/.well-known/oauth-protected-resource` on the same host.
+
+**Running other servers**
+
+To run additional servers (Git, Files, All-in-one), extend the `docker-compose.yml` with more services. Each server needs its own container, port, and proxy host. The hostnames must match the Auth0 API identifiers: `{slug}-mcp.<base_domain>`.
 
 ## Connecting Cursor
 
@@ -313,3 +370,4 @@ Cursor discovers the authorization server automatically via `/.well-known/oauth-
 - Node.js >= 20
 - An Auth0 tenant with a Management API application (client credentials grant)
 - Resource Parameter Compatibility Profile enabled on the tenant
+
