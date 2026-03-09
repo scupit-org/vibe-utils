@@ -6,6 +6,7 @@ This is a personal collection of small tools and guides.
 
 - Each **project** lives in its own top-level directory (e.g. `apple-shortcut-url-maker/`, `mcp-ecosystem/`).
 - All **guides** live under `guides/`, grouped into subdirectories by topic (e.g. `guides/gpg-and-cursor-cloud-agent-signing/`).
+- `guides/gpg-and-cursor-cloud-agent-signing/guide-project/` is the example project and script source for cloud agent GPG signing.
 
 ## Keeping the index up to date
 

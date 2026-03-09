@@ -1,0 +1,4 @@
+<div class="card">
+  <h3 @text="title"></h3>
+  <p @text="text"></p>
+</div>

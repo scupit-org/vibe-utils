@@ -3,12 +3,17 @@
 This is just my personal repository for random little tools, some vibe-coded,
 some not. Maybe somebody will find one useful!
 
+## Cloud Agent GPG auto-signing
+
+This repo includes scripts and configuration for GPG-signing commits in Cursor Cloud Agents. Setup uses Cursor Secrets, a pair of shell scripts ([setup.sh](./setup.sh), [init-gpg.sh](./init-gpg.sh)) at the repository root, and `.cursor/environment.json`. Set `SCRIPT_DOWNLOAD_ROOT_URL` to `https://raw.githubusercontent.com/scupit-org/vibe-utils/develop` in Cursor Secrets. See the [Cursor Cloud Agent Auto-Sign guide](./guides/gpg-and-cursor-cloud-agent-signing/cursor-cloud-agent-autosign-guide.md) for full setup instructions. The [guide-project](./guides/gpg-and-cursor-cloud-agent-signing/guide-project/) is the example project.
+
 ## Projects
 
 | Project | Description |
 | --- | --- |
 | [apple-shortcut-url-maker](./apple-shortcut-url-maker) | Tiny Python CLI that generates a `shortcuts://` URL for running a named iOS Shortcut, useful for programming NFC tags. |
 | [mcp-ecosystem](./mcp-ecosystem) | Provisioning CLI, runtime library, and server bootstrap for building a personal MCP server ecosystem that uses Auth0 for OAuth. Reconciles desired-state JSON config files against an Auth0 tenant and wires token validation into each server at startup. |
+| [guide-project](./guides/gpg-and-cursor-cloud-agent-signing/guide-project/) | Example project for the Cloud Agent GPG auto-signing setup (scripts are at repo root). |
 
 ## Guides
 

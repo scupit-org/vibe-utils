@@ -1,0 +1,9 @@
+{
+  "install": "{ [[ -n \"${SCRIPT_DOWNLOAD_ROOT_URL:-}\" ]] || { echo \"ERROR: SCRIPT_DOWNLOAD_ROOT_URL not set in Cursor Secrets\" >&2; false; }; } && { echo \"[Setup] Downloading from: $SCRIPT_DOWNLOAD_ROOT_URL/setup.sh\" && _setup_script=$(curl -fsSL \"$SCRIPT_DOWNLOAD_ROOT_URL/setup.sh\") && source /dev/stdin <<< \"$_setup_script\"; } && cd guides/gpg-and-cursor-cloud-agent-signing/guide-project && npm install",
+  "terminals": [
+    {
+      "name": "Guide Project Dev Server",
+      "command": "cd guides/gpg-and-cursor-cloud-agent-signing/guide-project && npm run dev"
+    }
+  ]
+}

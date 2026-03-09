@@ -193,7 +193,7 @@ Example .cursor/environment.json</summary>
 
 ---
 
-- *setup.sh* and *init-gpg.sh* have to be put in their own separate repository, or somewhere on the web where they can be freely downloaded from the same base URL.
+- *setup.sh* and *init-gpg.sh* have to be put in their own separate repository, or somewhere on the web where they can be freely downloaded from the same base URL. In this repo, the scripts live in the [repository root](../../) so they are accessible from the web.
 
 - *.cursor/environment.json* has to be put in the repository you're working on. I imagine many open source projects wouldn't appreciate you adding this to their repo, so I recommend adding it to your local, private ignore file instead of .gitignore:
   `echo ".cursor/environment.json" >> .git/info/exclude`
@@ -201,7 +201,7 @@ Example .cursor/environment.json</summary>
 Once those are all ready, configure these user secrets in cursor's cloud agent dashboard (or the editor settings):
 
 - `IS_RUNNING_CURSOR_CLOUD_AGENT`: Flag to safeguard against running this script in a local environment. Set it to `1` in secrets.
-- `SCRIPT_DOWNLOAD_ROOT_URL`: Base URL for downloading setup scripts. For example, if your scripts repository is hosted on github and called *my-scripts-repo* and the scripts you want are available on the *main* branch, your root URL will be `https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/my-scripts-repo/main`
+- `SCRIPT_DOWNLOAD_ROOT_URL`: Base URL for downloading setup scripts. For this repo, use `https://raw.githubusercontent.com/scupit-org/vibe-utils/develop` (replace `develop` with your branch if different). The scripts must be at the root so they are web-accessible. For other setups, if your scripts are in a repo called *my-scripts-repo* on the *main* branch, use `https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/my-scripts-repo/main`
 - `GPG_PRIVATE_KEY_BASE64`: base64 encoded ASCII-armored GPG private key.
 - `GPG_PRIVATE_KEY_PASSPHRASE`: Password for your private key.
 - `MY_GIT_EMAIL`: Email address associated with your GPG key and Git commits.
