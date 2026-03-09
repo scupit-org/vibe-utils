@@ -171,6 +171,8 @@ function resolveEcosystemConfig(file: EcosystemFileConfig): EcosystemConfig {
         client_access_policy:
           userApi.client_access_policy ??
           DEFAULT_API_SETTINGS.client_access_policy,
+        use_trailing_slash:
+          userApi.use_trailing_slash ?? DEFAULT_API_SETTINGS.use_trailing_slash,
       },
       scope_profiles: { ...DEFAULT_SCOPE_PROFILES, ...userScopeProfiles },
       client_profiles: { ...DEFAULT_CLIENT_PROFILES, ...userClientProfiles },
@@ -235,6 +237,21 @@ export function resolveClientAccessPolicy(
     ecosystem.defaults.api.client_access_policy) as ClientAccessPolicy;
 }
 
+/**
+ * Resolves whether the Auth0 API identifier should include a trailing slash.
+ * Server-level auth0.use_trailing_slash overrides the ecosystem default only
+ * when explicitly set.
+ */
+export function resolveUseTrailingSlash(
+  ecosystem: EcosystemConfig,
+  server: ServerConfig
+): boolean {
+  if (server.auth0?.use_trailing_slash !== undefined) {
+    return server.auth0.use_trailing_slash;
+  }
+  return ecosystem.defaults.api.use_trailing_slash;
+}
+
 function validateCrossReferences(
   ecosystem: EcosystemConfig,
   descriptors: Map<string, ClientDescriptor>,
@@ -251,7 +268,12 @@ function validateCrossReferences(
 
   const resourceUris = new Set<string>();
   for (const [slug, server] of servers) {
-    const uri = deriveCanonicalResourceUri(ecosystem, server.slug);
+    const useTrailingSlash = resolveUseTrailingSlash(ecosystem, server);
+    const uri = deriveCanonicalResourceUri(
+      ecosystem,
+      server.slug,
+      useTrailingSlash
+    );
     if (resourceUris.has(uri)) {
       throw new Error(
         `Duplicate derived resource URI for server "${slug}": ${uri}`
@@ -298,23 +320,31 @@ export function deriveHostname(
 
 export function deriveCanonicalResourceUri(
   ecosystem: EcosystemConfig,
-  slug: string
+  slug: string,
+  useTrailingSlash = false
 ): string {
-  return `https://${deriveHostname(ecosystem, slug)}`;
+  const base = `https://${deriveHostname(ecosystem, slug)}`;
+  return useTrailingSlash ? `${base}/` : base;
 }
 
 export function deriveMcpEndpoint(
   ecosystem: EcosystemConfig,
-  slug: string
+  slug: string,
+  useTrailingSlash = false
 ): string {
-  return `${deriveCanonicalResourceUri(ecosystem, slug)}/mcp`;
+  const base = deriveCanonicalResourceUri(ecosystem, slug, useTrailingSlash);
+  return base.endsWith("/") ? `${base}mcp` : `${base}/mcp`;
 }
 
 export function deriveProtectedResourceMetadataUrl(
   ecosystem: EcosystemConfig,
-  slug: string
+  slug: string,
+  useTrailingSlash = false
 ): string {
-  return `${deriveCanonicalResourceUri(ecosystem, slug)}/.well-known/oauth-protected-resource`;
+  const base = deriveCanonicalResourceUri(ecosystem, slug, useTrailingSlash);
+  return base.endsWith("/")
+    ? `${base}.well-known/oauth-protected-resource`
+    : `${base}/.well-known/oauth-protected-resource`;
 }
 
 export function resolveScopes(

@@ -6,6 +6,7 @@ import {
   resolveClientAccessPolicy,
   resolveScopes,
   resolveGrantTargets,
+  resolveUseTrailingSlash,
 } from "../config/index.js";
 import type { ServerConfig, Auth0Api } from "../types/index.js";
 import type {
@@ -56,7 +57,12 @@ export async function reconcileServer(
     context: `reconcile server "${serverSlug}"`,
     requireBaseDomain: true,
   });
-  const identifier = deriveCanonicalResourceUri(ecosystem, serverConfig.slug);
+  const useTrailingSlash = resolveUseTrailingSlash(ecosystem, serverConfig);
+  const identifier = deriveCanonicalResourceUri(
+    ecosystem,
+    serverConfig.slug,
+    useTrailingSlash
+  );
   const allScopes = resolveScopes(ecosystem, serverConfig);
 
   logger.info(

@@ -81,3 +81,13 @@ The npm scripts use `--only` to start only the servers that support each transpo
 See the comment block at the top of `ecosystem.config.cjs` for the current mapping.
 
 The ecosystem config is `example-ecosystem/ecosystem.config.cjs`. To act on a single server: `pm2 stop mcp-git`, `pm2 restart mcp-files`, etc.
+
+## Docker Deployment
+
+To build and redeploy the Live Monitor container after toolkit changes, run from `mcp-ecosystem/`:
+
+```bash
+docker compose up -d --build
+```
+
+The Dockerfile uses `npm install` (not `npm ci`) for the example-ecosystem step because the `file:..` dependency for `@scupit/mcp-ecosystem` does not resolve correctly with `npm ci` in the Docker build context.

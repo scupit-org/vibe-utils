@@ -124,6 +124,8 @@ Provision it:
 npx mcp-ecosystem reconcile-server my-server --dir ./my-ecosystem
 ```
 
+**API identifier and resource URI:** Auth0 requires an exact match between the OAuth `resource` parameter (sent by the client) and the Auth0 API identifier. Some clients, such as Cursor, send the resource URI with a trailing slash (e.g. `https://my-server-mcp.example.com/`). If OAuth fails with "callback received without code" or `access_denied`, the client may be sending a different format. Set `"auth0": { "use_trailing_slash": true }` in your server's `mcp-configuration.json` to use an identifier with a trailing slash. See [OAuth troubleshooting](docs/05-oauth-troubleshooting.md) for more.
+
 ### Write the server
 
 ```typescript
@@ -274,7 +276,7 @@ You can run the example ecosystem (or a subset of servers) in Docker for deploym
 
 1. Clone this repository on your server.
 2. Add `example-ecosystem/.env` with your Auth0 credentials and `ECOSYSTEM_BASE_DOMAIN`. Copy from `example-ecosystem/.env.example` and replace placeholders.
-3. Create a `.env` file in the repository root (gitignored) with `DOCKER_NETWORK_NAME=<your-reverse-proxy-network>`. Docker Compose reads this for variable substitution. The network must exist (e.g. `docker network create <name>`).
+3. Create a `.env` file in the `mcp-ecosystem/` directory (gitignored) with `DOCKER_NETWORK_NAME=<your-reverse-proxy-network>`. Docker Compose reads this for variable substitution. The network must exist (e.g. `docker network create <name>`).
 
 **Environment variables for `example-ecosystem/.env`**
 
@@ -290,6 +292,7 @@ You can run the example ecosystem (or a subset of servers) in Docker for deploym
 | `AUTH0_SYNC_WORKER_CLIENT_ID`     | Yes      | CLI    | Written by reconciliation. Used by sync-worker M2M client.                                               |
 | `AUTH0_SYNC_WORKER_CLIENT_SECRET` | Yes      | CLI    | Written once when sync-worker is created. **Do not delete** — unrecoverable without credential rotation. |
 | `PORT`                            | No       | Docker | Overridden by `docker-compose.yml` (3004 for Live Monitor).                                              |
+| `HOST`                            | No       | Docker | Overridden by `docker-compose.yml` (`0.0.0.0` for Live Monitor). Omit for loopback in local development. |
 | `MCP_TRANSPORT`                   | No       | Docker | Overridden by `docker-compose.yml` (`streamable_http_stateful`).                                         |
 
 
@@ -297,17 +300,17 @@ Run `npx mcp-ecosystem reconcile-all --dir example-ecosystem` locally (or on the
 
 **Build and run**
 
-From the repository root:
+From the `mcp-ecosystem/` directory (where `docker-compose.yml` lives):
 
 ```bash
 docker compose up -d --build
 ```
 
-This builds the image and starts the `mcp-live-monitor` container. The server listens on port 3004 inside the container.
+This builds the image and starts the `mcp-live-monitor` container. The server listens on port 3004 inside the container. The Dockerfile uses `npm install` (not `npm ci`) for the example-ecosystem step because the `file:..` dependency for `@scupit/mcp-ecosystem` does not resolve correctly with `npm ci` in the Docker build context.
 
 **Reverse proxy (Nginx Proxy Manager)**
 
-Configure a proxy host for your Live Monitor server. The hostname **must** match the Auth0 API identifier:
+Configure a proxy host for your Live Monitor server. The hostname (the domain part) must match the Auth0 API identifier. Live Monitor uses `use_trailing_slash: true`, so the identifier is `https://live-monitor-mcp.<your-base-domain>/` (with trailing slash); the hostname itself has no slash.
 
 - Hostname: `live-monitor-mcp.<your-base-domain>` (e.g. `live-monitor-mcp.example.com`)
 - Forward to: `mcp-live-monitor` container, port `3004`
@@ -363,6 +366,7 @@ Cursor discovers the authorization server automatically via `/.well-known/oauth-
 - [Ecosystem Defaults](docs/02-ecosystem-defaults.md) -- all hardcoded defaults, with override examples
 - [Managed Env And Reconciliation Lifecycle](docs/03-managed-env-and-reconciliation-lifecycle.md) -- how `.env`, `.env.example`, client caches, and bootstrap fit together
 - [MCP Server Runtime Lifecycle](docs/04-mcp-server-runtime-lifecycle.md) -- server factory model, transport lifecycles, shutdown semantics, error handling, origin validation, and host binding
+- [OAuth Troubleshooting](docs/05-oauth-troubleshooting.md) -- diagnosing OAuth failures, resource/identifier mismatch, trailing slash, M2M grant skip
 - [Implementation Plan](docs/original-implementation-plan.md) -- the phased plan used to build the system
 
 ## Requirements

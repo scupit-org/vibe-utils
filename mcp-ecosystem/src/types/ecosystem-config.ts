@@ -83,6 +83,7 @@ export const EcosystemFileSchema = z.object({
           token_dialect: z.string().optional(),
           user_access_policy: UserAccessPolicySchema.optional(),
           client_access_policy: ClientAccessPolicySchema.optional(),
+          use_trailing_slash: z.boolean().optional(),
         })
         .optional(),
       scope_profiles: z.record(z.string(), z.array(z.string())).optional(),
@@ -116,6 +117,7 @@ export interface EcosystemConfig {
       token_dialect: string;
       user_access_policy: string;
       client_access_policy: string;
+      use_trailing_slash: boolean;
     };
     scope_profiles: Record<string, string[]>;
     client_profiles: Record<string, ClientProfileDefinition>;

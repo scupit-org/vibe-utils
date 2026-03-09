@@ -6,6 +6,7 @@ import {
   assertRequiredEcosystemEnv,
   deriveCanonicalResourceUri,
   resolveScopes,
+  resolveUseTrailingSlash,
 } from "../config/index.js";
 import type { ServerConfig } from "../types/index.js";
 
@@ -67,9 +68,14 @@ export async function addScope(
   logger.success(`  Local config updated: ${configPath}`);
 
   // Update Auth0 API scopes (full replacement)
+  const useTrailingSlash = resolveUseTrailingSlash(
+    config.ecosystem,
+    serverConfig
+  );
   const identifier = deriveCanonicalResourceUri(
     config.ecosystem,
-    serverConfig.slug
+    serverConfig.slug,
+    useTrailingSlash
   );
   const existingApi = await auth0.findApiByIdentifier(identifier);
   if (existingApi) {

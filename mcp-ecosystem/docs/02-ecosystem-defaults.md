@@ -109,6 +109,7 @@ Applied to every Auth0 API (resource server) created by the provisioner.
 | `token_dialect` | `rfc9068_profile_authz` | Includes the `permissions` claim in access tokens, needed for scope-based authorization. |
 | `user_access_policy` | `require_client_grant` | Interactive clients need an explicit grant. Prevents accidental access. |
 | `client_access_policy` | `deny_all` | Machine-to-machine access is blocked unless explicitly enabled per server. Least-privilege default. |
+| `use_trailing_slash` | `false` | Auth0 compares the OAuth `resource` parameter to the API identifier exactly. Some clients (e.g. Cursor) send the resource URI with a trailing slash; set `true` so the identifier matches. Overridable per server in `auth0.use_trailing_slash`. |
 
 Override in `ecosystem-configuration.json`:
 

@@ -50,6 +50,7 @@ Most fields are optional. The toolkit applies sensible defaults from `src/config
 | `defaults.api.token_dialect` | string | No | Default `"rfc9068_profile_authz"` |
 | `defaults.api.user_access_policy` | enum | No | `"require_client_grant"` or `"allow_all"`. Default `"require_client_grant"` |
 | `defaults.api.client_access_policy` | enum | No | `"deny_all"` or `"require_client_grant"`. Default `"deny_all"` |
+| `defaults.api.use_trailing_slash` | boolean | No | Default `false`. When `true`, Auth0 API identifier and resource URI include a trailing slash. Overridable per server. |
 | `defaults.scope_profiles` | `Record<string, string[]>` | No | Merged with built-in `"readonly"` and `"standard"` profiles |
 | `defaults.client_profiles` | `Record<ProfileKey, ProfileDef>` | No | Merged with built-in profiles (rarely needed) |
 | `client_groups` | `Record<string, string[]>` | No | Named lists of client keys |
@@ -104,6 +105,7 @@ Validated by `ServerConfigSchema` in `src/types/server-config.ts`.
 | `extra_scopes` | string[] | No | Additional scopes unique to this server |
 | `auth0.create_api_if_missing` | boolean | No | Default `true` |
 | `auth0.existing_api_id` | string \| null | No | Pre-existing Auth0 API ID |
+| `auth0.use_trailing_slash` | boolean | No | Overrides ecosystem default. When `true`, API identifier is `https://{host}/` (with slash). Required when client sends `resource` with trailing slash (e.g. Cursor). |
 | `grants.client_groups` | string[] | No | Keys from `client_groups` |
 | `grants.client_overrides` | `Record<clientKey, string[]>` | No | Per-client scope overrides |
 | `access_policy.user` | enum | No | `"require_client_grant"` \| `"allow_all"` |

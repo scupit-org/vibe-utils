@@ -1,6 +1,5 @@
-# Run from repo root. Ensure example-ecosystem/.env exists before up.
+# Run from mcp-ecosystem/ directory. Ensure example-ecosystem/.env exists before up.
 # Proxy host: live-monitor-mcp.<your-base-domain>
-version: "3"
 
 services:
   mcp-live-monitor:
@@ -10,6 +9,7 @@ services:
       - example-ecosystem/.env
     environment:
       - PORT=3004
+      - HOST=0.0.0.0
       - MCP_TRANSPORT=streamable_http_stateful
     networks:
       - reverse-proxy

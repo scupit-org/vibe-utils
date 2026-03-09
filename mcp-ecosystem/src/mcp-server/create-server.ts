@@ -14,6 +14,7 @@ import {
   deriveMcpEndpoint,
   deriveProtectedResourceMetadataUrl,
   resolveScopes,
+  resolveUseTrailingSlash,
 } from "../config/index.js";
 import { EnvManager } from "../utils/env-manager.js";
 import { McpServerContext } from "../mcp-runtime/mcp-server-context.js";
@@ -68,9 +69,18 @@ async function loadServerConfig(
   }
 
   const hostname = deriveHostname(ecosystem, slug);
-  const resourceUri = deriveCanonicalResourceUri(ecosystem, slug);
-  const mcpEndpoint = deriveMcpEndpoint(ecosystem, slug);
-  const metadataUrl = deriveProtectedResourceMetadataUrl(ecosystem, slug);
+  const useTrailingSlash = resolveUseTrailingSlash(ecosystem, server);
+  const resourceUri = deriveCanonicalResourceUri(
+    ecosystem,
+    slug,
+    useTrailingSlash
+  );
+  const mcpEndpoint = deriveMcpEndpoint(ecosystem, slug, useTrailingSlash);
+  const metadataUrl = deriveProtectedResourceMetadataUrl(
+    ecosystem,
+    slug,
+    useTrailingSlash
+  );
   const scopes = resolveScopes(ecosystem, server);
   const issuerDomain = ecosystem.auth0.tenant_domain || "__SET_AUTH0_TENANT_DOMAIN__";
 

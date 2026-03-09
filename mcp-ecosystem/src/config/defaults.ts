@@ -17,6 +17,7 @@ export const DEFAULT_API_SETTINGS = {
   token_dialect: "rfc9068_profile_authz",
   user_access_policy: "require_client_grant",
   client_access_policy: "deny_all",
+  use_trailing_slash: false,
 } as const;
 
 export const DEFAULT_SCOPE_PROFILES: Record<string, string[]> = {

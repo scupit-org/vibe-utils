@@ -3,6 +3,7 @@ export {
   assertRequiredEcosystemEnv,
   resolveClientAccessPolicy,
   resolveUserAccessPolicy,
+  resolveUseTrailingSlash,
   deriveHostname,
   deriveCanonicalResourceUri,
   deriveMcpEndpoint,

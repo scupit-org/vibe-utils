@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   createMcpServer,
   mcpToolHandler,
+  hostFromEnvOrLoopback,
   portFromEnvOr,
   resolveTransportSelection,
   stdioTransport,
@@ -197,7 +198,7 @@ const mcp = await createMcpServer(import.meta.url, {
       stdio: stdioTransport({}),
       streamable_http_stateful: streamableHttpStatefulTransport({
         port: portFromEnvOr(3004),
-        auth: { enabled: false },
+        host: hostFromEnvOrLoopback(),
       }),
     },
     argv: process.argv,

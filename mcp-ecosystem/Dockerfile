@@ -12,7 +12,8 @@ RUN npm ci && npm run build
 
 COPY example-ecosystem ./example-ecosystem
 WORKDIR /app/example-ecosystem
-RUN npm ci
+# Use npm install: file:.. resolution for @scupit/mcp-ecosystem can fail with npm ci in Docker
+RUN npm install
 
 # Live-monitor: stateful HTTP on port 3004
 ENV PORT=3004

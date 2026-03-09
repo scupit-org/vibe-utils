@@ -5,6 +5,7 @@ import {
   deriveCanonicalResourceUri,
   resolveClientAccessPolicy,
   resolveScopes,
+  resolveUseTrailingSlash,
 } from "../config/index.js";
 import { reconcileClient } from "./reconcile-client.js";
 import { assertNoManagedClientCredentialsOutsideManagedBlock } from "./env-root-validation.js";
@@ -43,9 +44,14 @@ export async function grantClient(
     context: `grant access to server "${serverSlug}"`,
     requireBaseDomain: true,
   });
+  const useTrailingSlash = resolveUseTrailingSlash(
+    config.ecosystem,
+    serverConfig
+  );
   const audience = deriveCanonicalResourceUri(
     config.ecosystem,
-    serverConfig.slug
+    serverConfig.slug,
+    useTrailingSlash
   );
 
   const grantScopes =

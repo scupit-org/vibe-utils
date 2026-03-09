@@ -18,6 +18,7 @@ export const ServerConfigSchema = z.object({
     .object({
       create_api_if_missing: z.boolean().default(true),
       existing_api_id: z.string().nullable().default(null),
+      use_trailing_slash: z.boolean().optional(),
     })
     .optional(),
   grants: z

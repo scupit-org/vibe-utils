@@ -184,7 +184,13 @@ The guide itself has been partially updated (sections 6, 7.4, 20.3) to reflect s
 
 **Why:** The original config file was 75 lines, of which ~6 were real configuration and the rest were restating the guide's non-negotiable defaults. For a toolkit whose purpose is making MCP creation cheap and repeatable, requiring users to maintain a large boilerplate config file works against the goal. Secrets and tenant identity belong in environment variables, not JSON. The hardcoded defaults are documented in `docs/02-ecosystem-defaults.md`.
 
----
+### 29. `use_trailing_slash` for API identifier and resource URI
+
+**Guide said:** Not addressed. The guide assumes a single canonical format for the Auth0 API identifier.
+
+**Implementation:** Added `defaults.api.use_trailing_slash` (default `false`) and per-server override `auth0.use_trailing_slash`. When `true`, the Auth0 API identifier, resource URI, MCP endpoint, and metadata URL all include a trailing slash (e.g. `https://live-monitor-mcp.example.com/`). Reconcile, grant-client, and add-scope all use the resolved value.
+
+**Why:** Auth0 compares the OAuth `resource` parameter to the API identifier as an exact string. Cursor and possibly other clients send the resource URI with a trailing slash. A mismatch causes Auth0 to reject the authorization request with `access_denied`, so no code is returned and the user sees "OAuth callback received without code." Making the format configurable lets servers match what their clients send.
 
 ---
 
@@ -295,3 +301,4 @@ The guide itself has been partially updated (sections 6, 7.4, 20.3) to reflect s
 | 26 | -- | Machine-readable `/mcp` error responses | Runtime |
 | 27 | -- | Sync-only setup with known type loophole | Runtime |
 | 28 | -- | Setup callback receives McpServerContext for auth | Runtime |
+| 29 | -- | `use_trailing_slash` for API identifier and resource URI | Added |
