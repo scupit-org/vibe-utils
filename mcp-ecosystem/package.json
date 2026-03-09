@@ -25,7 +25,7 @@
     "build": "tsc",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js",
-    "test": "tsx --test tests/env-remediation.test.ts tests/transport-selection.test.ts",
+    "test": "tsx --test tests/env-remediation.test.ts tests/transport-selection.test.ts tests/teardown-server.test.ts",
     "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"

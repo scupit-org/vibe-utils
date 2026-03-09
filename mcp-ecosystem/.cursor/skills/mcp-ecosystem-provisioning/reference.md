@@ -65,6 +65,8 @@ Most fields are optional. The toolkit applies sensible defaults from `src/config
 
 Management audience is derived as `https://{AUTH0_TENANT_DOMAIN}/api/v2/`.
 
+**Management API scopes:** The M2M app must have `read:clients`, `create:clients`, `update:clients`, `read:resource_servers`, `create:resource_servers`, `update:resource_servers`, `delete:resource_servers`, `read:client_grants`, `create:client_grants`, `update:client_grants`, `delete:client_grants`, `read:tenant_settings`, `update:tenant_settings`. The `delete:resource_servers` scope is required for `teardown-server`.
+
 ### Built-in scope profiles
 
 - `"readonly"`: `resources.read`, `prompts.read`, `tools.read`
@@ -240,6 +242,12 @@ For a server, the grant targets are computed as:
 5. M2M grants are skipped if `access_policy.client` is `deny_all`
 
 Grants are matched in Auth0 by `client_id + audience + subject_type`. The provisioner creates or patches as needed.
+
+---
+
+## Teardown commands
+
+`teardown-server <slug>` deletes Auth0 APIs for a single MCP server. `teardown-all` tears down APIs for all configured servers in one run. Use them to free tenant API slots when hitting Auth0 limits (e.g. after changing `use_trailing_slash` and creating orphaned APIs). Both use `deriveResourceUris` and `resolveUseTrailingSlash` to determine which identifiers to look for, then delete each matching API. Support `--dry-run` to preview without changes.
 
 ---
 

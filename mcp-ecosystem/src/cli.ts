@@ -12,6 +12,8 @@ import {
   reconcileAll,
   addScope,
   grantClient,
+  teardownServer,
+  teardownAll,
   generateArtifacts,
 } from "./commands/index.js";
 
@@ -142,6 +144,38 @@ program
       const ctx = await buildContext(opts);
       await ctx.auth0.authenticate();
       const result = await addScope(ctx, serverSlug, scope);
+      output(opts.json, result);
+    } catch (err) {
+      logger.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+  });
+
+program
+  .command("teardown-all")
+  .description("Delete Auth0 APIs for all MCP servers (frees tenant API slots)")
+  .action(async () => {
+    const opts = program.opts() as { dir: string; dryRun: boolean; verbose: boolean; json: boolean };
+    try {
+      const ctx = await buildContext(opts);
+      await ctx.auth0.authenticate();
+      const result = await teardownAll(ctx);
+      output(opts.json, result);
+    } catch (err) {
+      logger.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+  });
+
+program
+  .command("teardown-server <server-slug>")
+  .description("Delete Auth0 APIs for an MCP server (frees tenant API slots)")
+  .action(async (serverSlug: string) => {
+    const opts = program.opts() as { dir: string; dryRun: boolean; verbose: boolean; json: boolean };
+    try {
+      const ctx = await buildContext(opts);
+      await ctx.auth0.authenticate();
+      const result = await teardownServer(ctx, serverSlug);
       output(opts.json, result);
     } catch (err) {
       logger.error(err instanceof Error ? err.message : String(err));

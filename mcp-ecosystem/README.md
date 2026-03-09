@@ -179,6 +179,8 @@ All commands support `--dry-run`, `--verbose`, `--json`, and `--dir <path>`.
 | `reconcile-all`                         | Full ecosystem reconciliation: tenant, then all clients, then all servers                |
 | `add-scope <slug> <scope>`              | Adds a scope to local config and updates the Auth0 API                                   |
 | `grant-client <slug> <key> [scopes...]` | Creates or updates a client grant for a specific client/server pair                      |
+| `teardown-all`                          | Deletes Auth0 APIs for all MCP servers (frees tenant API slots when hitting limits)      |
+| `teardown-server <slug>`                | Deletes Auth0 APIs for a single MCP server                                               |
 | `generate-artifacts`                    | Refreshes the managed `.env.example` block with placeholders                             |
 
 

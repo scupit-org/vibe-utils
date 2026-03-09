@@ -24,7 +24,7 @@ A frequent mismatch is the trailing slash:
 
 **Fix:** The default `use_trailing_slash: "both"` creates two Auth0 APIs (with and without slash) and the server accepts tokens for either. For a single API, set `"auth0": { "use_trailing_slash": "always" }` or `"never"` in your server's `mcp-configuration.json`. Run `reconcile-server` or `reconcile-all` to create or update the Auth0 API(s). See [Ecosystem Defaults: API Settings](./02-ecosystem-defaults.md#api-settings).
 
-If you change `use_trailing_slash` for an existing server, Auth0 may create new APIs (old ones become orphaned). Remove orphaned APIs manually in the Auth0 Dashboard if desired.
+If you change `use_trailing_slash` for an existing server, Auth0 may create new APIs (old ones become orphaned). Use `teardown-server <slug>` for a single server or `teardown-all` for all configured servers to delete Auth0 APIs and free tenant API slots, or remove orphaned APIs manually in the Auth0 Dashboard.
 
 ---
 

@@ -276,6 +276,10 @@ export class Auth0ManagementClient {
     );
   }
 
+  async deleteApi(apiId: string): Promise<void> {
+    await this.request<void>("DELETE", `/resource-servers/${apiId}`);
+  }
+
   // ── Client Grants ──
 
   async listClientGrants(params?: {

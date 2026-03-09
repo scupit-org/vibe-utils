@@ -65,8 +65,9 @@ export function createAuth0Client(
         `    3. Authorize it against the "Auth0 Management API"\n` +
         `    4. Grant it scopes: read:clients, create:clients, update:clients,\n` +
         `       read:resource_servers, create:resource_servers, update:resource_servers,\n` +
-        `       read:client_grants, create:client_grants, update:client_grants,\n` +
-        `       delete:client_grants, read:tenant_settings, update:tenant_settings\n` +
+        `       delete:resource_servers, read:client_grants, create:client_grants,\n` +
+        `       update:client_grants, delete:client_grants, read:tenant_settings,\n` +
+        `       update:tenant_settings\n` +
         `    5. Copy the Client ID into your .env file`
     );
   }

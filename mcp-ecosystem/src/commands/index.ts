@@ -20,5 +20,11 @@ export type { AddScopeResult } from "./add-scope.js";
 export { grantClient } from "./grant-client.js";
 export type { GrantClientResult } from "./grant-client.js";
 
+export { teardownServer } from "./teardown-server.js";
+export type { TeardownServerResult } from "./teardown-server.js";
+
+export { teardownAll } from "./teardown-all.js";
+export type { TeardownAllResult } from "./teardown-all.js";
+
 export { generateArtifacts } from "./generate-artifacts.js";
 export type { GenerateArtifactsResult } from "./generate-artifacts.js";
