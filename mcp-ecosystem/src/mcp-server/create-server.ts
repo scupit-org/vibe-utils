@@ -15,6 +15,7 @@ import {
   deriveProtectedResourceMetadataUrl,
   deriveResourceUris,
   resolveScopes,
+  resolveSessionIdleTimeoutSeconds,
   resolveUseTrailingSlash,
 } from "../config/index.js";
 import { EnvManager } from "../utils/env-manager.js";
@@ -43,6 +44,7 @@ export interface RuntimeConfig {
     protected_resource_metadata_url: string;
   };
   scopes: string[];
+  session_idle_timeout_seconds: number;
 }
 
 async function loadServerConfig(
@@ -79,6 +81,10 @@ async function loadServerConfig(
     mode
   );
   const scopes = resolveScopes(ecosystem, server);
+  const sessionIdleTimeoutSeconds = resolveSessionIdleTimeoutSeconds(
+    ecosystem,
+    server
+  );
   const issuerDomain = ecosystem.auth0.tenant_domain || "__SET_AUTH0_TENANT_DOMAIN__";
 
   const audiences = deriveResourceUris(ecosystem, slug, mode);
@@ -99,6 +105,7 @@ async function loadServerConfig(
       protected_resource_metadata_url: metadataUrl,
     },
     scopes,
+    session_idle_timeout_seconds: sessionIdleTimeoutSeconds,
   };
 }
 

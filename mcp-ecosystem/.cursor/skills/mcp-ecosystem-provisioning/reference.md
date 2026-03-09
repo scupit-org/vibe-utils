@@ -51,6 +51,7 @@ Most fields are optional. The toolkit applies sensible defaults from `src/config
 | `defaults.api.user_access_policy` | enum | No | `"require_client_grant"` or `"allow_all"`. Default `"require_client_grant"` |
 | `defaults.api.client_access_policy` | enum | No | `"deny_all"` or `"require_client_grant"`. Default `"deny_all"` |
 | `defaults.api.use_trailing_slash` | enum | No | Default `"both"`. `"never"` = single API without slash; `"always"` = single API with slash; `"both"` = two APIs, server accepts either. Overridable per server. |
+| `defaults.transport.session_idle_timeout_seconds` | number | No | Default `3600`. Seconds of inactivity before evicting a stateful session. Prevents unbounded memory growth. Must be >= 1. Overridable per server. |
 | `defaults.scope_profiles` | `Record<string, string[]>` | No | Merged with built-in `"readonly"` and `"standard"` profiles |
 | `defaults.client_profiles` | `Record<ProfileKey, ProfileDef>` | No | Merged with built-in profiles (rarely needed) |
 | `client_groups` | `Record<string, string[]>` | No | Named lists of client keys |
@@ -107,6 +108,7 @@ Validated by `ServerConfigSchema` in `src/types/server-config.ts`.
 | `extra_scopes` | string[] | No | Additional scopes unique to this server |
 | `auth0.create_api_if_missing` | boolean | No | Default `true` |
 | `auth0.use_trailing_slash` | enum | No | Overrides ecosystem default. `"never"` \| `"always"` \| `"both"`. Default `"both"` creates two APIs so tokens work regardless of client format. |
+| `transport.session_idle_timeout_seconds` | number | No | Overrides ecosystem default. Seconds of inactivity before evicting a stateful session. Must be >= 1. |
 | `grants.client_groups` | string[] | No | Keys from `client_groups` |
 | `grants.client_overrides` | `Record<clientKey, string[]>` | No | Per-client scope overrides |
 | `access_policy.user` | enum | No | `"require_client_grant"` \| `"allow_all"` |

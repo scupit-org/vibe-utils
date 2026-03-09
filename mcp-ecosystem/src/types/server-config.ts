@@ -33,6 +33,11 @@ export const ServerConfigSchema = z.object({
       client: ClientAccessPolicySchema.optional(),
     })
     .optional(),
+  transport: z
+    .object({
+      session_idle_timeout_seconds: z.number().int().min(1).optional(),
+    })
+    .optional(),
 });
 
 export type ServerConfig = z.infer<typeof ServerConfigSchema>;

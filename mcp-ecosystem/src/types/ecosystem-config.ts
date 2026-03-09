@@ -89,6 +89,11 @@ export const EcosystemFileSchema = z.object({
           use_trailing_slash: UseTrailingSlashSchema.optional(),
         })
         .optional(),
+      transport: z
+        .object({
+          session_idle_timeout_seconds: z.number().int().min(1).optional(),
+        })
+        .optional(),
       scope_profiles: z.record(z.string(), z.array(z.string())).optional(),
       client_profiles: z
         .record(ClientProfileSchema, ClientProfileDefinitionSchema)
@@ -121,6 +126,9 @@ export interface EcosystemConfig {
       user_access_policy: string;
       client_access_policy: string;
       use_trailing_slash: UseTrailingSlash;
+    };
+    transport: {
+      session_idle_timeout_seconds: number;
     };
     scope_profiles: Record<string, string[]>;
     client_profiles: Record<string, ClientProfileDefinition>;

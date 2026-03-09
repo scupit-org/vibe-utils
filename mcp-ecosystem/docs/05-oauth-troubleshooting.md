@@ -72,6 +72,18 @@ See [Ecosystem Defaults](./02-ecosystem-defaults.md) for full details.
 
 ---
 
+## Session idle timeout (stateful transport)
+
+**Symptom:** Sessions are evicted unexpectedly, or you want to adjust how long idle sessions are kept.
+
+**Context:** The stateful HTTP transport (`streamable_http_stateful`) maintains per-client sessions. When clients disconnect without sending `DELETE /mcp` (e.g., crash, force-quit), sessions would otherwise persist indefinitely. The toolkit evicts sessions idle longer than `session_idle_timeout_seconds` to prevent unbounded memory growth.
+
+**Config:** Default is 3600 seconds (1 hour). Override at the ecosystem level in `defaults.transport.session_idle_timeout_seconds` or per server in `transport.session_idle_timeout_seconds`. Value must be >= 1. See [Ecosystem Defaults: Transport Settings](./02-ecosystem-defaults.md#transport-settings).
+
+**When to adjust:** Increase the timeout if you have long-running tool calls or debugging sessions that exceed the default. Decrease it for stricter resource cleanup on busy servers.
+
+---
+
 ## M2M grant skipped during reconciliation
 
 **Symptom:** When running `reconcile-server` or `reconcile-all`, you see a warning like:

@@ -3,6 +3,7 @@ export {
   assertRequiredEcosystemEnv,
   resolveClientAccessPolicy,
   resolveUserAccessPolicy,
+  resolveSessionIdleTimeoutSeconds,
   resolveUseTrailingSlash,
   deriveHostname,
   deriveCanonicalResourceUri,
@@ -30,6 +31,7 @@ export {
   AUTH0_ENV,
   DEFAULT_ECOSYSTEM_NAME,
   DEFAULT_API_SETTINGS,
+  DEFAULT_TRANSPORT_SETTINGS,
   DEFAULT_SCOPE_PROFILES,
   DEFAULT_CLIENT_PROFILES,
 } from "./defaults.js";

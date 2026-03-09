@@ -204,7 +204,7 @@ For HTTP transports, auth is enabled by default. For local development without A
 
 HTTP transports bind to `127.0.0.1` by default. Set `host: "0.0.0.0"` in the transport config only for intentional network exposure behind a reverse proxy. Origin validation is enabled by default and rejects all browser `Origin` headers unless you configure a custom origin validator via the `origin` transport config field. See [MCP Server Runtime Lifecycle](docs/04-mcp-server-runtime-lifecycle.md) for full details.
 
-Shutdown is initiated through `server.close()`, which closes the active transport internally. Stateless mode tracks active in-flight request servers so `stop()` can terminate them. Stateful mode stores per-session server+transport pairs and closes them through the server on shutdown.
+Shutdown is initiated through `server.close()`, which closes the active transport internally. Stateless mode tracks active in-flight request servers so `stop()` can terminate them. Stateful mode stores per-session server+transport pairs and closes them through the server on shutdown. Idle sessions are evicted automatically after `session_idle_timeout_seconds` (default 1 hour); configure via `defaults.transport.session_idle_timeout_seconds` in ecosystem config or `transport.session_idle_timeout_seconds` per server. See [Ecosystem Defaults: Transport Settings](docs/02-ecosystem-defaults.md#transport-settings).
 
 The current server bootstrap assumes a single ecosystem/server context per Node process. If you need to host multiple different ecosystem contexts in one process, do not rely on the current `process.env` loading behavior to isolate them.
 

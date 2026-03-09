@@ -20,6 +20,10 @@ export const DEFAULT_API_SETTINGS = {
   use_trailing_slash: "both",
 } as const;
 
+export const DEFAULT_TRANSPORT_SETTINGS = {
+  session_idle_timeout_seconds: 3600,
+} as const;
+
 export const DEFAULT_SCOPE_PROFILES: Record<string, string[]> = {
   readonly: ["resources.read", "prompts.read", "tools.read"],
   standard: ["resources.read", "prompts.read", "tools.read", "tools.write"],

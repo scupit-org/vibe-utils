@@ -16,12 +16,14 @@ import {
 } from "./http-app.js";
 
 const DEFAULT_HOST = "127.0.0.1";
+const SWEEP_INTERVAL_MS = 300_000; // 5 minutes
 type CreateConfiguredServer = () => McpServer;
 
 interface SessionEntry {
   server: McpServer;
   transport: StreamableHTTPServerTransport;
   closing: boolean;
+  lastActivity: number;
 }
 
 /**
@@ -40,8 +42,10 @@ export class StreamableHttpStatefulMcp implements McpConfiguration {
   private readonly _host: string;
   private readonly _authEnabled: boolean;
   private readonly _transportConfig: StreamableHttpStatefulTransportConfig;
+  private readonly _sessionIdleTimeoutSeconds: number;
   private readonly _sessions = new Map<string, SessionEntry>();
   private _httpServer: Server | undefined;
+  private _sweepIntervalId: ReturnType<typeof setInterval> | undefined;
 
   constructor(
     createConfiguredServer: CreateConfiguredServer,
@@ -54,6 +58,7 @@ export class StreamableHttpStatefulMcp implements McpConfiguration {
     this._host = transportConfig.host ?? DEFAULT_HOST;
     this._authEnabled = transportConfig.auth?.enabled !== false;
     this._transportConfig = transportConfig;
+    this._sessionIdleTimeoutSeconds = config.session_idle_timeout_seconds;
   }
 
   async begin(): Promise<void> {
@@ -73,6 +78,7 @@ export class StreamableHttpStatefulMcp implements McpConfiguration {
           });
           return;
         }
+        entry.lastActivity = Date.now();
         await entry.transport.handleRequest(req, res, req.body);
         return;
       }
@@ -85,7 +91,12 @@ export class StreamableHttpStatefulMcp implements McpConfiguration {
           eventStore: this._transportConfig.eventStore,
           retryInterval: this._transportConfig.retryInterval,
           onsessioninitialized: (sid) => {
-            this._sessions.set(sid, { server, transport, closing: false });
+            this._sessions.set(sid, {
+              server,
+              transport,
+              closing: false,
+              lastActivity: Date.now(),
+            });
           },
         });
 
@@ -127,6 +138,7 @@ export class StreamableHttpStatefulMcp implements McpConfiguration {
         res.status(404).json({ error: "Session not found" });
         return;
       }
+      entry.lastActivity = Date.now();
       await entry.transport.handleRequest(req, res);
     }));
 
@@ -141,6 +153,7 @@ export class StreamableHttpStatefulMcp implements McpConfiguration {
         res.status(404).json({ error: "Session not found" });
         return;
       }
+      entry.lastActivity = Date.now();
       await entry.transport.handleRequest(req, res);
     }));
 
@@ -149,12 +162,35 @@ export class StreamableHttpStatefulMcp implements McpConfiguration {
     return new Promise<void>((resolve) => {
       this._httpServer = app.listen(this._port, this._host, () => {
         logHttpBanner(this.config, this._host, this._port, this._authEnabled);
+        this._sweepIntervalId = setInterval(
+          () => this._evictIdleSessions(),
+          SWEEP_INTERVAL_MS
+        );
         resolve();
       });
     });
   }
 
+  private _evictIdleSessions(): void {
+    const now = Date.now();
+    const thresholdMs = this._sessionIdleTimeoutSeconds * 1000;
+    for (const [sid, entry] of this._sessions) {
+      if (now - entry.lastActivity > thresholdMs) {
+        this._sessions.delete(sid);
+        if (!entry.closing) {
+          entry.closing = true;
+          entry.server.close().catch(() => {});
+        }
+      }
+    }
+  }
+
   async stop(): Promise<void> {
+    if (this._sweepIntervalId !== undefined) {
+      clearInterval(this._sweepIntervalId);
+      this._sweepIntervalId = undefined;
+    }
+
     const closeActiveServers = Promise.allSettled(
       [...this._sessions.values()].map((entry) => {
         entry.closing = true;

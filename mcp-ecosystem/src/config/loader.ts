@@ -18,6 +18,7 @@ import {
   AUTH0_ENV,
   DEFAULT_ECOSYSTEM_NAME,
   DEFAULT_API_SETTINGS,
+  DEFAULT_TRANSPORT_SETTINGS,
   DEFAULT_SCOPE_PROFILES,
   DEFAULT_CLIENT_PROFILES,
 } from "./defaults.js";
@@ -149,6 +150,7 @@ function resolveEcosystemConfig(file: EcosystemFileConfig): EcosystemConfig {
   const tenantDomain = process.env[AUTH0_ENV.tenantDomain] ?? "";
 
   const userApi = file.defaults?.api ?? {};
+  const userTransport = file.defaults?.transport ?? {};
   const userScopeProfiles = file.defaults?.scope_profiles ?? {};
   const userClientProfiles = file.defaults?.client_profiles ?? {};
 
@@ -177,6 +179,11 @@ function resolveEcosystemConfig(file: EcosystemFileConfig): EcosystemConfig {
           DEFAULT_API_SETTINGS.client_access_policy,
         use_trailing_slash:
           userApi.use_trailing_slash ?? DEFAULT_API_SETTINGS.use_trailing_slash,
+      },
+      transport: {
+        session_idle_timeout_seconds:
+          userTransport.session_idle_timeout_seconds ??
+          DEFAULT_TRANSPORT_SETTINGS.session_idle_timeout_seconds,
       },
       scope_profiles: { ...DEFAULT_SCOPE_PROFILES, ...userScopeProfiles },
       client_profiles: { ...DEFAULT_CLIENT_PROFILES, ...userClientProfiles },
@@ -239,6 +246,26 @@ export function resolveClientAccessPolicy(
 ): ClientAccessPolicy {
   return (server.access_policy?.client ??
     ecosystem.defaults.api.client_access_policy) as ClientAccessPolicy;
+}
+
+/**
+ * Resolves the session idle timeout for stateful MCP transport.
+ * Server-level transport.session_idle_timeout_seconds overrides the ecosystem
+ * default when explicitly set. Value must be >= 1 (idle cleanup is required).
+ */
+export function resolveSessionIdleTimeoutSeconds(
+  ecosystem: EcosystemConfig,
+  server: ServerConfig
+): number {
+  const value =
+    server.transport?.session_idle_timeout_seconds ??
+    ecosystem.defaults.transport.session_idle_timeout_seconds;
+  if (value < 1) {
+    throw new Error(
+      `session_idle_timeout_seconds must be at least 1 (idle cleanup is required). Got: ${value}`
+    );
+  }
+  return value;
 }
 
 /**

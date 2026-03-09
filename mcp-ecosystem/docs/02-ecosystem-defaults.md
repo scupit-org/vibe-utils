@@ -125,6 +125,38 @@ Override in `ecosystem-configuration.json`:
 
 ---
 
+## Transport Settings
+
+Applied to stateful MCP HTTP transport. Stateless and stdio transports ignore these.
+
+| Setting | Default | Rationale |
+| --- | --- | --- |
+| `session_idle_timeout_seconds` | `3600` | Seconds of inactivity after which a stateful MCP session is evicted. Prevents unbounded memory growth from orphaned sessions when clients disconnect without sending `DELETE /mcp`. Overridable per server in `transport.session_idle_timeout_seconds`. Must be >= 1. |
+
+Override in `ecosystem-configuration.json`:
+
+```json
+{
+  "defaults": {
+    "transport": {
+      "session_idle_timeout_seconds": 1800
+    }
+  }
+}
+```
+
+Per-server override in `mcp-configuration.json`:
+
+```json
+{
+  "transport": {
+    "session_idle_timeout_seconds": 900
+  }
+}
+```
+
+---
+
 ## Scope Profiles
 
 Named sets of scopes that servers reference via `scope_profile` in their `mcp-configuration.json`.
