@@ -1,7 +1,8 @@
 {
   "name": "@scupit/mcp-ecosystem",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Provisioning and runtime tooling for a personal MCP ecosystem that uses Auth0 for OAuth",
+  "license": "MIT", 
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -36,7 +37,6 @@
     "oauth",
     "provisioning"
   ],
-  "license": "UNLICENSED",
   "engines": {
     "node": ">=20.0.0"
   },
