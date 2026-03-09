@@ -2,7 +2,7 @@ import * as jose from "jose";
 
 export interface TokenValidatorOptions {
   issuer: string;
-  audience: string;
+  audience: string | string[];
   jwksUri?: string;
 }
 
@@ -19,7 +19,7 @@ export interface ValidatedToken {
 
 export class TokenValidator {
   private readonly issuer: string;
-  private readonly audience: string;
+  private readonly audience: string | string[];
   private readonly jwks: ReturnType<typeof jose.createRemoteJWKSet>;
 
   constructor(options: TokenValidatorOptions) {

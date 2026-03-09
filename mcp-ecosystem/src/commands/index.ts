@@ -5,7 +5,11 @@ export { reconcileClient } from "./reconcile-client.js";
 export type { ReconcileClientResult } from "./reconcile-client.js";
 
 export { reconcileServer } from "./reconcile-server.js";
-export type { ReconcileServerResult, GrantResult } from "./reconcile-server.js";
+export type {
+  ReconcileServerResult,
+  Auth0ApiInstanceResult,
+  GrantResult,
+} from "./reconcile-server.js";
 
 export { reconcileAll } from "./reconcile-all.js";
 export type { ReconcileAllResult } from "./reconcile-all.js";

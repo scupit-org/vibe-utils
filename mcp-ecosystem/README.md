@@ -124,7 +124,7 @@ Provision it:
 npx mcp-ecosystem reconcile-server my-server --dir ./my-ecosystem
 ```
 
-**API identifier and resource URI:** Auth0 requires an exact match between the OAuth `resource` parameter (sent by the client) and the Auth0 API identifier. Some clients, such as Cursor, send the resource URI with a trailing slash (e.g. `https://my-server-mcp.example.com/`). If OAuth fails with "callback received without code" or `access_denied`, the client may be sending a different format. Set `"auth0": { "use_trailing_slash": true }` in your server's `mcp-configuration.json` to use an identifier with a trailing slash. See [OAuth troubleshooting](docs/05-oauth-troubleshooting.md) for more.
+**API identifier and resource URI:** Auth0 requires an exact match between the OAuth `resource` parameter (sent by the client) and the Auth0 API identifier. The default `use_trailing_slash: "both"` creates two Auth0 APIs (with and without slash) so tokens work regardless of client format. For a single API, set `"auth0": { "use_trailing_slash": "always" }` or `"never"` in your server's `mcp-configuration.json`. See [OAuth troubleshooting](docs/05-oauth-troubleshooting.md) for more.
 
 ### Write the server
 
@@ -310,7 +310,7 @@ This builds the image and starts the `mcp-live-monitor` container. The server li
 
 **Reverse proxy (Nginx Proxy Manager)**
 
-Configure a proxy host for your Live Monitor server. The hostname (the domain part) must match the Auth0 API identifier. Live Monitor uses `use_trailing_slash: true`, so the identifier is `https://live-monitor-mcp.<your-base-domain>/` (with trailing slash); the hostname itself has no slash.
+Configure a proxy host for your Live Monitor server. The hostname (the domain part) must match the Auth0 API identifier. With the default `use_trailing_slash: "both"`, there are two identifiers (`https://live-monitor-mcp.<your-base-domain>` and `https://live-monitor-mcp.<your-base-domain>/`); the hostname itself has no slash.
 
 - Hostname: `live-monitor-mcp.<your-base-domain>` (e.g. `live-monitor-mcp.example.com`)
 - Forward to: `mcp-live-monitor` container, port `3004`

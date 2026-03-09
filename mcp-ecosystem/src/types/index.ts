@@ -7,6 +7,7 @@ export {
   TokenEndpointAuthMethodSchema,
   UserAccessPolicySchema,
   ClientAccessPolicySchema,
+  UseTrailingSlashSchema,
 } from "./ecosystem-config.js";
 export type {
   EcosystemConfig,
@@ -18,6 +19,7 @@ export type {
   UserAccessPolicy,
   ClientAccessPolicy,
   ClientProfileDefinition,
+  UseTrailingSlash,
 } from "./ecosystem-config.js";
 
 export { ClientDescriptorSchema, ReusePolicySchema } from "./client-descriptor.js";

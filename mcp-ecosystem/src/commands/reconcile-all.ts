@@ -78,13 +78,15 @@ export async function reconcileAll(
     );
   }
   for (const sr of serverResults) {
-    logger.info(
-      `  Server "${sr.slug}": API ${sr.action} (${sr.apiIdentifier})`
-    );
-    for (const gr of sr.grantResults) {
+    for (const api of sr.auth0ApiInstances) {
       logger.info(
-        `    Grant ${gr.clientKey}: ${gr.action} [${gr.scopes.join(", ")}]`
+        `  Server "${sr.slug}": API ${api.action} (${api.apiIdentifier})`
       );
+      for (const gr of api.grantResults) {
+        logger.info(
+          `    Grant ${gr.clientKey}: ${gr.action} [${gr.scopes.join(", ")}]`
+        );
+      }
     }
   }
 

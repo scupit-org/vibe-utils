@@ -188,9 +188,9 @@ The guide itself has been partially updated (sections 6, 7.4, 20.3) to reflect s
 
 **Guide said:** Not addressed. The guide assumes a single canonical format for the Auth0 API identifier.
 
-**Implementation:** Added `defaults.api.use_trailing_slash` (default `false`) and per-server override `auth0.use_trailing_slash`. When `true`, the Auth0 API identifier, resource URI, MCP endpoint, and metadata URL all include a trailing slash (e.g. `https://live-monitor-mcp.example.com/`). Reconcile, grant-client, and add-scope all use the resolved value.
+**Implementation:** Added `defaults.api.use_trailing_slash` (default `"both"`) and per-server override `auth0.use_trailing_slash`. Values: `"never"` (single API without slash), `"always"` (single API with slash), `"both"` (two Auth0 APIs; server accepts tokens for either audience). Reconcile, grant-client, and add-scope use `deriveResourceUris()` and operate on all identifiers.
 
-**Why:** Auth0 compares the OAuth `resource` parameter to the API identifier as an exact string. Cursor and possibly other clients send the resource URI with a trailing slash. A mismatch causes Auth0 to reject the authorization request with `access_denied`, so no code is returned and the user sees "OAuth callback received without code." Making the format configurable lets servers match what their clients send.
+**Why:** Auth0 compares the OAuth `resource` parameter to the API identifier as an exact string. Cursor and possibly other clients send the resource URI with a trailing slash. A mismatch causes Auth0 to reject the authorization request with `access_denied`. The default `"both"` creates two APIs so tokens work regardless of client format.
 
 ---
 

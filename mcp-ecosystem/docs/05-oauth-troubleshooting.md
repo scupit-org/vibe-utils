@@ -22,9 +22,9 @@ A frequent mismatch is the trailing slash:
 - **Auth0 API identifier:** `https://live-monitor-mcp.example.com` (no slash)
 - **Result:** Auth0 rejects the request.
 
-**Fix:** Set `"auth0": { "use_trailing_slash": true }` in your server's `mcp-configuration.json`. Run `reconcile-server` or `reconcile-all` to create or update the Auth0 API with the correct identifier. See [Ecosystem Defaults: API Settings](./02-ecosystem-defaults.md#api-settings).
+**Fix:** The default `use_trailing_slash: "both"` creates two Auth0 APIs (with and without slash) and the server accepts tokens for either. For a single API, set `"auth0": { "use_trailing_slash": "always" }` or `"never"` in your server's `mcp-configuration.json`. Run `reconcile-server` or `reconcile-all` to create or update the Auth0 API(s). See [Ecosystem Defaults: API Settings](./02-ecosystem-defaults.md#api-settings).
 
-If you change `use_trailing_slash` for an existing server, Auth0 will create a new API (the old one becomes orphaned). Remove the old API manually in the Auth0 Dashboard if desired.
+If you change `use_trailing_slash` for an existing server, Auth0 may create new APIs (old ones become orphaned). Remove orphaned APIs manually in the Auth0 Dashboard if desired.
 
 ---
 
@@ -62,11 +62,11 @@ If you changed `use_trailing_slash` or other auth-related config, redeploy the M
 
 `use_trailing_slash` flows from:
 
-1. Ecosystem default: `defaults.api.use_trailing_slash` (default `false`)
-2. Per-server override: `auth0.use_trailing_slash` in `mcp-configuration.json`
+1. Ecosystem default: `defaults.api.use_trailing_slash` (default `"both"`)
+2. Per-server override: `auth0.use_trailing_slash` in `mcp-configuration.json` — one of `"never"`, `"always"`, or `"both"`
 3. `resolveUseTrailingSlash(ecosystem, server)` — server override wins over ecosystem default
-4. `deriveCanonicalResourceUri()` — appends `/` when `use_trailing_slash` is true
-5. Auth0 API identifier, MCP endpoint, metadata URL, and token audience all use the derived value
+4. `deriveResourceUris()` — returns `[base]` for `"never"`, `[base/]` for `"always"`, `[base, base/]` for `"both"`
+5. Auth0 API identifier(s), MCP endpoint, metadata URL, and token audience(s) use the derived value(s). With `"both"`, the server accepts tokens for either audience.
 
 See [Ecosystem Defaults](./02-ecosystem-defaults.md) for full details.
 

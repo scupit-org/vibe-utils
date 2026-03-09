@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   ClientAccessPolicySchema,
   UserAccessPolicySchema,
+  UseTrailingSlashSchema,
 } from "./ecosystem-config.js";
 
 const DNS_SAFE_SLUG = /^[a-z]([a-z0-9-]*[a-z0-9])?$/;
@@ -17,8 +18,7 @@ export const ServerConfigSchema = z.object({
   auth0: z
     .object({
       create_api_if_missing: z.boolean().default(true),
-      existing_api_id: z.string().nullable().default(null),
-      use_trailing_slash: z.boolean().optional(),
+      use_trailing_slash: UseTrailingSlashSchema.optional(),
     })
     .optional(),
   grants: z

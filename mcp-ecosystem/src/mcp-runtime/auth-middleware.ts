@@ -7,7 +7,7 @@ export interface AuthMiddlewareOptions {
   resourceUri: string;
   resourceMetadataUrl: string;
   issuer: string;
-  audience: string;
+  audience: string | string[];
   jwksUri?: string;
 }
 

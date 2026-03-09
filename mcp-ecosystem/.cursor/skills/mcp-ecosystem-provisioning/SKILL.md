@@ -89,8 +89,7 @@ To force-use a pre-existing Auth0 Application, manually set `AUTH0_{KEY}_CLIENT_
   "scope_profile": "standard",
   "extra_scopes": [],
   "auth0": {
-    "create_api_if_missing": true,
-    "existing_api_id": null
+    "create_api_if_missing": true
   },
   "grants": {
     "client_groups": ["interactive-default"]

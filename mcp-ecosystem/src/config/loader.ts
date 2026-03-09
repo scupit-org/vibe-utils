@@ -22,7 +22,11 @@ import {
   DEFAULT_CLIENT_PROFILES,
 } from "./defaults.js";
 import { getEnvPlaceholder, isPlaceholderEnvValue } from "./env-policy.js";
-import type { ClientAccessPolicy, UserAccessPolicy } from "../types/index.js";
+import type {
+  ClientAccessPolicy,
+  UserAccessPolicy,
+  UseTrailingSlash,
+} from "../types/index.js";
 
 export interface LoadedConfig {
   ecosystem: EcosystemConfig;
@@ -238,14 +242,14 @@ export function resolveClientAccessPolicy(
 }
 
 /**
- * Resolves whether the Auth0 API identifier should include a trailing slash.
+ * Resolves the trailing slash mode for Auth0 API identifiers.
  * Server-level auth0.use_trailing_slash overrides the ecosystem default only
  * when explicitly set.
  */
 export function resolveUseTrailingSlash(
   ecosystem: EcosystemConfig,
   server: ServerConfig
-): boolean {
+): UseTrailingSlash {
   if (server.auth0?.use_trailing_slash !== undefined) {
     return server.auth0.use_trailing_slash;
   }
@@ -266,20 +270,19 @@ function validateCrossReferences(
     }
   }
 
-  const resourceUris = new Set<string>();
+  const uriToSlug = new Map<string, string>();
   for (const [slug, server] of servers) {
-    const useTrailingSlash = resolveUseTrailingSlash(ecosystem, server);
-    const uri = deriveCanonicalResourceUri(
-      ecosystem,
-      server.slug,
-      useTrailingSlash
-    );
-    if (resourceUris.has(uri)) {
-      throw new Error(
-        `Duplicate derived resource URI for server "${slug}": ${uri}`
-      );
+    const mode = resolveUseTrailingSlash(ecosystem, server);
+    const uris = deriveResourceUris(ecosystem, server.slug, mode);
+    for (const uri of uris) {
+      const existing = uriToSlug.get(uri);
+      if (existing !== undefined && existing !== slug) {
+        throw new Error(
+          `Resource URI ${uri} is used by server "${existing}" and cannot be used by "${slug}".`
+        );
+      }
+      uriToSlug.set(uri, slug);
     }
-    resourceUris.add(uri);
 
     if (server.scope_profile && !ecosystem.defaults.scope_profiles[server.scope_profile]) {
       throw new Error(
@@ -318,30 +321,71 @@ export function deriveHostname(
     .replace("{base_domain}", ecosystem.domain.base_domain);
 }
 
+/**
+ * Returns one or two resource URIs depending on mode.
+ * - "never": [base] (no slash)
+ * - "always": [base/] (with slash)
+ * - "both": [base, base/] (both formats)
+ */
+export function deriveResourceUris(
+  ecosystem: EcosystemConfig,
+  slug: string,
+  mode: UseTrailingSlash
+): string[] {
+  const base = `https://${deriveHostname(ecosystem, slug)}`;
+  switch (mode) {
+    case "never":
+      return [base];
+    case "always":
+      return [`${base}/`];
+    case "both":
+      return [base, `${base}/`];
+    default: {
+      const _exhaustive: never = mode;
+      throw new Error(`Unreachable use_trailing_slash: ${String(_exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * Returns the canonical single resource URI for metadata, endpoints, etc.
+ * For "both", returns the no-slash form as the canonical base.
+ */
 export function deriveCanonicalResourceUri(
   ecosystem: EcosystemConfig,
   slug: string,
-  useTrailingSlash = false
+  mode: UseTrailingSlash
 ): string {
   const base = `https://${deriveHostname(ecosystem, slug)}`;
-  return useTrailingSlash ? `${base}/` : base;
+  switch (mode) {
+    case "never":
+      return base;
+    case "always":
+      return `${base}/`;
+    case "both":
+      return base;
+    default: {
+      const _exhaustive: never = mode;
+      throw new Error(`Unreachable use_trailing_slash: ${String(_exhaustive)}`);
+    }
+  }
 }
 
 export function deriveMcpEndpoint(
   ecosystem: EcosystemConfig,
   slug: string,
-  useTrailingSlash = false
+  mode: UseTrailingSlash
 ): string {
-  const base = deriveCanonicalResourceUri(ecosystem, slug, useTrailingSlash);
+  const base = deriveCanonicalResourceUri(ecosystem, slug, mode);
   return base.endsWith("/") ? `${base}mcp` : `${base}/mcp`;
 }
 
 export function deriveProtectedResourceMetadataUrl(
   ecosystem: EcosystemConfig,
   slug: string,
-  useTrailingSlash = false
+  mode: UseTrailingSlash
 ): string {
-  const base = deriveCanonicalResourceUri(ecosystem, slug, useTrailingSlash);
+  const base = deriveCanonicalResourceUri(ecosystem, slug, mode);
   return base.endsWith("/")
     ? `${base}.well-known/oauth-protected-resource`
     : `${base}/.well-known/oauth-protected-resource`;

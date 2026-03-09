@@ -2,7 +2,7 @@ import type { CommandContext } from "../utils/index.js";
 import { logger } from "../utils/index.js";
 import {
   assertRequiredEcosystemEnv,
-  deriveCanonicalResourceUri,
+  deriveResourceUris,
   resolveClientAccessPolicy,
   resolveScopes,
   resolveGrantTargets,
@@ -24,13 +24,17 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   "tools.write": "Execute mutating tools",
 };
 
-export interface ReconcileServerResult {
-  slug: string;
+export interface Auth0ApiInstanceResult {
   apiIdentifier: string;
   auth0ApiId: string;
   action: "created" | "updated" | "unchanged" | "dry_run";
-  scopes: string[];
   grantResults: GrantResult[];
+}
+
+export interface ReconcileServerResult {
+  slug: string;
+  scopes: string[];
+  auth0ApiInstances: Auth0ApiInstanceResult[];
 }
 
 export interface GrantResult {
@@ -57,28 +61,42 @@ export async function reconcileServer(
     context: `reconcile server "${serverSlug}"`,
     requireBaseDomain: true,
   });
-  const useTrailingSlash = resolveUseTrailingSlash(ecosystem, serverConfig);
-  const identifier = deriveCanonicalResourceUri(
+  const mode = resolveUseTrailingSlash(ecosystem, serverConfig);
+  const identifiers = deriveResourceUris(
     ecosystem,
     serverConfig.slug,
-    useTrailingSlash
+    mode
   );
   const allScopes = resolveScopes(ecosystem, serverConfig);
 
   logger.info(
     `Reconciling server: ${serverConfig.name} (${serverConfig.slug})`
   );
-  logger.debug(`  Identifier: ${identifier}`);
+  logger.debug(`  Identifiers: ${identifiers.join(", ")}`);
   logger.debug(`  Scopes: ${allScopes.join(", ")}`);
 
-  // ── Phase 1: Reconcile Auth0 API ──
+  // ── Phase 1: Reconcile Auth0 API(s) ──
 
-  const apiResult = await reconcileApi(ctx, serverConfig, identifier, allScopes);
+  const apiResults: Array<{
+    auth0ApiId: string;
+    action: "created" | "updated" | "unchanged" | "dry_run";
+  }> = [];
+  for (const identifier of identifiers) {
+    const apiResult = await reconcileApi(
+      ctx,
+      serverConfig,
+      identifier,
+      allScopes
+    );
+    apiResults.push(apiResult);
+  }
 
   // ── Phase 2: Reconcile access policy ──
 
-  if (apiResult.action !== "dry_run") {
-    await reconcileAccessPolicy(ctx, apiResult.auth0ApiId, serverConfig);
+  for (const apiResult of apiResults) {
+    if (apiResult.action !== "dry_run") {
+      await reconcileAccessPolicy(ctx, apiResult.auth0ApiId, serverConfig);
+    }
   }
 
   // ── Phase 3: Reconcile client grants ──
@@ -89,7 +107,7 @@ export async function reconcileServer(
     config.clientConfigs
   );
 
-  const grantResults: GrantResult[] = [];
+  const grantResultsByApi: GrantResult[][] = identifiers.map(() => []);
 
   for (const target of grantTargets) {
     const clientConfig = config.clientConfigs.get(target.clientKey);
@@ -111,13 +129,16 @@ export async function reconcileServer(
     }
 
     if (!clientId || clientId === "__DRY_RUN__") {
-      grantResults.push({
+      const dryRunGrant: GrantResult = {
         clientKey: target.clientKey,
         clientId: clientId ?? "__DRY_RUN__",
         action: "dry_run",
         scopes: target.scopes,
         subjectType: target.subjectType,
-      });
+      };
+      for (let i = 0; i < identifiers.length; i++) {
+        grantResultsByApi[i].push(dryRunGrant);
+      }
       continue;
     }
 
@@ -133,21 +154,26 @@ export async function reconcileServer(
       continue;
     }
 
-    const grantResult = await reconcileGrant(
-      ctx,
-      target.clientKey,
-      clientId,
-      identifier,
-      target.scopes,
-      target.subjectType
-    );
-    grantResults.push(grantResult);
+    for (let i = 0; i < identifiers.length; i++) {
+      const grantResult = await reconcileGrant(
+        ctx,
+        target.clientKey,
+        clientId,
+        identifiers[i],
+        target.scopes,
+        target.subjectType
+      );
+      grantResultsByApi[i].push(grantResult);
+    }
   }
 
   // ── Phase 4: Clean up stale grants ──
 
-  if (apiResult.action !== "dry_run") {
-    await cleanupStaleGrants(ctx, identifier, grantResults);
+  const anyDryRun = apiResults.some((r) => r.action === "dry_run");
+  if (!anyDryRun) {
+    for (let i = 0; i < identifiers.length; i++) {
+      await cleanupStaleGrants(ctx, identifiers[i], grantResultsByApi[i]);
+    }
   }
 
   logger.blank();
@@ -155,11 +181,13 @@ export async function reconcileServer(
 
   return {
     slug: serverConfig.slug,
-    apiIdentifier: identifier,
-    auth0ApiId: apiResult.auth0ApiId,
-    action: apiResult.action,
     scopes: allScopes,
-    grantResults,
+    auth0ApiInstances: identifiers.map((identifier, i) => ({
+      apiIdentifier: identifier,
+      auth0ApiId: apiResults[i].auth0ApiId,
+      action: apiResults[i].action,
+      grantResults: grantResultsByApi[i],
+    })),
   };
 }
 
@@ -182,21 +210,6 @@ async function reconcileApi(
     value: s,
     description: SCOPE_DESCRIPTIONS[s] ?? `Scope: ${s}`,
   }));
-
-  if (server.auth0?.existing_api_id) {
-    logger.info(
-      `  Using existing API ID: ${server.auth0.existing_api_id}`
-    );
-    const existing = await auth0.getApi(server.auth0.existing_api_id);
-    return reconcileExistingApi(
-      ctx,
-      existing,
-      server,
-      scopePayload,
-      signingAlg,
-      tokenDialect
-    );
-  }
 
   logger.info("  Searching for existing Auth0 API by identifier...");
   const existing = await auth0.findApiByIdentifier(identifier);

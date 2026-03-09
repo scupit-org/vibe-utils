@@ -4,7 +4,7 @@ import type { CommandContext } from "../utils/index.js";
 import { logger } from "../utils/index.js";
 import {
   assertRequiredEcosystemEnv,
-  deriveCanonicalResourceUri,
+  deriveResourceUris,
   resolveScopes,
   resolveUseTrailingSlash,
 } from "../config/index.js";
@@ -67,28 +67,28 @@ export async function addScope(
   await writeFile(configPath, JSON.stringify(raw, null, 2) + "\n", "utf-8");
   logger.success(`  Local config updated: ${configPath}`);
 
-  // Update Auth0 API scopes (full replacement)
-  const useTrailingSlash = resolveUseTrailingSlash(
-    config.ecosystem,
-    serverConfig
-  );
-  const identifier = deriveCanonicalResourceUri(
+  // Update Auth0 API scopes (full replacement) for each identifier
+  const mode = resolveUseTrailingSlash(config.ecosystem, serverConfig);
+  const identifiers = deriveResourceUris(
     config.ecosystem,
     serverConfig.slug,
-    useTrailingSlash
+    mode
   );
-  const existingApi = await auth0.findApiByIdentifier(identifier);
-  if (existingApi) {
-    const scopePayload = fullDesiredScopes.map((s) => ({
-      value: s,
-      description: `Scope: ${s}`,
-    }));
-    await auth0.updateApi(existingApi.id, { scopes: scopePayload });
-    logger.success("  Auth0 API scopes updated.");
-  } else {
-    logger.warn(
-      "  Auth0 API not found for this server. Run reconcile-server to create it."
-    );
+  const scopePayload = fullDesiredScopes.map((s) => ({
+    value: s,
+    description: `Scope: ${s}`,
+  }));
+
+  for (const identifier of identifiers) {
+    const existingApi = await auth0.findApiByIdentifier(identifier);
+    if (existingApi) {
+      await auth0.updateApi(existingApi.id, { scopes: scopePayload });
+      logger.success(`  Auth0 API scopes updated (${identifier}).`);
+    } else {
+      logger.warn(
+        `  Auth0 API not found for identifier "${identifier}". Run reconcile-server to create it.`
+      );
+    }
   }
 
   return { slug: serverSlug, scope, action: "added", finalScopes: fullDesiredScopes };

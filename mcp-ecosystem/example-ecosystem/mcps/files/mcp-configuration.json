@@ -7,8 +7,7 @@
     "files.delete"
   ],
   "auth0": {
-    "create_api_if_missing": true,
-    "existing_api_id": null
+    "create_api_if_missing": true
   },
   "grants": {
     "client_groups": [

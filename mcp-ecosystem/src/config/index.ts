@@ -6,6 +6,7 @@ export {
   resolveUseTrailingSlash,
   deriveHostname,
   deriveCanonicalResourceUri,
+  deriveResourceUris,
   deriveMcpEndpoint,
   deriveProtectedResourceMetadataUrl,
   resolveScopes,

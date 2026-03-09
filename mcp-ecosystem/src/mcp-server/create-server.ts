@@ -13,6 +13,7 @@ import {
   deriveCanonicalResourceUri,
   deriveMcpEndpoint,
   deriveProtectedResourceMetadataUrl,
+  deriveResourceUris,
   resolveScopes,
   resolveUseTrailingSlash,
 } from "../config/index.js";
@@ -37,7 +38,7 @@ export interface RuntimeConfig {
   };
   auth: {
     issuer: string;
-    audience: string;
+    audience: string | string[];
     jwks_uri: string;
     protected_resource_metadata_url: string;
   };
@@ -69,20 +70,19 @@ async function loadServerConfig(
   }
 
   const hostname = deriveHostname(ecosystem, slug);
-  const useTrailingSlash = resolveUseTrailingSlash(ecosystem, server);
-  const resourceUri = deriveCanonicalResourceUri(
-    ecosystem,
-    slug,
-    useTrailingSlash
-  );
-  const mcpEndpoint = deriveMcpEndpoint(ecosystem, slug, useTrailingSlash);
+  const mode = resolveUseTrailingSlash(ecosystem, server);
+  const resourceUri = deriveCanonicalResourceUri(ecosystem, slug, mode);
+  const mcpEndpoint = deriveMcpEndpoint(ecosystem, slug, mode);
   const metadataUrl = deriveProtectedResourceMetadataUrl(
     ecosystem,
     slug,
-    useTrailingSlash
+    mode
   );
   const scopes = resolveScopes(ecosystem, server);
   const issuerDomain = ecosystem.auth0.tenant_domain || "__SET_AUTH0_TENANT_DOMAIN__";
+
+  const audiences = deriveResourceUris(ecosystem, slug, mode);
+  const audience = audiences.length === 1 ? audiences[0] : audiences;
 
   return {
     server: {
@@ -94,7 +94,7 @@ async function loadServerConfig(
     },
     auth: {
       issuer: `https://${issuerDomain}/`,
-      audience: resourceUri,
+      audience,
       jwks_uri: `https://${issuerDomain}/.well-known/jwks.json`,
       protected_resource_metadata_url: metadataUrl,
     },

@@ -41,6 +41,9 @@ export const ClientAccessPolicySchema = z.enum([
 ]);
 export type ClientAccessPolicy = z.infer<typeof ClientAccessPolicySchema>;
 
+export const UseTrailingSlashSchema = z.enum(["both", "never", "always"]);
+export type UseTrailingSlash = z.infer<typeof UseTrailingSlashSchema>;
+
 const ClientProfileDefinitionSchema = z.object({
   application_type: z.enum(["native", "spa", "regular_web", "m2m"]),
   access_mode: AccessModeSchema,
@@ -83,7 +86,7 @@ export const EcosystemFileSchema = z.object({
           token_dialect: z.string().optional(),
           user_access_policy: UserAccessPolicySchema.optional(),
           client_access_policy: ClientAccessPolicySchema.optional(),
-          use_trailing_slash: z.boolean().optional(),
+          use_trailing_slash: UseTrailingSlashSchema.optional(),
         })
         .optional(),
       scope_profiles: z.record(z.string(), z.array(z.string())).optional(),
@@ -117,7 +120,7 @@ export interface EcosystemConfig {
       token_dialect: string;
       user_access_policy: string;
       client_access_policy: string;
-      use_trailing_slash: boolean;
+      use_trailing_slash: UseTrailingSlash;
     };
     scope_profiles: Record<string, string[]>;
     client_profiles: Record<string, ClientProfileDefinition>;
