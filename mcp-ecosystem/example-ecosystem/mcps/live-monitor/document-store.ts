@@ -1,6 +1,7 @@
 export interface StoredDocument {
   taskId: string;
   userId: string;
+  documentId: string;
   status: "working" | "completed" | "failed" | "cancelled";
   progress: number;
   content: string | null;
@@ -21,10 +22,11 @@ export interface StoredDocument {
 export class DocumentStore {
   private readonly _store = new Map<string, Map<string, StoredDocument>>();
 
-  createTask(userId: string, taskId: string): StoredDocument {
+  createTask(userId: string, taskId: string, documentId: string): StoredDocument {
     const doc: StoredDocument = {
       taskId,
       userId,
+      documentId,
       status: "working",
       progress: 0,
       content: null,

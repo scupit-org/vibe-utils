@@ -19,32 +19,6 @@ const LOCAL_USER_ID = "local";
  */
 const documentStore = new DocumentStore();
 
-/**
- * Simulates background document processing with staged progress updates.
- * Replace with real processing logic when available.
- */
-async function processDocumentInBackground(
-  userId: string,
-  taskId: string,
-  documentId: string,
-  store: DocumentStore
-): Promise<void> {
-  try {
-    for (const [progress, delay] of [[25, 1000], [50, 1000], [75, 1000]] as const) {
-      await new Promise<void>((resolve) => setTimeout(resolve, delay));
-      store.updateTask(userId, taskId, { progress });
-    }
-    await new Promise<void>((resolve) => setTimeout(resolve, 1000));
-    store.updateTask(userId, taskId, {
-      status: "completed",
-      progress: 100,
-      content: `Document ${documentId} has been processed successfully.`,
-    });
-  } catch {
-    store.updateTask(userId, taskId, { status: "failed" });
-  }
-}
-
 function configureMcp(
   server: Parameters<ConfigureMcpServer>[0],
   context: Parameters<ConfigureMcpServer>[1]
@@ -63,9 +37,7 @@ function configureMcp(
       const userId = auth.isAuthEnabled ? auth.sub : LOCAL_USER_ID;
 
       const taskId = randomUUID();
-      documentStore.createTask(userId, taskId);
-
-      void processDocumentInBackground(userId, taskId, documentId, documentStore);
+      documentStore.createTask(userId, taskId, documentId);
 
       return {
         content: [{ type: "text", text: taskId }],
@@ -91,11 +63,29 @@ function configureMcp(
         throw new Error(`Task not found: ${taskId}`);
       }
 
+      // Stateful progress: each check adds 25%, up to 100%
+      if (doc.status === "working") {
+        const nextProgress = Math.min(doc.progress + 25, 100);
+        if (nextProgress === 100) {
+          documentStore.updateTask(userId, taskId, {
+            status: "completed",
+            progress: 100,
+            content: `Document ${doc.documentId} has been processed successfully.`,
+          });
+        } else {
+          documentStore.updateTask(userId, taskId, { progress: nextProgress });
+        }
+      }
+
+      const updated = documentStore.getTask(userId, taskId)!;
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify({ status: doc.status, progress: doc.progress }),
+            text: JSON.stringify({
+              status: updated.status,
+              progress: updated.progress,
+            }),
           },
         ],
       };
