@@ -19,14 +19,29 @@ Always wrap MCP handler callbacks with the appropriate wrapper from `@scupit/mcp
 ```typescript
 import { createMcpServer, mcpToolHandler, mcpResourceHandler, mcpPromptHandler } from "@scupit/mcp-ecosystem/server";
 
-server.registerTool("my-tool", { description: "..." }, mcpToolHandler(async (args) => {
+function configureMcp(server, context) {
+  server.registerTool("my-tool", { description: "..." }, mcpToolHandler(async (args) => {
+    return { content: [{ type: "text", text: "result" }] };
+  }));
+  server.registerResource("my-resource", "file:///path", { description: "..." }, mcpResourceHandler(async (uri) => {
+    return { contents: [{ uri: uri.href, text: "..." }] };
+  }));
+  server.registerPrompt("my-prompt", { description: "..." }, mcpPromptHandler(async () => {
+    return { messages: [{ role: "user", content: { type: "text", text: "..." } }] };
+  }));
+}
+
+const mcp = await createMcpServer(import.meta.url, { transport: ... }, configureMcp);
+```
+
+The setup callback receives `(server, context)` where `context` is `McpServerContext`. For user-scoped tools that need identity, use `(args, extra)` and `context.retrieveAuthData(extra)`:
+
+```typescript
+server.registerTool("my-tool", { ... }, mcpToolHandler(async (args, extra) => {
+  const auth = context.retrieveAuthData(extra);
+  const userId = auth.isAuthEnabled ? auth.sub : "local";
+  // use userId as storage key
   return { content: [{ type: "text", text: "result" }] };
-}));
-server.registerResource("my-resource", "file:///path", { description: "..." }, mcpResourceHandler(async (uri) => {
-  return { contents: [{ uri: uri.href, text: "..." }] };
-}));
-server.registerPrompt("my-prompt", { description: "..." }, mcpPromptHandler(async () => {
-  return { messages: [{ role: "user", content: { type: "text", text: "..." } }] };
 }));
 ```
 
@@ -45,15 +60,24 @@ The `example-ecosystem/` references the toplevel package via `"@scupit/mcp-ecosy
 
 Use PM2 to run and manage the example MCP servers during testing. Install the latest PM2 with `npm install pm2 --save-dev` (in `example-ecosystem/`). Transport must be explicitly chosen; there is no default.
 
+The npm scripts use `--only` to start only the servers that support each transport. This avoids launching incompatible servers (which would crash and waste time).
+
 | Command | Action |
 |---------|--------|
-| `npm run pm2:start:http_stateless` | Start all servers with streamable_http_stateless |
-| `npm run pm2:start:stdio` | Start all servers with stdio |
+| `npm run pm2:start:http_stateless` | Start mcp-git, mcp-files, mcp-all-in-one (streamable_http_stateless) |
+| `npm run pm2:start:http_stateful` | Start mcp-live-monitor only (streamable_http_stateful) |
+| `npm run pm2:start:stdio` | Start all 4 servers (stdio) |
 | `npm run pm2:status` | List running processes |
 | `npm run pm2:logs` | Stream logs from all servers |
 | `npm run pm2:stop` | Stop all servers |
 | `npm run pm2:delete` | Remove from PM2 (run after stop to fully clean up) |
-| `pm2 start ecosystem.config.cjs --env stdio` | Platform-agnostic: all servers use stdio |
-| `pm2 start ecosystem.config.cjs --env http_stateless` | Platform-agnostic: all servers use HTTP stateless |
+
+**When adding a new MCP server** to `example-ecosystem/mcps/`, update the `--only` lists in `package.json` for each script that matches the server's supported transports:
+
+- `pm2:start:stdio` — add to the list if the server supports stdio
+- `pm2:start:http_stateless` — add if it supports streamable_http_stateless
+- `pm2:start:http_stateful` — add if it supports streamable_http_stateful
+
+See the comment block at the top of `ecosystem.config.cjs` for the current mapping.
 
 The ecosystem config is `example-ecosystem/ecosystem.config.cjs`. To act on a single server: `pm2 stop mcp-git`, `pm2 restart mcp-files`, etc.

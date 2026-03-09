@@ -9,7 +9,7 @@ Detailed config schemas, valid values, algorithms, and patterns. Read this when 
 The `mcp-ecosystem` repository contains:
 - **The npm package** (`@scupit/mcp-ecosystem`): CLI provisioner, runtime helpers, and server bootstrap
 - **An example ecosystem**: `example-ecosystem/` (runnable servers + complete config)
-- **Documentation**: `guide-and-provisioning-contract.md`, `implementation-plan.md`
+- **Documentation**: `docs/original-guide-and-provisioning-contract.md`, `docs/original-implementation-plan.md`
 
 A **user's ecosystem** is a separate directory (or repo) that depends on `@scupit/mcp-ecosystem` as an npm package. It contains ecosystem config, client descriptors, OAuth client instances, and MCP server implementations under `mcps/`. The provisioning CLI operates on it via `--dir <path>`.
 
@@ -18,7 +18,7 @@ A **user's ecosystem** is a separate directory (or repo) that depends on `@scupi
 | Import path | Contents |
 |---|---|
 | `@scupit/mcp-ecosystem` | Types, config loading, Auth0 client, runtime helpers (token validation, 401 challenges) |
-| `@scupit/mcp-ecosystem/server` | `createMcpServer(importMetaUrl, options?, setup?)` (requires `@modelcontextprotocol/sdk`; `express` is needed for HTTP transports). The `setup` callback receives the real SDK `McpServer` and must be synchronous. |
+| `@scupit/mcp-ecosystem/server` | `createMcpServer(importMetaUrl, options, setup)` (requires `@modelcontextprotocol/sdk`; `express` is needed for HTTP transports). Both `options` and `setup` are required. The `setup` callback receives `(server, context)`: the real SDK `McpServer` and an `McpServerContext` for auth (`context.retrieveAuthData(extra)`); it must be synchronous. |
 
 ### Example ecosystem structure
 
@@ -27,9 +27,11 @@ example-ecosystem/
   package.json, tsconfig.json      # Build/run config for the servers
   mcps/files/                      # Files MCP (read_file, write_file)
   mcps/git/                        # Git MCP (git_status)
+  mcps/all-in-one/                 # Combined files + git server
+  mcps/live-monitor/               # User-scoped task storage (start_task, check_progress, etc.)
 ```
 
-Run example servers from `example-ecosystem/`: `npm run pm2:start:http_stateless` or `npm run pm2:start:stdio`. Transport must be explicitly chosen; use `pm2 start ecosystem.config.cjs --env stdio` or `--env http_stateless`.
+Run example servers from `example-ecosystem/`: `npm run pm2:start:http_stateless`, `npm run pm2:start:http_stateful`, or `npm run pm2:start:stdio`. Transport must be explicitly chosen; servers that don't support the chosen transport will crash.
 
 ---
 
@@ -366,3 +368,5 @@ Use `requireScopes(['tools.write'])` middleware for per-route enforcement.
 |------|--------------|-------------|-------|-------------|
 | `files` | `standard` | `files.index`, `files.delete` | `read_file`, `write_file` | 3002 |
 | `git` | `standard` | `git.commit` | `git_status` | 3001 |
+| `all-in-one` | `standard` | `files.index`, `files.delete`, `git.commit` | `read_file`, `write_file`, `git_status` | 3003 |
+| `live-monitor` | `standard` | — | `start_task`, `check_progress`, `retrieve_result`, `stop_task`, `list_tasks` | 3004 |

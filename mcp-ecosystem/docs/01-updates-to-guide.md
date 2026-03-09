@@ -196,7 +196,7 @@ The guide itself has been partially updated (sections 6, 7.4, 20.3) to reflect s
 
 **Initial implementation:** `createMcpServer()` returned a handle with a `.builder` property — a custom recording proxy that captured `registerTool()` / `registerResource()` / `registerPrompt()` calls and replayed them onto each fresh `McpServer` instance.
 
-**Current implementation:** `createMcpServer()` accepts an optional third argument: `setup(server)`, a synchronous callback that receives the real SDK `McpServer` instance. The recording proxy / `McpServerBuilder` / `McpServerRecorder` abstraction has been removed entirely.
+**Current implementation:** `createMcpServer()` accepts a required third argument: `setup(server, context)`, a synchronous callback that receives the real SDK `McpServer` instance and an `McpServerContext`. The context exposes `context.isAuthEnabled` and `context.retrieveAuthData(extra)` for user-scoped storage keys. The recording proxy / `McpServerBuilder` / `McpServerRecorder` abstraction has been removed entirely.
 
 **Why:** The recording proxy required mirroring the SDK's registration method signatures, introduced replay correctness risks (including detached-method `this` binding issues), and generated disproportionate type complexity. The setup-callback model is simpler, gives callers direct SDK access, and avoids maintaining a custom registration system.
 
@@ -253,6 +253,14 @@ The guide itself has been partially updated (sections 6, 7.4, 20.3) to reflect s
 
 **Why:** Setup is intentionally synchronous because `createConfiguredServer()` does not await the callback before connecting the server to its transport. Allowing async setup without awaiting it would create a race between configuration and connection.
 
+### 28. Setup callback receives McpServerContext for auth
+
+**Guide said:** Not addressed.
+
+**Implementation:** The setup callback signature is `setup(server, context)`. The second argument `context` is an `McpServerContext` that carries `isAuthEnabled` (from transport config) and `retrieveAuthData(extra)`. Handlers receive `(args, extra)`; passing `extra` to `context.retrieveAuthData(extra)` yields `{ isAuthEnabled: false }` or `{ isAuthEnabled: true, sub, clientId, scopes }`. Use `sub` (never `clientId`) as the storage key for user-scoped data; when auth is disabled, use a constant like `"local"`.
+
+**Why:** User-scoped tools (e.g. task storage, document stores) need a stable per-user key. Auth0 `sub` identifies the user across clients; `clientId` varies per MCP client and would fragment data. The `example-ecosystem/mcps/live-monitor/` server demonstrates this pattern.
+
 ---
 
 ## Summary
@@ -286,3 +294,4 @@ The guide itself has been partially updated (sections 6, 7.4, 20.3) to reflect s
 | 25 | -- | Canonical shutdown through `server.close()` | Runtime |
 | 26 | -- | Machine-readable `/mcp` error responses | Runtime |
 | 27 | -- | Sync-only setup with known type loophole | Runtime |
+| 28 | -- | Setup callback receives McpServerContext for auth | Runtime |

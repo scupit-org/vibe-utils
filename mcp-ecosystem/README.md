@@ -129,6 +129,7 @@ npx mcp-ecosystem reconcile-server my-server --dir ./my-ecosystem
 ```typescript
 import {
   createMcpServer,
+  mcpToolHandler,
   streamableHttpStatelessTransport,
 } from "@scupit/mcp-ecosystem/server";
 import { z } from "zod";
@@ -138,18 +139,18 @@ const mcp = await createMcpServer(
   {
     transport: streamableHttpStatelessTransport({ port: 3000 }),
   },
-  (server) => {
+  (server, _context) => {
     server.registerTool(
       "hello",
       {
         description: "Say hello",
         inputSchema: { name: z.string() },
       },
-      async ({ name }) => {
+      mcpToolHandler(async ({ name }) => {
         return {
           content: [{ type: "text", text: `Hello, ${name}!` }],
         };
-      }
+      })
     );
   }
 );
@@ -187,9 +188,9 @@ The main entry point. Types, config loading, Auth0 Management API client, and li
 
 The server bootstrap. `@modelcontextprotocol/sdk` is required. `express` is required for the HTTP transports and optional for `stdio`. Provides:
 
-- `createMcpServer(importMetaUrl, options?, setup?)` -- loads config from source files, derives runtime env/config, creates the selected MCP transport, and returns a lifecycle handle with `.config`, `.begin()`, and `.stop()`.
+- `createMcpServer(importMetaUrl, options, setup)` -- loads config from source files, derives runtime env/config, creates the selected MCP transport, and returns a lifecycle handle with `.config`, `.begin()`, and `.stop()`. Both `options` and `setup` are required.
 
-The optional `setup` callback receives the real SDK `McpServer` instance and is where you register tools, resources, and prompts. It is called once per fresh server instance: once per request for stateless HTTP, once per session for stateful HTTP, and once per process for stdio. Setup must be synchronous; async setup callbacks are rejected at the type level.
+The `setup` callback receives `(server, context)`: the real SDK `McpServer` instance and an `McpServerContext` that carries auth configuration. Use `context.retrieveAuthData(extra)` in tool/resource/prompt handlers to get user identity for user-scoped storage; when auth is disabled, it returns `{ isAuthEnabled: false }` and you can use a constant like `"local"` as the storage key. Setup is called once per fresh server instance: once per request for stateless HTTP, once per session for stateful HTTP, and once per process for stdio. Setup must be synchronous; async setup callbacks are rejected at the type level.
 
 For HTTP transports, auth is enabled by default. For local development without Auth0, pass `streamableHttpStatelessTransport({ port: portFromEnvOr(3000), auth: { enabled: false } })` or the equivalent stateful transport config. `stdio` has no HTTP auth layer.
 
@@ -214,6 +215,8 @@ The provisioner enforces these defaults (configurable per server):
 
 Each MCP server validates tokens at runtime by checking the RS256 signature, issuer, audience, and scopes. Invalid or missing tokens get a proper `WWW-Authenticate` challenge pointing to the server's Protected Resource Metadata.
 
+**Auth context in handlers:** The auth middleware shapes `req.auth` as the SDK's `AuthInfo` type (with the Auth0 `sub` claim in `extra.sub`). The SDK passes this through as `extra.authInfo` to every tool, resource, and prompt handler. Use `context.retrieveAuthData(extra)` from the setup callback's `context` to get user identity — it returns a tagged union discriminated by `isAuthEnabled`. When auth is enabled, use `auth.sub` as the storage key for user-scoped data (never `clientId`, which identifies the OAuth application and would fragment a user's data across Cursor, Claude Code, etc.). When auth is disabled, `retrieveAuthData` returns `{ isAuthEnabled: false }`; use a constant like `"local"` as the storage key since auth-disabled transports are single-user by definition.
+
 ## Client profiles
 
 Four built-in profiles cover the standard OAuth application types:
@@ -229,7 +232,7 @@ Four built-in profiles cover the standard OAuth application types:
 
 The `example-ecosystem/` directory contains a complete working example with:
 
-- Three MCP servers: **Git** (`git_status` tool), **Files** (`read_file`, `write_file` tools), and **All-in-one** (tools, resources, prompts with multi-transport selection)
+- Four MCP servers: **Git** (`git_status` tool), **Files** (`read_file`, `write_file` tools), **All-in-one** (tools, resources, prompts), and **Live Monitor** (stateful, user-scoped task storage with `start_task`, `check_progress`, `retrieve_result`, `stop_task`, `list_tasks` — demonstrates `context.retrieveAuthData()` and works with auth disabled using `"local"` as the storage key)
 - Three client descriptors: Cursor, MCP Inspector, service worker
 - Three concrete client configs
 - Full ecosystem configuration
@@ -239,20 +242,22 @@ Run the example servers with [PM2](https://pm2.keymetrics.io/). Transport must b
 ```bash
 cd example-ecosystem
 npm install
-npm run pm2:start:http_stateless   # All servers use streamable_http_stateless
-npm run pm2:start:stdio  # All servers use stdio
-npm run pm2:status       # List running processes
+npm run pm2:start:http_stateless   # Git, Files, All-in-one (streamable_http_stateless)
+npm run pm2:start:http_stateful    # Live Monitor (streamable_http_stateful)
+npm run pm2:start:stdio            # All 4 servers (stdio)
+npm run pm2:status                 # List running processes
 npm run pm2:logs         # Stream logs from all servers
 npm run pm2:stop         # Stop all servers
 npm run pm2:delete       # Remove from PM2 (use after stop to fully clean up)
 npm run pm2:restart      # Restart all servers
 ```
 
-Use `--env` to select the transport (platform-agnostic; required — running without `--env` will fail):
+Use `--env` to select the transport (platform-agnostic; required — running without `--env` will fail). Servers that don't support the chosen transport will crash; the rest run normally.
 
 ```bash
-pm2 start ecosystem.config.cjs --env http_stateless   # All servers via HTTP stateless
-pm2 start ecosystem.config.cjs --env stdio   # All servers via stdio
+pm2 start ecosystem.config.cjs --env http_stateless
+pm2 start ecosystem.config.cjs --env http_stateful
+pm2 start ecosystem.config.cjs --env stdio
 ```
 
 To install the latest PM2: `npm install pm2 --save-dev` (in `example-ecosystem/`).
@@ -296,12 +301,12 @@ Cursor discovers the authorization server automatically via `/.well-known/oauth-
 
 ## Documentation
 
-- [Guide and Provisioning Contract](guide-and-provisioning-contract.md) -- the full specification this system implements
+- [Guide and Provisioning Contract](docs/original-guide-and-provisioning-contract.md) -- the full specification this system implements
 - [Updates to Guide](docs/01-updates-to-guide.md) -- every deviation from the original spec, with rationale
 - [Ecosystem Defaults](docs/02-ecosystem-defaults.md) -- all hardcoded defaults, with override examples
 - [Managed Env And Reconciliation Lifecycle](docs/03-managed-env-and-reconciliation-lifecycle.md) -- how `.env`, `.env.example`, client caches, and bootstrap fit together
 - [MCP Server Runtime Lifecycle](docs/04-mcp-server-runtime-lifecycle.md) -- server factory model, transport lifecycles, shutdown semantics, error handling, origin validation, and host binding
-- [Implementation Plan](implementation-plan.md) -- the phased plan used to build the system
+- [Implementation Plan](docs/original-implementation-plan.md) -- the phased plan used to build the system
 
 ## Requirements
 

@@ -1,14 +1,16 @@
 export { createMcpServer } from "./create-server.js";
+export { McpServerContext } from "../mcp-runtime/mcp-server-context.js";
 export {
   mcpToolHandler,
   mcpResourceHandler,
   mcpPromptHandler,
 } from "./mcp-handler.js";
 export type { RuntimeConfig } from "./create-server.js";
+export type { AuthData, HandlerExtra } from "../mcp-runtime/mcp-server-context.js";
 export type {
   ConfigureMcpServer,
-  McpConfiguration,
   CreateMcpServerOptions,
+  McpConfiguration,
 } from "./mcp-configuration.js";
 export {
   stdioTransport,

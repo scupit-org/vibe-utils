@@ -5,7 +5,7 @@ description: Provisions and configures MCP servers and OAuth clients using the m
 
 # MCP Ecosystem Provisioning
 
-Operational playbook for the `mcp-ecosystem` CLI tool. This tool provisions and manages Auth0-backed MCP server ecosystems. For deep rationale, see [guide-and-provisioning-contract.md](../../../guide-and-provisioning-contract.md). For full config schemas, see [reference.md](reference.md).
+Operational playbook for the `mcp-ecosystem` CLI tool. This tool provisions and manages Auth0-backed MCP server ecosystems. For deep rationale, see [guide-and-provisioning-contract.md](../../../docs/original-guide-and-provisioning-contract.md). For full config schemas, see [reference.md](reference.md).
 
 ## Tool vs Ecosystem
 
@@ -120,7 +120,7 @@ import {
 const mcp = await createMcpServer(
   import.meta.url,
   { transport: streamableHttpStatelessTransport({ port: 3001 }) },
-  (server) => {
+  (server, context) => {
     server.registerTool("my-tool", { description: "..." }, mcpToolHandler(async (args) => {
       return { content: [{ type: "text", text: "result" }] };
     }));
@@ -132,13 +132,13 @@ await mcp.begin();
 
 `createMcpServer()` reads `ecosystem-configuration.json` and `mcp-configuration.json` at startup and derives the full `RuntimeConfig` (hostname, resource URI, issuer, audience, scopes) automatically.
 
-The third argument is a synchronous `setup(server)` callback that receives the real SDK `McpServer`. Register tools, resources, and prompts here. This callback is called once per fresh server instance (per request for stateless HTTP, per session for stateful HTTP, once for stdio). Do not use async setup callbacks; they are rejected at the type level.
+The third argument is a synchronous `setup(server, context)` callback that receives the real SDK `McpServer` and an `McpServerContext`. Register tools, resources, and prompts here. Use `context.retrieveAuthData(extra)` in handlers that need user-scoped storage keys (pass the handler's `extra` argument). This callback is called once per fresh server instance (per request for stateless HTTP, per session for stateful HTTP, once for stdio). Do not use async setup callbacks; they are rejected at the type level.
 
 Always wrap MCP handler callbacks with the appropriate wrapper: `mcpToolHandler()` for tools, `mcpResourceHandler()` for resources, `mcpPromptHandler()` for prompts. Each catches thrown errors and returns the correct result shape, eliminating manual `try/catch` blocks.
 
 There is no `.builder` property on the returned handle. The setup callback is the only configuration entry point.
 
-See `example-ecosystem/mcps/git/server.ts` or `example-ecosystem/mcps/files/server.ts` for complete patterns.
+See `example-ecosystem/mcps/git/server.ts` or `example-ecosystem/mcps/files/server.ts` for basic patterns; `example-ecosystem/mcps/live-monitor/server.ts` for user-scoped data with `context.retrieveAuthData(extra)`.
 
 ### Derived values (never set manually)
 
@@ -301,7 +301,7 @@ After writing any config:
 
 ## Additional Resources
 
-- Full rationale and Auth0 mapping: [guide-and-provisioning-contract.md](../../../guide-and-provisioning-contract.md)
+- Full rationale and Auth0 mapping: [guide-and-provisioning-contract.md](../../../docs/original-guide-and-provisioning-contract.md)
 - Config schemas, reuse algorithm, scope model: [reference.md](reference.md)
 - Working example ecosystem: `example-ecosystem/`
 - Server bootstrap API: `@scupit/mcp-ecosystem/server` subpath export

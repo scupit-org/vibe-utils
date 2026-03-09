@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { TokenValidator, InsufficientScopeError } from "./token-validator.js";
 import { send401Challenge } from "./www-authenticate.js";
 
@@ -13,8 +14,16 @@ export interface AuthMiddlewareOptions {
 /**
  * Creates an Express/Connect-compatible middleware that validates bearer tokens.
  *
- * On success, attaches `req.auth` with the validated token claims.
+ * On success, attaches `req.auth` as an {@link AuthInfo} object conforming to the
+ * MCP SDK's expected shape. The Auth0 `sub` claim (stable user ID) is stored in
+ * `req.auth.extra.sub` and is accessible in tool handlers via `extra.authInfo.extra.sub`.
  * On failure, sends a proper 401 WWW-Authenticate challenge per MCP spec.
+ *
+ * NOTE: This middleware sets `req.auth` before the transport route runs. We assume
+ * the MCP SDK's StreamableHTTPServerTransport reads `req.auth` from the request
+ * and passes it through to tool/resource/prompt handlers as `extra.authInfo`. If
+ * auth ever fails to reach handlers, verify that the SDK's handleRequest() wires
+ * req.auth into the handler context.
  */
 export function createAuthMiddleware(options: AuthMiddlewareOptions) {
   const validator = new TokenValidator({
@@ -24,7 +33,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
   });
 
   return async (
-    req: IncomingMessage & { auth?: unknown },
+    req: IncomingMessage & { auth?: AuthInfo },
     res: ServerResponse,
     next?: (err?: unknown) => void
   ) => {
@@ -43,7 +52,27 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
 
     try {
       const payload = await validator.validate(token);
-      (req as IncomingMessage & { auth: unknown }).auth = payload;
+
+      // azp (authorized party) is the OAuth client/application ID. Prefer it over
+      // aud since aud may be the resource server URI rather than the client ID.
+      const azp = typeof payload["azp"] === "string" ? payload["azp"] : undefined;
+      const audFallback = typeof payload.aud === "string"
+        ? payload.aud
+        : Array.isArray(payload.aud)
+          ? (payload.aud.find((a): a is string => typeof a === "string") ?? "")
+          : "";
+
+      const authInfo: AuthInfo = {
+        token,
+        clientId: azp ?? audFallback,
+        scopes: typeof payload.scope === "string"
+          ? payload.scope.split(" ").filter(Boolean)
+          : [],
+        expiresAt: payload.exp,
+        extra: { sub: payload.sub },
+      };
+
+      (req as IncomingMessage & { auth: AuthInfo }).auth = authInfo;
       next?.();
     } catch (err) {
       if (err instanceof InsufficientScopeError) {
@@ -74,7 +103,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
  */
 export function requireScopes(scopes: string[]) {
   return (
-    req: IncomingMessage & { auth?: Record<string, unknown> },
+    req: IncomingMessage & { auth?: AuthInfo },
     res: ServerResponse,
     next?: (err?: unknown) => void
   ) => {
@@ -85,17 +114,7 @@ export function requireScopes(scopes: string[]) {
       return;
     }
 
-    const tokenScopes = new Set<string>();
-    if (typeof auth["scope"] === "string") {
-      for (const s of (auth["scope"] as string).split(" ")) {
-        if (s) tokenScopes.add(s);
-      }
-    }
-    if (Array.isArray(auth["permissions"])) {
-      for (const p of auth["permissions"] as string[]) {
-        if (typeof p === "string") tokenScopes.add(p);
-      }
-    }
+    const tokenScopes = new Set(auth.scopes);
 
     const hasSufficientScope = scopes.some((s) => tokenScopes.has(s));
     if (!hasSufficientScope) {

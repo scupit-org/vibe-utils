@@ -10,7 +10,10 @@ import {
 } from "@scupit/mcp-ecosystem/server";
 import type { ConfigureMcpServer } from "@scupit/mcp-ecosystem/server";
 
-function configureMcp(server: Parameters<ConfigureMcpServer>[0]) {
+function configureMcp(
+  server: Parameters<ConfigureMcpServer>[0],
+  _context: Parameters<ConfigureMcpServer>[1]
+) {
   server.registerTool(
     "git_status",
     {

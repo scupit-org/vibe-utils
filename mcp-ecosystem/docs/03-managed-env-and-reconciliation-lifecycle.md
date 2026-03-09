@@ -170,7 +170,7 @@ This is an intentional, pragmatic boundary rather than an attempt to fully isola
 
 ## Server Runtime Model
 
-After environment bootstrap, `createMcpServer()` builds a server factory that creates fresh SDK `McpServer` instances on demand. If the caller provided a `setup(server)` callback as the third argument, it is called on each fresh instance before the instance is connected to a transport.
+After environment bootstrap, `createMcpServer()` builds a server factory that creates fresh SDK `McpServer` instances on demand. The caller must provide a `setup(server, context)` callback as the third argument; it is called on each fresh instance before the instance is connected to a transport.
 
 The setup callback must be synchronous. It is the only configuration entry point for tools, resources, and prompts. There is no `.builder` property on the returned handle.
 

@@ -11,14 +11,15 @@ For the environment/bootstrap boundary and `.env` handling, see [Managed Env And
 ```ts
 import {
   createMcpServer,
+  mcpToolHandler,
   streamableHttpStatelessTransport,
 } from "@scupit/mcp-ecosystem/server";
 
 const mcp = await createMcpServer(
   import.meta.url,
   { transport: streamableHttpStatelessTransport({ port: 3001 }) },
-  (server) => {
-    server.registerTool("my-tool", { ... }, async (args) => { ... });
+  (server, context) => {
+    server.registerTool("my-tool", { ... }, mcpToolHandler(async (args) => { ... }));
   },
 );
 
@@ -28,8 +29,8 @@ await mcp.begin();
 The three arguments are:
 
 1. `importMetaUrl` — used to locate the server's `mcp-configuration.json` and ecosystem root.
-2. `options?` — transport config (or result of `resolveTransportSelection()`), version override.
-3. `setup?` — a synchronous callback that receives the real SDK `McpServer` instance.
+2. `options` — transport config (or result of `resolveTransportSelection()`), version override. Required.
+3. `setup` — a synchronous callback that receives `(server, context)`: the real SDK `McpServer` instance and an `McpServerContext` for auth. Required.
 
 ### Transport selection
 
@@ -51,11 +52,15 @@ The returned handle exposes:
 
 ## The Setup Callback
 
-The `setup(server)` callback is where you register tools, resources, and prompts on the SDK `McpServer`. It receives the real SDK instance, not a custom abstraction.
+The `setup(server, context)` callback is where you register tools, resources, and prompts on the SDK `McpServer`. It receives the real SDK instance and an `McpServerContext` that carries auth configuration from the transport.
+
+### McpServerContext and auth
+
+The second argument `context` exposes `context.isAuthEnabled` (from the transport config) and `context.retrieveAuthData(extra)`. Pass the handler's `extra` argument to get a tagged union: `{ isAuthEnabled: false }` when auth is disabled (stdio or HTTP with `auth: { enabled: false }`), or `{ isAuthEnabled: true, sub, clientId, scopes }` when auth is enabled. Use `sub` (never `clientId`) as the storage key for user-scoped data. When auth is disabled, use a constant like `"local"` since those transports are single-user by definition. See [User-scoped data](#user-scoped-data) below.
 
 ### When setup is called
 
-| Transport | When `setup(server)` runs |
+| Transport | When `setup(server, context)` runs |
 |---|---|
 | Stateless HTTP | Once per incoming POST request |
 | Stateful HTTP | Once per new session (on initialize) |
@@ -65,7 +70,7 @@ Because setup runs on every fresh server instance, it should contain only regist
 
 ### Setup must be synchronous
 
-Setup is intentionally synchronous today. The server factory calls `setup(server)` and immediately connects the server to its transport. It does not await a returned promise.
+Setup is intentionally synchronous today. The server factory calls `setup(server, context)` and immediately connects the server to its transport. It does not await a returned promise.
 
 Promise-returning setup callbacks are rejected at the type level for inline callbacks. There is a known deferred loophole: if a callback is pre-typed as `ConfigureMcpServer`, TypeScript widens the return type to `void` and an async implementation can slip through. That loophole is documented in code with a TODO and should be tightened later.
 
@@ -84,7 +89,7 @@ That abstraction was removed because:
 - Type complexity grew disproportionately to the value it provided.
 - The setup-callback model is simpler and preserves all needed functionality.
 
-The current `setup(server)` callback gives callers direct access to the real SDK `McpServer` without any intermediary.
+The current `setup(server, context)` callback gives callers direct access to the real SDK `McpServer` without any intermediary.
 
 ---
 
@@ -94,7 +99,7 @@ The current `setup(server)` callback gives callers direct access to the real SDK
 
 Each `POST /mcp` request creates:
 
-1. A fresh `McpServer` via the server factory (which calls `setup(server)`).
+1. A fresh `McpServer` via the server factory (which calls `setup(server, context)`).
 2. A fresh `StreamableHTTPServerTransport` with no session tracking.
 
 The server is connected to the transport, the request is handled, and both are cleaned up when the response completes.
@@ -153,7 +158,7 @@ Closes the server instance, which closes the stdio transport internally.
 
 All async HTTP MCP route handlers are wrapped with `asyncExpressHandler(...)`, which forwards rejections into Express's error pipeline via `next(err)`. This prevents unhandled promise rejections from:
 
-- `setup(server)` throwing during server creation
+- `setup(server, context)` throwing during server creation
 - `server.connect(transport)` failing
 - `transport.handleRequest(...)` rejecting
 
@@ -200,7 +205,9 @@ const mcp = await createMcpServer(import.meta.url, {
     port: 3001,
     origin: allowLocalOrigins(),
   }),
-}, setup);
+}, (server, context) => {
+  // your setup: register tools, resources, prompts
+});
 ```
 
 Origin validation runs before auth middleware.
@@ -212,6 +219,36 @@ Origin validation runs before auth middleware.
 HTTP transports default to binding on `127.0.0.1` (loopback only), per MCP spec guidance for locally hosted servers.
 
 To bind to all interfaces (for example, behind a reverse proxy), set `host: "0.0.0.0"` in the transport config. The startup banner always prints the actual bound address.
+
+---
+
+## User-scoped data
+
+When handlers need to store or retrieve data per user (e.g. documents, task results), use `context.retrieveAuthData(extra)` to get the storage key. Tool handlers receive `(args, extra)`; resource handlers receive `(uri, extra)`. Pass `extra` directly to `retrieveAuthData`.
+
+```ts
+import { createMcpServer, mcpToolHandler, streamableHttpStatelessTransport } from "@scupit/mcp-ecosystem/server";
+
+const mcp = await createMcpServer(import.meta.url, {
+  transport: streamableHttpStatelessTransport({ port: 3001 }),
+}, (server, context) => {
+  server.registerTool("my-tool", { ... }, mcpToolHandler(async (args, extra) => {
+    const auth = context.retrieveAuthData(extra);
+    const userId = auth.isAuthEnabled ? auth.sub : "local";
+    // use userId as the key for user-scoped storage
+    return { content: [{ type: "text", text: "..." }] };
+  }));
+});
+
+await mcp.begin();
+```
+
+**Key points:**
+
+- Use `auth.sub` (Auth0 user ID) as the storage key when `auth.isAuthEnabled` is true. Do not use `clientId` — the same user has different client IDs from different MCP clients (Cursor, Claude Code, etc.), which would fragment their data.
+- When `auth.isAuthEnabled` is false, use a constant like `"local"`. Auth-disabled transports (stdio, HTTP with `auth: { enabled: false }`) are single-user by definition.
+- Create shared stores (e.g. `DocumentStore`) at module scope, not inside the setup callback. Setup runs per session/request; a store created inside it would be isolated per instance instead of shared across users.
+- The `example-ecosystem/mcps/live-monitor/` server demonstrates this pattern with `start_task`, `check_progress`, `retrieve_result`, `stop_task`, and `list_tasks`.
 
 ---
 

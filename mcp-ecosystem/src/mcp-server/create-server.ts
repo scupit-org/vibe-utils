@@ -16,6 +16,7 @@ import {
   resolveScopes,
 } from "../config/index.js";
 import { EnvManager } from "../utils/env-manager.js";
+import { McpServerContext } from "../mcp-runtime/mcp-server-context.js";
 import type {
   McpConfiguration,
   CreateMcpServerOptions,
@@ -155,8 +156,9 @@ function scrubServerProcessEnv(): void {
 // callsite. If a callback is pre-typed as ConfigureMcpServer, TypeScript will
 // widen its return type to void and an async implementation can still slip
 // through. Tighten this in the near future if we need stricter enforcement.
-type RejectPromiseReturningSetup<TSetup extends (server: McpServer) => unknown> =
-  ReturnType<TSetup> extends PromiseLike<unknown> ? never : TSetup;
+type RejectPromiseReturningSetup<
+  TSetup extends (server: McpServer, context: McpServerContext) => unknown,
+> = ReturnType<TSetup> extends PromiseLike<unknown> ? never : TSetup;
 
 /**
  * Create an MCP server configured with the given transport.
@@ -170,7 +172,7 @@ type RejectPromiseReturningSetup<TSetup extends (server: McpServer) => unknown> 
  * const mcp = await createMcpServer(
  *   import.meta.url,
  *   { transport: streamableHttpStatelessTransport({ port: 3001, auth: { enabled: false } }) },
- *   (server) => {
+ *   (server, context) => {
  *     server.registerTool("my-tool", { ... }, async (args) => { ... });
  *   },
  * );
@@ -179,7 +181,7 @@ type RejectPromiseReturningSetup<TSetup extends (server: McpServer) => unknown> 
  * ```
  */
 export async function createMcpServer<
-  TSetup extends (server: McpServer) => unknown,
+  TSetup extends (server: McpServer, context: McpServerContext) => unknown,
 >(
   importMetaUrl: string,
   options: CreateMcpServerOptions,
@@ -197,6 +199,11 @@ export async function createMcpServer<
     ("auth" in transport ? transport.auth?.enabled !== false : false);
   const config = await loadServerConfig(mcpDir, { requireTenantDomain });
 
+  const isAuthEnabled =
+    transport.type !== "stdio" &&
+    ("auth" in transport ? transport.auth?.enabled !== false : true);
+  const context = new McpServerContext(isAuthEnabled);
+
   const createConfiguredServer = (): McpServer => {
     const server = new McpServer({
       name: config.server.name,
@@ -206,7 +213,7 @@ export async function createMcpServer<
     // callbacks are rejected at the type level; if we ever support async
     // setup, we must explicitly await it here before connecting the server
     // to its transport.
-    setup(server);
+    setup(server, context);
     return server;
   };
 

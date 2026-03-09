@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServerContext } from "../mcp-runtime/mcp-server-context.js";
 import type { RuntimeConfig } from "./create-server.js";
 import type { TransportConfig } from "./transport-config.js";
 
@@ -8,8 +9,15 @@ import type { TransportConfig } from "./transport-config.js";
  *
  * HTTP transports call this once per new request/session server instance.
  * Stdio calls it once for the process-wide server instance.
+ *
+ * The second argument {@link McpServerContext} carries auth configuration
+ * (e.g. `isAuthEnabled`) and provides {@link McpServerContext.retrieveAuthData}
+ * for extracting user identity in handlers.
  */
-export type ConfigureMcpServer = (server: McpServer) => void;
+export type ConfigureMcpServer = (
+  server: McpServer,
+  context: McpServerContext
+) => void;
 
 /**
  * Unified handle returned by {@link createMcpServer}. Provides access to the
