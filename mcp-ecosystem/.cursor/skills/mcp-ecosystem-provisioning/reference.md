@@ -261,6 +261,12 @@ Grants are matched in Auth0 by `client_id + audience + subject_type`. The provis
 
 ---
 
+## Tenant commands
+
+`tenant disable-dcr` disables Dynamic Client Registration on the Auth0 tenant via PATCH `/tenants/settings`. `tenant enable-dcr` re-enables it. Both require the M2M app to have `update:tenant_settings` scope. Use when `verify-tenant` warns that DCR is enabled and you want to disable it via CLI instead of the Auth0 Dashboard.
+
+---
+
 ## Teardown commands
 
 `teardown-server <slug>` deletes Auth0 APIs for a single MCP server. `teardown-all` tears down APIs for all configured servers in one run. Use them to free tenant API slots when hitting Auth0 limits (e.g. after changing `use_trailing_slash` and creating orphaned APIs). Both use `deriveResourceUris` and `resolveUseTrailingSlash` to determine which identifiers to look for, then delete each matching API. Support `--dry-run` to preview without changes.

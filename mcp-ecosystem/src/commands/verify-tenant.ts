@@ -91,7 +91,8 @@ export async function verifyTenant(
   if (dcr) {
     logger.warn(
       "Dynamic Client Registration is enabled. The baseline system uses static registration. " +
-        "Disable DCR unless you specifically need it."
+        "Disable DCR via: Auth0 Dashboard > Settings > Advanced > Dynamic Client Registration, " +
+        "or run: npx mcp-ecosystem tenant disable-dcr --dir <path>"
     );
   } else {
     logger.info("Dynamic Client Registration is disabled (expected for baseline).");

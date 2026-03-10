@@ -139,6 +139,25 @@ export class Auth0ManagementClient {
     );
   }
 
+  /**
+   * Set the Dynamic Client Registration flag on the tenant.
+   * Throws a helpful error on 403 (missing update:tenant_settings scope).
+   */
+  async patchDcrEnabled(enabled: boolean): Promise<void> {
+    try {
+      await this.patchTenantSettings({
+        flags: { enable_dynamic_client_registration: enabled },
+      });
+    } catch (err) {
+      if (err instanceof Auth0ApiError && err.statusCode === 403) {
+        throw new Error(
+          "Insufficient permissions. Ensure your M2M app has the update:tenant_settings scope."
+        );
+      }
+      throw err;
+    }
+  }
+
   // ── Applications (Clients) ──
 
   async listApplications(params?: {

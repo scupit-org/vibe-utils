@@ -28,3 +28,15 @@ export type { TeardownAllResult } from "./teardown-all.js";
 
 export { generateArtifacts } from "./generate-artifacts.js";
 export type { GenerateArtifactsResult } from "./generate-artifacts.js";
+
+export { tenantDisableDcr } from "./tenant-disable-dcr.js";
+export type {
+  TenantDisableDcrResult,
+  TenantDisableDcrAction,
+} from "./tenant-disable-dcr.js";
+
+export { tenantEnableDcr } from "./tenant-enable-dcr.js";
+export type {
+  TenantEnableDcrResult,
+  TenantEnableDcrAction,
+} from "./tenant-enable-dcr.js";

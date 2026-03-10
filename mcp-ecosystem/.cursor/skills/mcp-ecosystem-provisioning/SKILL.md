@@ -260,6 +260,8 @@ All commands support `--dry-run`, `--verbose`, `--json`, `--dir <path>`.
 | Command | Purpose |
 |---------|---------|
 | `verify-tenant` | Check Auth0 tenant prerequisites |
+| `tenant disable-dcr` | Disable Dynamic Client Registration on Auth0 tenant |
+| `tenant enable-dcr` | Enable Dynamic Client Registration on Auth0 tenant |
 | `reconcile-client <key>` | Create or reuse Auth0 Application |
 | `reconcile-server <slug>` | Reconcile Auth0 API + scopes + policy + grants |
 | `reconcile-all` | Full ecosystem reconciliation |

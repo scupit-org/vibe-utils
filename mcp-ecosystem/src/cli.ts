@@ -15,6 +15,8 @@ import {
   teardownServer,
   teardownAll,
   generateArtifacts,
+  tenantDisableDcr,
+  tenantEnableDcr,
 } from "./commands/index.js";
 
 const program = new Command();
@@ -193,6 +195,40 @@ program
       await ctx.auth0.authenticate();
       const result = await grantClient(ctx, serverSlug, clientKey, scopes);
       await ctx.envManager.flush(ctx.dryRun);
+      output(opts.json, result);
+    } catch (err) {
+      logger.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+  });
+
+const tenantCmd = program
+  .command("tenant")
+  .description("Manage Auth0 tenant settings");
+
+tenantCmd
+  .command("disable-dcr")
+  .description("Disable Dynamic Client Registration on the Auth0 tenant")
+  .action(async () => {
+    const opts = program.opts() as { dir: string; dryRun: boolean; verbose: boolean; json: boolean };
+    try {
+      const ctx = await buildContext(opts);
+      const result = await tenantDisableDcr(ctx);
+      output(opts.json, result);
+    } catch (err) {
+      logger.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+  });
+
+tenantCmd
+  .command("enable-dcr")
+  .description("Enable Dynamic Client Registration on the Auth0 tenant")
+  .action(async () => {
+    const opts = program.opts() as { dir: string; dryRun: boolean; verbose: boolean; json: boolean };
+    try {
+      const ctx = await buildContext(opts);
+      const result = await tenantEnableDcr(ctx);
       output(opts.json, result);
     } catch (err) {
       logger.error(err instanceof Error ? err.message : String(err));

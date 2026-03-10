@@ -174,6 +174,8 @@ All commands support `--dry-run`, `--verbose`, `--json`, and `--dir <path>`.
 | Command                                 | What it does                                                                             |
 | --------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `verify-tenant`                         | Checks Auth0 tenant prerequisites (Resource Parameter Compatibility Profile, DCR status) |
+| `tenant disable-dcr`                    | Disable Dynamic Client Registration on the Auth0 tenant                                  |
+| `tenant enable-dcr`                     | Enable Dynamic Client Registration on the Auth0 tenant                                   |
 | `reconcile-client <key>`                | Creates or reuses an Auth0 Application for a software client                             |
 | `reconcile-server <slug>`               | Reconciles the Auth0 API, scopes, access policy, and client grants for an MCP server     |
 | `reconcile-all`                         | Full ecosystem reconciliation: tenant, then all clients, then all servers                |
