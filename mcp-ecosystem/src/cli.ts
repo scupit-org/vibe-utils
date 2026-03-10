@@ -26,7 +26,7 @@ program
   .description(
     "Provisioning and runtime tooling for a personal MCP ecosystem that uses Auth0 for OAuth"
   )
-  .version("0.1.0")
+  .version("0.2.4")
   .option("-d, --dir <path>", "Root directory of the ecosystem", ".")
   .option("--dry-run", "Preview changes without modifying Auth0 or local files", false)
   .option("--verbose", "Enable verbose/debug output", false)
