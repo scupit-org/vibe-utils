@@ -1,7 +1,13 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import { TokenValidator, InsufficientScopeError } from "./token-validator.js";
+import {
+  TokenValidator,
+  InsufficientScopeError,
+  ValidatedToken,
+  extractScopes,
+} from "./token-validator.js";
 import { send401Challenge } from "./www-authenticate.js";
+import { getPopulatedStringOrNull } from "../utils/index.js";
 
 export interface AuthMiddlewareOptions {
   resourceUri: string;
@@ -9,6 +15,24 @@ export interface AuthMiddlewareOptions {
   issuer: string;
   audience: string | string[];
   jwksUri?: string;
+}
+
+/**
+ * Extracts the OAuth client ID from a validated JWT payload.
+ *
+ * Priority: client_id (RFC 9068) > azp (Auth0/OIDC). Never uses aud, which
+ * contains resource URIs, not client identifiers.
+ *
+ * @internal Exported for testing.
+ */
+export function extractClientIdFromPayload(
+  payload: Record<string, unknown>
+): string {
+  return (
+    getPopulatedStringOrNull(payload["client_id"]) ??
+    getPopulatedStringOrNull(payload["azp"]) ??
+    ""
+  );
 }
 
 /**
@@ -51,23 +75,13 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
     const token = authHeader.slice(7);
 
     try {
-      const payload = await validator.validate(token);
-
-      // azp (authorized party) is the OAuth client/application ID. Prefer it over
-      // aud since aud may be the resource server URI rather than the client ID.
-      const azp = typeof payload["azp"] === "string" ? payload["azp"] : undefined;
-      const audFallback = typeof payload.aud === "string"
-        ? payload.aud
-        : Array.isArray(payload.aud)
-          ? (payload.aud.find((a): a is string => typeof a === "string") ?? "")
-          : "";
+      const payload: ValidatedToken = await validator.validate(token);
+      const clientId: string = extractClientIdFromPayload(payload);
 
       const authInfo: AuthInfo = {
         token,
-        clientId: azp ?? audFallback,
-        scopes: typeof payload.scope === "string"
-          ? payload.scope.split(" ").filter(Boolean)
-          : [],
+        clientId,
+        scopes: Array.from(extractScopes(payload)),
         expiresAt: payload.exp,
         extra: { sub: payload.sub },
       };

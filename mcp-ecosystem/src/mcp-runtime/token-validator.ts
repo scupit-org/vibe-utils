@@ -60,7 +60,7 @@ export class TokenValidator {
   }
 }
 
-function extractScopes(payload: ValidatedToken): Set<string> {
+export function extractScopes(payload: ValidatedToken): Set<string> {
   const scopes = new Set<string>();
 
   if (typeof payload.scope === "string") {

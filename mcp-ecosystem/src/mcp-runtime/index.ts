@@ -10,6 +10,7 @@ export type {
 export {
   TokenValidator,
   InsufficientScopeError,
+  extractScopes,
 } from "./token-validator.js";
 export type {
   TokenValidatorOptions,

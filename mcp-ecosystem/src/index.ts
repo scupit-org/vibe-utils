@@ -44,6 +44,7 @@ export {
   protectedResourceMetadataHandler,
   TokenValidator,
   InsufficientScopeError,
+  extractScopes,
   buildWwwAuthenticateChallenge,
   send401Challenge,
   createAuthMiddleware,

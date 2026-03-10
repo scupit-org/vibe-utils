@@ -1,3 +1,4 @@
+export { getPopulatedStringOrNull } from "./string-utils.js";
 export { logger, setVerbose } from "./logger.js";
 export { createAuth0Client, createLazyAuth0Context } from "./context.js";
 export type { CommandContext } from "./context.js";

@@ -1,4 +1,5 @@
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import { getPopulatedStringOrNull } from "../utils/index.js";
 
 /**
  * Minimal shape of the MCP handler `extra` argument. Avoids importing the
@@ -54,8 +55,8 @@ export class McpServerContext {
       return { isAuthEnabled: false };
     }
 
-    const sub = authInfo?.extra?.["sub"];
-    if (typeof sub !== "string" || sub.trim() === "") {
+    const sub = getPopulatedStringOrNull(authInfo?.extra?.["sub"]);
+    if (!sub) {
       throw new Error(
         "Auth is enabled but user identity (sub claim) is missing from authInfo. " +
           "This indicates a misconfiguration — verify that auth middleware is correctly wired."
@@ -65,7 +66,7 @@ export class McpServerContext {
     return {
       isAuthEnabled: true,
       sub,
-      clientId: typeof authInfo?.clientId === "string" ? authInfo.clientId : null,
+      clientId: getPopulatedStringOrNull(authInfo?.clientId),
       scopes: Array.isArray(authInfo?.scopes) ? authInfo.scopes : [],
     };
   }
