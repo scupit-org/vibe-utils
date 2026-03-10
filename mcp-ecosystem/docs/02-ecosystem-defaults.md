@@ -63,7 +63,7 @@ These are written to the `.env` managed block by the CLI during `reconcile-clien
 
 These variables exist because Auth0 only returns a client secret at creation time. The CLI persists them so they are not lost. **Manually deleting a secret line from `.env` is unrecoverable** without rotating the credential in the Auth0 Dashboard.
 
-MCP servers do not need client IDs or secrets. Servers validate incoming requests by verifying the JWT signature, issuer, audience, and scopes via Auth0's JWKS endpoint. The access control decision (which clients may request tokens for which APIs) is enforced by Auth0 at token issuance time, configured by the CLI's `reconcile-server` and `grant-client` commands.
+MCP servers do not need client IDs or secrets. Servers validate incoming requests by verifying the JWT signature, issuer, and audience via Auth0's JWKS endpoint. Scope data is extracted from the token and passed to handlers; scope enforcement is the server implementer's responsibility. The access control decision (which clients may request tokens for which APIs) is enforced by Auth0 at token issuance time, configured by the CLI's `reconcile-server` and `grant-client` commands.
 
 The `.env` managed block is intentionally tool-owned. If you want to document extra variables or add notes for humans, put them outside the managed block so future reconciliations preserve them.
 
@@ -159,7 +159,23 @@ Per-server override in `mcp-configuration.json`:
 
 ## Scope Profiles
 
-Named sets of scopes that servers reference via `scope_profile` in their `mcp-configuration.json`.
+Named sets of scopes that servers reference via `scope_profile` in their `mcp-configuration.json`. Add server-specific scopes via `extra_scopes` in `mcp-configuration.json`.
+
+### Built-in scopes reference
+
+| Scope | Description |
+| --- | --- |
+| `resources.read` | Read MCP resources |
+| `prompts.read` | Read MCP prompts |
+| `tools.read` | Execute read-only tools (list, inspect) |
+| `tools.write` | Execute mutating tools (create, update, delete) |
+
+### Default scope profiles
+
+| Profile | Scopes | Use case |
+| --- | --- | --- |
+| `readonly` | `resources.read`, `prompts.read`, `tools.read` | Read-only access to resources, prompts, and tools |
+| `standard` | `readonly` + `tools.write` | Full access including mutating tools |
 
 ### `readonly`
 

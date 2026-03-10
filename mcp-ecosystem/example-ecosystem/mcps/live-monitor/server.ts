@@ -36,6 +36,11 @@ function configureMcp(
       const auth = context.retrieveAuthData(extra);
       const userId = auth.isAuthEnabled ? auth.sub : LOCAL_USER_ID;
 
+      // Scope check: start_task is a write operation
+      if (auth.isAuthEnabled && !auth.scopes.includes("tools.write")) {
+        throw new Error("Insufficient scope: tools.write required");
+      }
+
       const taskId = randomUUID();
       documentStore.createTask(userId, taskId, documentId);
 
@@ -56,6 +61,7 @@ function configureMcp(
     mcpToolHandler(async ({ taskId }, extra) => {
       const auth = context.retrieveAuthData(extra);
       const userId = auth.isAuthEnabled ? auth.sub : LOCAL_USER_ID;
+      // Scope check omitted for brevity; see start_task for the pattern.
 
       const doc = documentStore.getTask(userId, taskId);
 
@@ -103,6 +109,7 @@ function configureMcp(
     mcpToolHandler(async ({ taskId }, extra) => {
       const auth = context.retrieveAuthData(extra);
       const userId = auth.isAuthEnabled ? auth.sub : LOCAL_USER_ID;
+      // Scope check omitted for brevity; see start_task for the pattern.
 
       const doc = documentStore.getTask(userId, taskId);
 
@@ -130,6 +137,7 @@ function configureMcp(
     mcpToolHandler(async ({ taskId }, extra) => {
       const auth = context.retrieveAuthData(extra);
       const userId = auth.isAuthEnabled ? auth.sub : LOCAL_USER_ID;
+      // Scope check omitted for brevity; see start_task for the pattern.
 
       const doc = documentStore.getTask(userId, taskId);
 
@@ -157,6 +165,11 @@ function configureMcp(
     mcpToolHandler(async (_args, extra) => {
       const auth = context.retrieveAuthData(extra);
       const userId = auth.isAuthEnabled ? auth.sub : LOCAL_USER_ID;
+
+      // Scope check: list_tasks is a read operation
+      if (auth.isAuthEnabled && !auth.scopes.includes("tools.read")) {
+        throw new Error("Insufficient scope: tools.read required");
+      }
 
       const tasks = documentStore.listTasks(userId);
 

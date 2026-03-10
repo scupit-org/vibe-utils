@@ -45,6 +45,21 @@ server.registerTool("my-tool", { ... }, mcpToolHandler(async (args, extra) => {
 }));
 ```
 
+For tools that modify state, check `auth.scopes` before proceeding. The framework extracts scopes from the token but does not enforce them; the server implementer is responsible for scope checks:
+
+```typescript
+server.registerTool("write-tool", { ... }, mcpToolHandler(async (args, extra) => {
+  const auth = context.retrieveAuthData(extra);
+  if (auth.isAuthEnabled && !auth.scopes.includes("tools.write")) {
+    throw new Error("Insufficient scope: tools.write required");
+  }
+  // ... perform write operation
+  return { content: [{ type: "text", text: "done" }] };
+}));
+```
+
+Built-in scopes: `tools.read`, `tools.write`, `resources.read`, `prompts.read` (see [README Auth model](README.md#auth-model) or [Ecosystem Defaults](docs/02-ecosystem-defaults.md#scope-profiles) for the full reference). See `example-ecosystem/mcps/live-monitor/server.ts` for `start_task` (tools.write) and `list_tasks` (tools.read) scope-check examples.
+
 Do **not** write manual `try/catch` blocks — use the appropriate wrapper instead.
 
 ## Example Ecosystem Validation

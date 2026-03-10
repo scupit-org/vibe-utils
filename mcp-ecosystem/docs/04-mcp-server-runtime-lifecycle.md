@@ -247,8 +247,9 @@ await mcp.begin();
 
 - Use `auth.sub` (Auth0 user ID) as the storage key when `auth.isAuthEnabled` is true. Do not use `clientId` — the same user has different client IDs from different MCP clients (Cursor, Claude Code, etc.), which would fragment their data.
 - When `auth.isAuthEnabled` is false, use a constant like `"local"`. Auth-disabled transports (stdio, HTTP with `auth: { enabled: false }`) are single-user by definition.
+- The `auth.scopes` array contains the token's granted scopes. The server implementer is responsible for checking them where needed (e.g. require `tools.write` before write operations, `tools.read` before read operations). See [Ecosystem Defaults: Scope Profiles](./02-ecosystem-defaults.md#scope-profiles) for the built-in scope reference.
 - Create shared stores (e.g. `DocumentStore`) at module scope, not inside the setup callback. Setup runs per session/request; a store created inside it would be isolated per instance instead of shared across users.
-- The `example-ecosystem/mcps/live-monitor/` server demonstrates this pattern with `start_task`, `check_progress`, `retrieve_result`, `stop_task`, and `list_tasks`.
+- The `example-ecosystem/mcps/live-monitor/` server demonstrates identity and scope checks with `start_task` (tools.write), `list_tasks` (tools.read), and the other handlers.
 
 ---
 

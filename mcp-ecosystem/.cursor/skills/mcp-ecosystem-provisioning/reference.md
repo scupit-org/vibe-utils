@@ -118,6 +118,20 @@ Validated by `ServerConfigSchema` in `src/types/server-config.ts`.
 
 Final scope set = `scope_profiles[scope_profile]` union `extra_scopes`, deduplicated.
 
+### Built-in scope profiles and scopes
+
+| Profile | Scopes |
+| --- | --- |
+| `readonly` | `resources.read`, `prompts.read`, `tools.read` |
+| `standard` | `resources.read`, `prompts.read`, `tools.read`, `tools.write` |
+
+| Scope | Description |
+| --- | --- |
+| `resources.read` | Read MCP resources |
+| `prompts.read` | Read MCP prompts |
+| `tools.read` | Execute read-only tools |
+| `tools.write` | Execute mutating tools |
+
 ---
 
 ## Client Config Schema (`client-configuration.json`)
@@ -345,13 +359,13 @@ Use `send401Challenge()` or `createAuthMiddleware()` from `@scupit/mcp-ecosystem
 
 ### Token Validation
 
-Validate: RS256 signature via JWKS, issuer, audience, expiration, scopes/permissions.
+The framework validates RS256 signature via JWKS, issuer, audience, and expiration. It extracts scope/permission data from the token and passes it to handlers; scope enforcement is the server implementer's responsibility.
 
 Use `TokenValidator` from `@scupit/mcp-ecosystem`.
 
 ### Scope Enforcement
 
-Use `requireScopes(['tools.write'])` middleware for per-route enforcement.
+Check `auth.scopes` from `context.retrieveAuthData(extra)` inside tool handlers where needed (e.g. require `tools.write` before write operations). For non-MCP Express routes, use `requireScopes(['tools.write'])` middleware.
 
 ---
 

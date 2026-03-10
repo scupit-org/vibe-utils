@@ -196,7 +196,7 @@ The server bootstrap. `@modelcontextprotocol/sdk` is required. `express` is requ
 
 - `createMcpServer(importMetaUrl, options, setup)` -- loads config from source files, derives runtime env/config, creates the selected MCP transport, and returns a lifecycle handle with `.config`, `.begin()`, and `.stop()`. Both `options` and `setup` are required.
 
-The `setup` callback receives `(server, context)`: the real SDK `McpServer` instance and an `McpServerContext` that carries auth configuration. Use `context.retrieveAuthData(extra)` in tool/resource/prompt handlers to get user identity for user-scoped storage; when auth is disabled, it returns `{ isAuthEnabled: false }` and you can use a constant like `"local"` as the storage key. Setup is called once per fresh server instance: once per request for stateless HTTP, once per session for stateful HTTP, and once per process for stdio. Setup must be synchronous; async setup callbacks are rejected at the type level.
+The `setup` callback receives `(server, context)`: the real SDK `McpServer` instance and an `McpServerContext` that carries auth configuration. Use `context.retrieveAuthData(extra)` in tool/resource/prompt handlers to get user identity and scopes; when auth is disabled, it returns `{ isAuthEnabled: false }` and you can use a constant like `"local"` as the storage key. Check `auth.scopes` where needed to enforce scope-based access. Setup is called once per fresh server instance: once per request for stateless HTTP, once per session for stateful HTTP, and once per process for stdio. Setup must be synchronous; async setup callbacks are rejected at the type level.
 
 For HTTP transports, auth is enabled by default. For local development without Auth0, pass `streamableHttpStatelessTransport({ port: portFromEnvOr(3000), auth: { enabled: false } })` or the equivalent stateful transport config. `stdio` has no HTTP auth layer.
 
@@ -219,9 +219,27 @@ The provisioner enforces these defaults (configurable per server):
 - **Token format**: `rfc9068_profile_authz` -- access tokens include the `permissions` claim
 - **Signing**: RS256 via Auth0 JWKS
 
-Each MCP server validates tokens at runtime by checking the RS256 signature, issuer, audience, and scopes. Invalid or missing tokens get a proper `WWW-Authenticate` challenge pointing to the server's Protected Resource Metadata.
+The framework validates tokens at runtime by checking the RS256 signature, issuer, and audience. It extracts scope data from the token and passes it through to handlers; scope enforcement is the server implementer's responsibility. Invalid or missing tokens get a proper `WWW-Authenticate` challenge pointing to the server's Protected Resource Metadata.
 
-**Auth context in handlers:** The auth middleware shapes `req.auth` as the SDK's `AuthInfo` type (with the Auth0 `sub` claim in `extra.sub`). The SDK passes this through as `extra.authInfo` to every tool, resource, and prompt handler. Use `context.retrieveAuthData(extra)` from the setup callback's `context` to get user identity — it returns a tagged union discriminated by `isAuthEnabled`. When auth is enabled, use `auth.sub` as the storage key for user-scoped data (never `clientId`, which identifies the OAuth application and would fragment a user's data across Cursor, Claude Code, etc.). When auth is disabled, `retrieveAuthData` returns `{ isAuthEnabled: false }`; use a constant like `"local"` as the storage key since auth-disabled transports are single-user by definition.
+**Auth context in handlers:** The auth middleware shapes `req.auth` as the SDK's `AuthInfo` type (with the Auth0 `sub` claim in `extra.sub`). The SDK passes this through as `extra.authInfo` to every tool, resource, and prompt handler. Use `context.retrieveAuthData(extra)` from the setup callback's `context` to get user identity and scopes — it returns a tagged union discriminated by `isAuthEnabled`. When auth is enabled, use `auth.sub` as the storage key for user-scoped data (never `clientId`, which identifies the OAuth application and would fragment a user's data across Cursor, Claude Code, etc.). The `auth.scopes` array contains the token's granted scopes; the server implementer is responsible for checking them where needed (e.g. require `tools.write` before allowing write operations). When auth is disabled, `retrieveAuthData` returns `{ isAuthEnabled: false }`; use a constant like `"local"` as the storage key since auth-disabled transports are single-user by definition.
+
+### Default scope profiles
+
+Servers reference a scope profile in `mcp-configuration.json`; the provisioner grants those scopes to clients. Add server-specific scopes via `extra_scopes`.
+
+| Profile | Scopes | Use case |
+| --- | --- | --- |
+| `readonly` | `resources.read`, `prompts.read`, `tools.read` | Read-only access to resources, prompts, and tools |
+| `standard` | `readonly` + `tools.write` | Full access including mutating tools |
+
+### Built-in scopes reference
+
+| Scope | Description |
+| --- | --- |
+| `resources.read` | Read MCP resources |
+| `prompts.read` | Read MCP prompts |
+| `tools.read` | Execute read-only tools (list, inspect) |
+| `tools.write` | Execute mutating tools (create, update, delete) |
 
 ## Client profiles
 
@@ -240,7 +258,7 @@ Four built-in profiles cover the standard OAuth application types:
 
 The `example-ecosystem/` directory contains a complete working example with:
 
-- Four MCP servers: **Git** (`git_status` tool), **Files** (`read_file`, `write_file` tools), **All-in-one** (tools, resources, prompts), and **Live Monitor** (stateful, user-scoped task storage with `start_task`, `check_progress`, `retrieve_result`, `stop_task`, `list_tasks` — demonstrates `context.retrieveAuthData()` and works with auth disabled using `"local"` as the storage key)
+- Four MCP servers: **Git** (`git_status` tool), **Files** (`read_file`, `write_file` tools), **All-in-one** (tools, resources, prompts), and **Live Monitor** (stateful, user-scoped task storage with `start_task`, `check_progress`, `retrieve_result`, `stop_task`, `list_tasks` — demonstrates `context.retrieveAuthData()` for identity and scope checks, works with auth disabled using `"local"` as the storage key)
 - Three client descriptors: Cursor, MCP Inspector, service worker
 - Three concrete client configs
 - Full ecosystem configuration
