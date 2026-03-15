@@ -1,3 +1,7 @@
 node_modules/
 dist/
 example/dist/
+.yarn/
+.pnp.cjs
+.pnp.loader.mjs
+*.tgz
