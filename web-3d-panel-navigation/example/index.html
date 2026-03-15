@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>web-3d-panel-navigation Example</title>
+    <link rel="stylesheet" href="./dist/styles.css">
+  </head>
+  <body>
+    <div id="zoom-planes-source">
+      <div class="zoom-plane"
+           data-zoom-plane="left"
+           data-section="page-left"
+           data-width="1920"
+           data-height="1080"
+           data-position="-850, 0, 100"
+           data-rotation="0, 30, 0">
+        <span class="plane-label">Projects</span>
+      </div>
+
+      <div class="zoom-plane"
+           data-zoom-plane="middle"
+           data-section="page-middle"
+           data-width="1600"
+           data-height="900"
+           data-position="0, 0, 0"
+           data-rotation="0, 0, 0"
+           data-zoom-center>
+        <span class="plane-label">About</span>
+      </div>
+
+      <div class="zoom-plane"
+           data-zoom-plane="right"
+           data-section="page-right"
+           data-width="1280"
+           data-height="720"
+           data-position="700, 0, 100"
+           data-rotation="0, -30, 0">
+        <span class="plane-label">Contact</span>
+      </div>
+
+      <div class="zoom-plane"
+           data-zoom-plane="top"
+           data-section="page-top"
+           data-width="1400"
+           data-height="800"
+           data-position="0, 600, 200"
+           data-rotation="-45, 0, 0">
+        <span class="plane-label">Resources</span>
+      </div>
+
+      <div class="zoom-plane"
+           data-zoom-plane="large"
+           data-section="page-large"
+           data-width="2400"
+           data-height="1600"
+           data-position="-1200, -300, 300"
+           data-rotation="15, -20, 10">
+        <span class="plane-label">Gallery</span>
+      </div>
+
+      <div class="zoom-plane"
+           data-zoom-plane="small"
+           data-section="page-small"
+           data-width="800"
+           data-height="600"
+           data-position="1100, -200, 50"
+           data-rotation="0, 45, -15">
+        <span class="plane-label">Quick Links</span>
+      </div>
+
+      <div class="zoom-plane"
+           data-zoom-plane="bottom"
+           data-section="page-bottom"
+           data-width="1600"
+           data-height="950"
+           data-position="-400, -700, -100"
+           data-rotation="30, 25, -5">
+        <span class="plane-label">News</span>
+      </div>
+    </div>
+
+    <div id="scene-container"></div>
+
+    <div id="page-content-container">
+      <section id="page-left" class="page-section">
+        <h1>Projects</h1>
+        <p>Welcome to the Projects section. This is where all your work would be displayed.</p>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+        <div class="project-grid">
+          <div class="project-card">
+            <h3>Project Alpha</h3>
+            <p>A cutting-edge web application built with modern technologies.</p>
+          </div>
+          <div class="project-card">
+            <h3>Project Beta</h3>
+            <p>An innovative mobile app that revolutionizes user experience.</p>
+          </div>
+          <div class="project-card">
+            <h3>Project Gamma</h3>
+            <p>A comprehensive backend system powering multiple services.</p>
+          </div>
+        </div>
+        <h2>More Content</h2>
+        <p>This section has more content to demonstrate scrolling works properly when zoomed in.</p>
+        <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+        <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+      </section>
+
+      <section id="page-middle" class="page-section">
+        <h1>About</h1>
+        <p>Welcome to the About section. Learn more about who we are and what we do.</p>
+        <p>We are a team of passionate developers and designers dedicated to creating exceptional digital experiences. Our focus is on clean code, beautiful design, and seamless user interactions.</p>
+        <h2>Our Mission</h2>
+        <p>To push the boundaries of web technology and deliver innovative solutions that make a difference.</p>
+        <h2>Our Values</h2>
+        <ul>
+          <li>Excellence in craft</li>
+          <li>Continuous learning</li>
+          <li>User-centered design</li>
+          <li>Open collaboration</li>
+        </ul>
+        <h2>Our Story</h2>
+        <p>Founded with a vision to transform how people interact with technology, we've been on a journey of constant innovation and growth.</p>
+        <p>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.</p>
+      </section>
+
+      <section id="page-right" class="page-section">
+        <h1>Contact</h1>
+        <p>Welcome to the Contact section. Get in touch with us.</p>
+        <p>We'd love to hear from you! Whether you have a question, feedback, or just want to say hello, feel free to reach out.</p>
+        <div class="contact-info">
+          <h2>Get In Touch</h2>
+          <p><strong>Email:</strong> hello@example.com</p>
+          <p><strong>Phone:</strong> +1 (555) 123-4567</p>
+          <p><strong>Location:</strong> San Francisco, CA</p>
+        </div>
+        <h2>Follow Us</h2>
+        <p>Stay connected through our social media channels for the latest updates and news.</p>
+        <p>Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.</p>
+      </section>
+
+      <section id="page-top" class="page-section">
+        <h1>Resources</h1>
+        <p>Welcome to the Resources section. Find helpful tools, documentation, and guides.</p>
+        <p>This section demonstrates a fourth zoom plane positioned above the main scene with a downward rotation to test the camera implementation.</p>
+        <h2>Documentation</h2>
+        <ul>
+          <li>API Reference Guide</li>
+          <li>Getting Started Tutorial</li>
+          <li>Architecture Overview</li>
+          <li>Best Practices</li>
+        </ul>
+        <h2>Tools & Libraries</h2>
+        <p>A collection of useful tools and libraries to accelerate your development:</p>
+        <ul>
+          <li>Component Library</li>
+          <li>Testing Framework</li>
+          <li>Build Tools</li>
+          <li>Deployment Utilities</li>
+        </ul>
+        <h2>Community</h2>
+        <p>Join our community to share knowledge, ask questions, and collaborate on projects.</p>
+        <p>Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur.</p>
+      </section>
+
+      <section id="page-large" class="page-section">
+        <h1>Gallery</h1>
+        <p>Welcome to our Gallery. This is the largest zoom plane in the scene-a great place for showcasing visual content.</p>
+        <h2>Featured Works</h2>
+        <p>This plane demonstrates how larger surfaces can fill more of the viewport when zoomed in. The large size (2400x1600) and complex rotation test the camera's ability to frame diverse geometries.</p>
+        <h2>Photography</h2>
+        <ul>
+          <li>Landscape Collection</li>
+          <li>Portrait Series</li>
+          <li>Urban Exploration</li>
+          <li>Nature Studies</li>
+        </ul>
+        <h2>Artwork</h2>
+        <p>Digital art, 3D modeling, illustrations, and experimental designs that push creative boundaries.</p>
+        <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis.</p>
+      </section>
+
+      <section id="page-small" class="page-section">
+        <h1>Quick Links</h1>
+        <p>Compact reference to frequently accessed resources.</p>
+        <h2>Navigation</h2>
+        <ul>
+          <li><a href="#">Home</a></li>
+          <li><a href="#">Portfolio</a></li>
+          <li><a href="#">Blog</a></li>
+          <li><a href="#">Contact</a></li>
+        </ul>
+        <h2>External</h2>
+        <ul>
+          <li><a href="#">GitHub</a></li>
+          <li><a href="#">Twitter</a></li>
+          <li><a href="#">LinkedIn</a></li>
+        </ul>
+        <p>This smaller plane (800x600) tests how the system handles varying scales in the scene.</p>
+      </section>
+
+      <section id="page-bottom" class="page-section">
+        <h1>News & Updates</h1>
+        <p>Latest news and announcements from our team.</p>
+        <h2>Recent Posts</h2>
+        <article>
+          <h3>Introducing New Features</h3>
+          <p><strong>Posted:</strong> December 28, 2025</p>
+          <p>We're excited to announce a range of new features that will enhance your experience. Learn more about what's new in this comprehensive overview.</p>
+        </article>
+        <article>
+          <h3>Behind the Scenes: Development Process</h3>
+          <p><strong>Posted:</strong> December 20, 2025</p>
+          <p>Join us as we explore the development process behind our latest project. From concept to launch, here's how we built it.</p>
+        </article>
+        <h2>Announcements</h2>
+        <p>Important updates and announcements. This plane demonstrates positioning below the main scene (negative Y-axis) with a tilted, complex rotation.</p>
+      </section>
+    </div>
+
+    <button id="back-button" class="back-button hidden">&#8592; Back to Overview</button>
+    <script type="module" src="./dist/main.js"></script>
+  </body>
+</html>

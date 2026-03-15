@@ -1,0 +1,38 @@
+{
+  "name": "@scupit/web-3d-panel-navigation",
+  "version": "0.1.0",
+  "description": "Fullscreen viewport-owned 3D panel navigation with Three.js CSS3D and clip-path content reveals.",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "./dist/styles.css"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "example:build": "npm run build && node ./scripts/build-example.mjs"
+  },
+  "peerDependencies": {
+    "three": "^0.182.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.5",
+    "sass": "^1.89.2",
+    "three": "^0.182.0"
+  }
+}
