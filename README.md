@@ -13,6 +13,7 @@ This repo includes scripts and configuration for GPG-signing commits in Cursor C
 | --- | --- |
 | [apple-shortcut-url-maker](./apple-shortcut-url-maker) | Tiny Python CLI that generates a `shortcuts://` URL for running a named iOS Shortcut, useful for programming NFC tags. |
 | [mcp-ecosystem](./mcp-ecosystem) | Provisioning CLI, runtime library, and server bootstrap for building a personal MCP server ecosystem that uses Auth0 for OAuth. Reconciles desired-state JSON config files against an Auth0 tenant and wires token validation into each server at startup. |
+| [web-3d-panel-navigation](./web-3d-panel-navigation) | Provides an interesting way to "navigate" within a webpage by clicking on a configurable set of panels organized in 3D. |
 | [guide-project](./guides/gpg-and-cursor-cloud-agent-signing/guide-project/) | Example project for the Cloud Agent GPG auto-signing setup (scripts are at repo root). |
 
 ## Guides
