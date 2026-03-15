@@ -1,5 +1,8 @@
 # @scupit/web-3d-panel-navigation
 
+> **NOTE: This is vibe coded software!** I made this for personal
+> use in my website; Use at your own discretion!
+
 Standalone package for the fifth-attempt fullscreen pane navigation system. It preserves the current viewport-owned model: CSS3D planes defined by HTML data attributes, adaptive camera transitions, and clip-path based content reveal.
 
 ## Install
