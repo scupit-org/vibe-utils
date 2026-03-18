@@ -8,20 +8,22 @@ from typing import Any
 
 import yaml
 
+PathPartsTuple = tuple[str, ...]
+
 # ── Output path constants ─────────────────────────────────────────────────
 # Defined once, shared by writers, validators, and the sync orchestrator.
 
-SKILL_OUTPUT_ROOTS: list[tuple[str, ...]] = [
+SKILL_OUTPUT_ROOTS: list[PathPartsTuple] = [
     (".claude", "skills"),
     (".agents", "skills"),
 ]
 
-SUBAGENT_OUTPUT_TARGETS: list[tuple[tuple[str, ...], str]] = [
+SUBAGENT_OUTPUT_TARGETS: list[tuple[PathPartsTuple, str]] = [
     ((".claude", "agents"), ".md"),
     ((".codex", "agents"), ".toml"),
 ]
 
-MANAGED_SUBTREES: list[tuple[str, ...]] = [
+MANAGED_SUBTREES: list[PathPartsTuple] = [
     *SKILL_OUTPUT_ROOTS,
     *(parts for parts, _ in SUBAGENT_OUTPUT_TARGETS),
 ]
