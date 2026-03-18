@@ -18,22 +18,11 @@ class Diagnostic:
     context: dict[str, Any] | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class ModelResolution:
-    """Result of resolving a Cursor model string to Claude/Codex targets."""
-
-    raw_cursor_model: str | None
-    claude_model: str | None
-    codex_model: str | None
-    codex_reasoning_effort: str | None
-    resolution_kind: Literal["explicit", "inherit", "unsupported-family", "unknown-model"]
-
-
 @dataclass(slots=True)
 class SkillSpec:
     """Canonical representation of a skill parsed from source."""
 
-    source_tool: Literal["cursor"]
+    source_tool: Literal["cursor", "claude", "codex"]
     source_root: Path
     source_skill_dir: Path
     relative_skill_dir: PurePosixPath
@@ -52,7 +41,7 @@ class SkillSpec:
 class SubagentSpec:
     """Canonical representation of a subagent parsed from source."""
 
-    source_tool: Literal["cursor"]
+    source_tool: Literal["cursor", "claude", "codex"]
     source_path: Path
     filename_stem: str
     name: str

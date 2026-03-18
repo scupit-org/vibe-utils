@@ -13,7 +13,8 @@ from agent_sync.domain.diagnostics import (
     w004_unknown_frontmatter_keys,
 )
 from agent_sync.domain.models import Diagnostic, SyncManifest
-from agent_sync.transform.model_map import KNOWN_CURSOR_MODELS
+from agent_sync.transform.model_map import is_known_model
+from agent_sync.write.common import SKILL_OUTPUT_ROOTS, SUBAGENT_OUTPUT_TARGETS
 
 
 def validate_manifest(manifest: SyncManifest) -> list[Diagnostic]:
@@ -39,11 +40,11 @@ def _check_unknown_models(
 ) -> None:
     """E005: Unknown model string not in allowed vocabulary."""
     for skill in manifest.skills:
-        if skill.model is not None and skill.model not in KNOWN_CURSOR_MODELS:
+        if skill.model is not None and not is_known_model("cursor", skill.model):
             diagnostics.append(e005_unknown_model(skill.entrypoint_path, skill.model))
 
     for sub in manifest.subagents:
-        if sub.model is not None and sub.model not in KNOWN_CURSOR_MODELS:
+        if sub.model is not None and not is_known_model("cursor", sub.model):
             diagnostics.append(e005_unknown_model(sub.source_path, sub.model))
 
 
@@ -80,24 +81,17 @@ def _check_duplicate_output_paths(
     diagnostics: list[Diagnostic],
 ) -> None:
     """E008: Duplicate output file paths for any single target."""
-    checks: list[tuple[str, list[tuple[str, Path]]]] = [
-        (
-            ".claude/skills",
-            [(str(s.relative_skill_dir), s.entrypoint_path) for s in manifest.skills],
-        ),
-        (
-            ".agents/skills",
-            [(str(s.relative_skill_dir), s.entrypoint_path) for s in manifest.skills],
-        ),
-        (
-            ".claude/agents",
-            [(s.filename_stem + ".md", s.source_path) for s in manifest.subagents],
-        ),
-        (
-            ".codex/agents",
-            [(s.filename_stem + ".toml", s.source_path) for s in manifest.subagents],
-        ),
-    ]
+    checks: list[tuple[str, list[tuple[str, Path]]]] = []
+    for parts in SKILL_OUTPUT_ROOTS:
+        root = "/".join(parts)
+        checks.append(
+            (root, [(str(s.relative_skill_dir), s.entrypoint_path) for s in manifest.skills])
+        )
+    for parts, ext in SUBAGENT_OUTPUT_TARGETS:
+        root = "/".join(parts)
+        checks.append(
+            (root, [(s.filename_stem + ext, s.source_path) for s in manifest.subagents])
+        )
 
     for target_root, pairs in checks:
         by_output: dict[str, list[Path]] = defaultdict(list)

@@ -13,15 +13,7 @@ from agent_sync.transform.normalize import normalize_manifest
 from agent_sync.transform.validate import validate_manifest
 from agent_sync.write.claude import ClaudeSkillWriter, ClaudeSubagentWriter
 from agent_sync.write.codex import CodexSkillWriter, CodexSubagentWriter
-
-
-# Managed subtrees — these are wiped and regenerated on each sync.
-MANAGED_SUBTREES: list[tuple[str, ...]] = [
-    (".claude", "skills"),
-    (".claude", "agents"),
-    (".agents", "skills"),
-    (".codex", "agents"),
-]
+from agent_sync.write.common import MANAGED_SUBTREES
 
 
 class SyncOrchestrator:

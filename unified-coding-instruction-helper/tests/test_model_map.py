@@ -1,47 +1,43 @@
 """Tests for agent_sync.transform.model_map."""
 
 from agent_sync.transform.model_map import (
-    CURSOR_TO_CLAUDE,
-    CURSOR_TO_CODEX,
-    KNOWN_CURSOR_MODELS,
-    resolve_model,
+    MODEL_ROWS,
+    is_known_model,
+    lookup,
 )
 
 
-class TestResolveModel:
-    def test_none_inherits(self):
-        r = resolve_model(None)
-        assert r.resolution_kind == "inherit"
-        assert r.claude_model is None
-        assert r.codex_model is None
-        assert r.codex_reasoning_effort is None
-
-    def test_composer_unsupported(self):
-        r = resolve_model("composer-1.5")
-        assert r.resolution_kind == "unsupported-family"
-        assert r.claude_model is None
-        assert r.codex_model is None
+class TestLookupByCursor:
+    def test_composer_no_cross_tool(self):
+        row = lookup("cursor", "composer-1.5", None)
+        assert row is not None
+        assert row.claude is None
+        assert row.codex is None
 
     def test_claude_sonnet_to_claude(self):
-        r = resolve_model("claude-4.6-sonnet-medium")
-        assert r.claude_model == "claude-sonnet-4-6"
-        assert r.codex_model is None
-        assert r.resolution_kind == "explicit"
+        row = lookup("cursor", "claude-4.6-sonnet-medium", None)
+        assert row is not None
+        assert row.claude is not None
+        assert row.claude.model_name == "claude-sonnet-4-6"
+        assert row.codex is None
 
     def test_claude_sonnet_thinking_to_claude(self):
-        r = resolve_model("claude-4.6-sonnet-medium-thinking")
-        assert r.claude_model == "claude-sonnet-4-6"
+        row = lookup("cursor", "claude-4.6-sonnet-medium-thinking", None)
+        assert row is not None
+        assert row.claude.model_name == "claude-sonnet-4-6"
 
     def test_claude_opus_to_claude(self):
         for model in ["claude-4.6-opus-high", "claude-4.6-opus-max",
                        "claude-4.6-opus-high-thinking", "claude-4.6-opus-max-thinking"]:
-            r = resolve_model(model)
-            assert r.claude_model == "claude-opus-4-6", f"Failed for {model}"
+            row = lookup("cursor", model, None)
+            assert row is not None, f"Missing row for {model}"
+            assert row.claude.model_name == "claude-opus-4-6", f"Failed for {model}"
 
     def test_claude_haiku_to_claude(self):
         for model in ["claude-4.5-haiku", "claude-4.5-haiku-thinking"]:
-            r = resolve_model(model)
-            assert r.claude_model == "claude-haiku-4-5", f"Failed for {model}"
+            row = lookup("cursor", model, None)
+            assert row is not None
+            assert row.claude.model_name == "claude-haiku-4-5", f"Failed for {model}"
 
     def test_gpt_to_codex(self):
         cases = [
@@ -51,32 +47,71 @@ class TestResolveModel:
             ("gpt-5.4-xhigh", "gpt-5.4", "xhigh"),
         ]
         for cursor_model, expected_model, expected_effort in cases:
-            r = resolve_model(cursor_model)
-            assert r.codex_model == expected_model, f"Failed for {cursor_model}"
-            assert r.codex_reasoning_effort == expected_effort
-            assert r.claude_model is None
-            assert r.resolution_kind == "explicit"
+            row = lookup("cursor", cursor_model, None)
+            assert row is not None, f"Missing row for {cursor_model}"
+            assert row.codex is not None
+            assert row.codex.model_name == expected_model
+            assert row.codex.reasoning_effort == expected_effort
+            assert row.claude is None
 
     def test_gpt_to_claude_none(self):
-        r = resolve_model("gpt-5.4-high")
-        assert r.claude_model is None
+        row = lookup("cursor", "gpt-5.4-high", None)
+        assert row is not None
+        assert row.claude is None
 
     def test_claude_to_codex_none(self):
-        r = resolve_model("claude-4.6-opus-high")
-        assert r.codex_model is None
-        assert r.codex_reasoning_effort is None
+        row = lookup("cursor", "claude-4.6-opus-high", None)
+        assert row is not None
+        assert row.codex is None
 
     def test_unknown_model(self):
-        r = resolve_model("llama-3-70b")
-        assert r.resolution_kind == "unknown-model"
-        assert r.claude_model is None
-        assert r.codex_model is None
+        assert lookup("cursor", "llama-3-70b", None) is None
 
-    def test_all_known_models_in_both_dicts(self):
-        for model in KNOWN_CURSOR_MODELS:
-            assert model in CURSOR_TO_CLAUDE, f"{model} missing from CURSOR_TO_CLAUDE"
-            assert model in CURSOR_TO_CODEX, f"{model} missing from CURSOR_TO_CODEX"
 
-    def test_dict_sizes_match_known_set(self):
-        assert len(CURSOR_TO_CLAUDE) == len(KNOWN_CURSOR_MODELS)
-        assert len(CURSOR_TO_CODEX) == len(KNOWN_CURSOR_MODELS)
+class TestLookupByClaude:
+    def test_lookup_by_claude(self):
+        row = lookup("claude", "claude-opus-4-6", None)
+        assert row is not None
+        assert row.cursor is not None
+        assert row.cursor.model_name.startswith("claude-4.6-opus")
+
+
+class TestLookupByCodex:
+    def test_lookup_by_codex_with_reasoning(self):
+        row = lookup("codex", "gpt-5.4", "high")
+        assert row is not None
+        assert row.cursor is not None
+        assert row.cursor.model_name == "gpt-5.4-high"
+
+    def test_lookup_by_codex_wrong_effort(self):
+        assert lookup("codex", "gpt-5.4", "ultra") is None
+
+    def test_lookup_by_codex_missing_effort(self):
+        # "gpt-5.4" without the right effort won't match any specific row.
+        assert lookup("codex", "gpt-5.4", None) is None
+
+
+class TestIsKnownModel:
+    def test_known_cursor_model(self):
+        assert is_known_model("cursor", "claude-4.6-opus-high") is True
+
+    def test_unknown_cursor_model(self):
+        assert is_known_model("cursor", "llama-3-70b") is False
+
+    def test_known_codex_model_with_effort(self):
+        assert is_known_model("codex", "gpt-5.4", "high") is True
+
+    def test_known_codex_model_without_effort(self):
+        assert is_known_model("codex", "gpt-5.4") is False
+
+
+class TestRegistry:
+    def test_all_rows_have_cursor_id(self):
+        for row in MODEL_ROWS:
+            assert row.cursor is not None, f"Row missing cursor entry: {row}"
+
+    def test_every_row_resolves_via_lookup(self):
+        for row in MODEL_ROWS:
+            assert row.cursor is not None
+            result = lookup("cursor", row.cursor.model_name, None)
+            assert result is not None, f"{row.cursor.model_name} not found in registry"

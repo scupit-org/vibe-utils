@@ -10,6 +10,29 @@ from agent_sync.app.sync import SyncOrchestrator
 from agent_sync.domain.models import Diagnostic, SyncResult
 
 
+SOURCE_TOOL_DEFAULTS: dict[str, str] = {
+    "cursor": ".cursor",
+}
+
+
+def _add_common_args(sub: argparse.ArgumentParser) -> None:
+    """Add arguments shared by all subcommands."""
+    sub.add_argument(
+        "--repo-root", type=Path, default=Path.cwd(),
+        help="Repository root (default: current directory)",
+    )
+    sub.add_argument(
+        "--source-tool", type=str, default="cursor",
+        choices=sorted(SOURCE_TOOL_DEFAULTS),
+        help="Source tool whose definitions to read (default: cursor)",
+    )
+    sub.add_argument(
+        "--source-dir", type=str, default=None,
+        help="Source directory name (default: derived from --source-tool)",
+    )
+    sub.add_argument("--verbose", action="store_true")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agent-sync",
@@ -21,30 +44,14 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser = subparsers.add_parser(
         "sync", help="Parse, validate, and regenerate outputs.",
     )
-    sync_parser.add_argument(
-        "--repo-root", type=Path, default=Path.cwd(),
-        help="Repository root (default: current directory)",
-    )
-    sync_parser.add_argument(
-        "--source-dir", type=str, default=".cursor",
-        help="Source directory name (default: .cursor)",
-    )
-    sync_parser.add_argument("--verbose", action="store_true")
+    _add_common_args(sync_parser)
     sync_parser.add_argument("--dry-run", action="store_true")
 
     # validate command
     validate_parser = subparsers.add_parser(
         "validate", help="Parse and validate without writing.",
     )
-    validate_parser.add_argument(
-        "--repo-root", type=Path, default=Path.cwd(),
-        help="Repository root (default: current directory)",
-    )
-    validate_parser.add_argument(
-        "--source-dir", type=str, default=".cursor",
-        help="Source directory name (default: .cursor)",
-    )
-    validate_parser.add_argument("--verbose", action="store_true")
+    _add_common_args(validate_parser)
 
     return parser
 
@@ -53,9 +60,12 @@ def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    # Derive --source-dir from --source-tool when not explicitly provided.
+    source_dir = args.source_dir or SOURCE_TOOL_DEFAULTS[args.source_tool]
+
     orchestrator = SyncOrchestrator(
         repo_root=args.repo_root,
-        source_dir_name=args.source_dir,
+        source_dir_name=source_dir,
         dry_run=getattr(args, "dry_run", False),
         verbose=args.verbose,
     )

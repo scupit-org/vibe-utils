@@ -1,128 +1,157 @@
-"""Model translation dictionaries and resolver.
+"""Unified model mapping registry and resolver.
 
-Maps Cursor model identifiers to Claude and Codex equivalents.
+Each known model variant is a :class:`CrossToolModelRow` carrying the
+:class:`ModelEntry` for every tool.  Lookup dictionaries are built
+programmatically from the registry so adding a new parser later only
+requires adding rows — not a cross-product of new dicts.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
-from agent_sync.domain.models import ModelResolution
+ToolName = Literal["cursor", "claude", "codex"]
 
 
 @dataclass(frozen=True, slots=True)
-class CodexModelMapping:
-    """Codex target model + optional reasoning effort."""
+class ModelEntry:
+    """A model identifier for a single tool."""
 
-    model: str | None
-    reasoning_effort: str | None
-
-
-# ── Known Cursor model identifiers ──────────────────────────────────────
-
-KNOWN_CURSOR_MODELS: frozenset[str] = frozenset({
-    "composer-1.5",
-    "claude-4.6-sonnet-medium",
-    "claude-4.6-sonnet-medium-thinking",
-    "claude-4.6-opus-high",
-    "claude-4.6-opus-max",
-    "claude-4.6-opus-high-thinking",
-    "claude-4.6-opus-max-thinking",
-    "claude-4.5-haiku",
-    "claude-4.5-haiku-thinking",
-    "gpt-5.4-low",
-    "gpt-5.4-medium",
-    "gpt-5.4-high",
-    "gpt-5.4-xhigh",
-})
+    model_name: str
+    reasoning_effort: str | None = None
 
 
-# ── Cursor → Claude ─────────────────────────────────────────────────────
+@dataclass(frozen=True, slots=True)
+class CrossToolModelRow:
+    """Maps a single model variant across all supported tools."""
 
-CURSOR_TO_CLAUDE: dict[str, str | None] = {
-    "composer-1.5": None,
-    # Sonnet family
-    "claude-4.6-sonnet-medium": "claude-sonnet-4-6",
-    "claude-4.6-sonnet-medium-thinking": "claude-sonnet-4-6",
-    # Opus family
-    "claude-4.6-opus-high": "claude-opus-4-6",
-    "claude-4.6-opus-max": "claude-opus-4-6",
-    "claude-4.6-opus-high-thinking": "claude-opus-4-6",
-    "claude-4.6-opus-max-thinking": "claude-opus-4-6",
-    # Haiku family
-    "claude-4.5-haiku": "claude-haiku-4-5",
-    "claude-4.5-haiku-thinking": "claude-haiku-4-5",
-    # GPT family → not mappable to Claude
-    "gpt-5.4-low": None,
-    "gpt-5.4-medium": None,
-    "gpt-5.4-high": None,
-    "gpt-5.4-xhigh": None,
-}
+    cursor: ModelEntry | None = None
+    claude: ModelEntry | None = None
+    codex: ModelEntry | None = None
+
+    def get(self, tool: ToolName) -> ModelEntry | None:
+        return getattr(self, tool)
 
 
-# ── Cursor → Codex ──────────────────────────────────────────────────────
+# ── Single source of truth ───────────────────────────────────────────────
 
-_INHERIT = CodexModelMapping(None, None)
+MODEL_ROWS: list[CrossToolModelRow] = [
+    # Composer (Cursor-only, no cross-tool mapping)
+    CrossToolModelRow(
+        cursor=ModelEntry("composer-1.5"),
+    ),
 
-CURSOR_TO_CODEX: dict[str, CodexModelMapping] = {
-    "composer-1.5": _INHERIT,
-    # Claude family → not mappable to Codex
-    "claude-4.6-sonnet-medium": _INHERIT,
-    "claude-4.6-sonnet-medium-thinking": _INHERIT,
-    "claude-4.6-opus-high": _INHERIT,
-    "claude-4.6-opus-max": _INHERIT,
-    "claude-4.6-opus-high-thinking": _INHERIT,
-    "claude-4.6-opus-max-thinking": _INHERIT,
-    "claude-4.5-haiku": _INHERIT,
-    "claude-4.5-haiku-thinking": _INHERIT,
+    # Claude Sonnet family
+    CrossToolModelRow(
+        cursor=ModelEntry("claude-4.6-sonnet-medium"),
+        claude=ModelEntry("claude-sonnet-4-6"),
+    ),
+    CrossToolModelRow(
+        cursor=ModelEntry("claude-4.6-sonnet-medium-thinking"),
+        claude=ModelEntry("claude-sonnet-4-6"),
+    ),
+
+    # Claude Opus family
+    CrossToolModelRow(
+        cursor=ModelEntry("claude-4.6-opus-high"),
+        claude=ModelEntry("claude-opus-4-6"),
+    ),
+    CrossToolModelRow(
+        cursor=ModelEntry("claude-4.6-opus-max"),
+        claude=ModelEntry("claude-opus-4-6"),
+    ),
+    CrossToolModelRow(
+        cursor=ModelEntry("claude-4.6-opus-high-thinking"),
+        claude=ModelEntry("claude-opus-4-6"),
+    ),
+    CrossToolModelRow(
+        cursor=ModelEntry("claude-4.6-opus-max-thinking"),
+        claude=ModelEntry("claude-opus-4-6"),
+    ),
+
+    # Claude Haiku family
+    CrossToolModelRow(
+        cursor=ModelEntry("claude-4.5-haiku"),
+        claude=ModelEntry("claude-haiku-4-5"),
+    ),
+    CrossToolModelRow(
+        cursor=ModelEntry("claude-4.5-haiku-thinking"),
+        claude=ModelEntry("claude-haiku-4-5"),
+    ),
+
     # GPT family
-    "gpt-5.4-low": CodexModelMapping("gpt-5.4", "low"),
-    "gpt-5.4-medium": CodexModelMapping("gpt-5.4", "medium"),
-    "gpt-5.4-high": CodexModelMapping("gpt-5.4", "high"),
-    "gpt-5.4-xhigh": CodexModelMapping("gpt-5.4", "xhigh"),
+    CrossToolModelRow(
+        cursor=ModelEntry("gpt-5.4-low"),
+        codex=ModelEntry("gpt-5.4", reasoning_effort="low"),
+    ),
+    CrossToolModelRow(
+        cursor=ModelEntry("gpt-5.4-medium"),
+        codex=ModelEntry("gpt-5.4", reasoning_effort="medium"),
+    ),
+    CrossToolModelRow(
+        cursor=ModelEntry("gpt-5.4-high"),
+        codex=ModelEntry("gpt-5.4", reasoning_effort="high"),
+    ),
+    CrossToolModelRow(
+        cursor=ModelEntry("gpt-5.4-xhigh"),
+        codex=ModelEntry("gpt-5.4", reasoning_effort="xhigh"),
+    ),
+]
+
+
+# ── Programmatically built lookups ───────────────────────────────────────
+
+def _make_key(model_name: str, reasoning_effort: str | None) -> str:
+    """Build a lookup key from model name and reasoning effort."""
+    return f"{model_name}::{reasoning_effort or 'unknown'}"
+
+
+def _build_lookup(tool: ToolName) -> dict[str, CrossToolModelRow]:
+    """Build a ``{key: row}`` dict for *tool*."""
+    result: dict[str, CrossToolModelRow] = {}
+    for row in MODEL_ROWS:
+        entry = row.get(tool)
+        if entry is not None:
+            result[_make_key(entry.model_name, entry.reasoning_effort)] = row
+    return result
+
+
+_BY_TOOL: dict[ToolName, dict[str, CrossToolModelRow]] = {
+    "cursor": _build_lookup("cursor"),
+    "claude": _build_lookup("claude"),
+    "codex": _build_lookup("codex"),
 }
 
+def lookup(
+    tool: ToolName,
+    model_name: str,
+    reasoning_effort: str | None,
+) -> CrossToolModelRow | None:
+    """Look up a model by *tool*, *model_name*, and *reasoning_effort*.
 
-# ── Resolver ─────────────────────────────────────────────────────────────
-
-def resolve_model(raw_cursor_model: str | None) -> ModelResolution:
-    """Resolve a Cursor model string to Claude and Codex targets.
-
-    Returns a :class:`ModelResolution` with ``resolution_kind``:
-
-    * ``"inherit"`` — input is ``None`` (model not specified)
-    * ``"explicit"`` — at least one target gets a concrete value
-    * ``"unsupported-family"`` — known model but maps to ``None`` for both targets
-    * ``"unknown-model"`` — not in :data:`KNOWN_CURSOR_MODELS`
+    Returns the :class:`CrossToolModelRow` or ``None`` if not found.
     """
-    if raw_cursor_model is None:
-        return ModelResolution(
-            raw_cursor_model=None,
-            claude_model=None,
-            codex_model=None,
-            codex_reasoning_effort=None,
-            resolution_kind="inherit",
-        )
+    return _BY_TOOL[tool].get(_make_key(model_name, reasoning_effort))
 
-    if raw_cursor_model not in KNOWN_CURSOR_MODELS:
-        return ModelResolution(
-            raw_cursor_model=raw_cursor_model,
-            claude_model=None,
-            codex_model=None,
-            codex_reasoning_effort=None,
-            resolution_kind="unknown-model",
-        )
 
-    claude_model = CURSOR_TO_CLAUDE[raw_cursor_model]
-    codex_mapping = CURSOR_TO_CODEX[raw_cursor_model]
+def is_known_model(
+    tool: ToolName,
+    model_name: str,
+    reasoning_effort: str | None = None,
+) -> bool:
+    """Return ``True`` if *model_name* is registered for *tool*."""
+    return lookup(tool, model_name, reasoning_effort) is not None
 
-    has_any_target = (claude_model is not None
-                      or codex_mapping.model is not None)
 
-    return ModelResolution(
-        raw_cursor_model=raw_cursor_model,
-        claude_model=claude_model,
-        codex_model=codex_mapping.model,
-        codex_reasoning_effort=codex_mapping.reasoning_effort,
-        resolution_kind="explicit" if has_any_target else "unsupported-family",
-    )
+def get_target_model(
+    source_tool: ToolName,
+    source_model: str,
+    target_tool: ToolName,
+    reasoning_effort: str | None = None,
+) -> ModelEntry | None:
+    """Look up *source_model* from *source_tool* and return the entry for *target_tool*."""
+    row = lookup(source_tool, source_model, reasoning_effort)
+    if row is None:
+        return None
+    return row.get(target_tool)

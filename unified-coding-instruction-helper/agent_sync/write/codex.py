@@ -8,7 +8,7 @@ from typing import Any
 import tomli_w
 
 from agent_sync.domain.models import SkillSpec, SubagentSpec, SyncManifest
-from agent_sync.transform.model_map import resolve_model
+from agent_sync.transform.model_map import get_target_model
 from agent_sync.write.common import copy_asset_tree, generate_yaml_frontmatter
 
 
@@ -54,18 +54,22 @@ class CodexSubagentWriter:
         self.output_root = staging_dir / ".codex" / "agents"
 
     def write_subagent(self, subagent: SubagentSpec) -> Path:
-        resolution = resolve_model(subagent.model)
         self.output_root.mkdir(parents=True, exist_ok=True)
+
+        # Resolve Cursor model → Codex target.
+        codex_entry = None
+        if subagent.model is not None:
+            codex_entry = get_target_model("cursor", subagent.model, "codex")
 
         # Build TOML fields in specified order.
         data: dict[str, Any] = {
             "name": subagent.name,
             "description": subagent.description,
         }
-        if resolution.codex_model is not None:
-            data["model"] = resolution.codex_model
-        if resolution.codex_reasoning_effort is not None:
-            data["model_reasoning_effort"] = resolution.codex_reasoning_effort
+        if codex_entry is not None:
+            data["model"] = codex_entry.model_name
+            if codex_entry.reasoning_effort is not None:
+                data["model_reasoning_effort"] = codex_entry.reasoning_effort
         data["developer_instructions"] = subagent.prompt_markdown
 
         content = tomli_w.dumps(data)

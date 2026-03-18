@@ -5,12 +5,20 @@ from __future__ import annotations
 from pathlib import Path
 
 from agent_sync.domain.models import SkillSpec, SubagentSpec, SyncManifest
-from agent_sync.transform.model_map import resolve_model
+from agent_sync.transform.model_map import get_target_model
 from agent_sync.write.common import (
     copy_asset_tree,
     generate_skill_md,
     generate_subagent_md,
 )
+
+
+def _resolve_model(source_model: str | None, target_tool: str) -> str | None:
+    """Resolve a Cursor model string to a target tool's model name, or None."""
+    if source_model is None:
+        return None
+    entry = get_target_model("cursor", source_model, target_tool)  # type: ignore[arg-type]
+    return entry.model_name if entry else None
 
 
 class ClaudeSkillWriter:
@@ -20,7 +28,6 @@ class ClaudeSkillWriter:
         self.output_root = staging_dir / ".claude" / "skills"
 
     def write_skill(self, skill: SkillSpec) -> Path:
-        resolution = resolve_model(skill.model)
         out_dir = self.output_root / str(skill.relative_skill_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -32,7 +39,7 @@ class ClaudeSkillWriter:
             name=skill.name,
             description=skill.description,
             body_markdown=skill.body_markdown,
-            model=resolution.claude_model,
+            model=_resolve_model(skill.model, "claude"),
             disable_model_invocation=skill.disable_model_invocation,
         )
         (out_dir / "SKILL.md").write_text(content, encoding="utf-8")
@@ -49,14 +56,13 @@ class ClaudeSubagentWriter:
         self.output_root = staging_dir / ".claude" / "agents"
 
     def write_subagent(self, subagent: SubagentSpec) -> Path:
-        resolution = resolve_model(subagent.model)
         self.output_root.mkdir(parents=True, exist_ok=True)
 
         content = generate_subagent_md(
             name=subagent.name,
             description=subagent.description,
             prompt_markdown=subagent.prompt_markdown,
-            model=resolution.claude_model,
+            model=_resolve_model(subagent.model, "claude"),
         )
         out_path = self.output_root / f"{subagent.filename_stem}.md"
         out_path.write_text(content, encoding="utf-8")
