@@ -47,11 +47,63 @@ Source (any one tool)          Canonical model           Targets (all other tool
 | Model field (subagents) | Cursor model names | Claude model aliases | Codex model name + `model_reasoning_effort` |
 | Model field (skills) | Stored in frontmatter | Not emitted (inherited) | Not emitted (inherited) |
 
-## Setup
+## Build, test, and install
 
 Requires **Python 3.12+**.
 
-### Create and activate a virtual environment
+### Build the package
+
+```bash
+python -m pip install --upgrade build
+python -m build
+```
+
+This produces modern Python distributions in `dist/`:
+
+- a **wheel** (`.whl`) for installation
+- an **sdist** (`.tar.gz`) for source distribution
+
+Setuptools may also regenerate a local `agent_sync.egg-info/` directory while building. That metadata is a normal build artifact and should not be committed.
+
+### Test the project
+
+If you need to run the test suite from a local checkout, install the dev extras first:
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest -q
+```
+
+### Install the built package
+
+Install or reinstall from the wheel produced by the current build instead of installing directly from the source tree. This keeps the installed CLI aligned with the exact artifact in `dist/`.
+
+If you are installing into a virtual environment, omit `--user`.
+
+Windows PowerShell:
+
+```powershell
+$wheel = Get-ChildItem .\dist\agent_sync-*.whl | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+python -m pip install --user --force-reinstall $wheel.FullName
+```
+
+Linux / macOS:
+
+```bash
+python -m pip install --user --force-reinstall dist/agent_sync-*.whl
+```
+
+If your shell does not expand `dist/agent_sync-*.whl`, replace it with the exact wheel filename shown in `dist/`.
+
+### Verify the installed CLI
+
+```bash
+agent-sync --help
+```
+
+### Development install
+
+If you want an editable local development environment instead of installing the built wheel:
 
 ```bash
 python -m venv .venv
@@ -67,18 +119,10 @@ source .venv/bin/activate
 .\.venv\Scripts\Activate.ps1
 ```
 
-### Install
-
-Install the project and its dependencies:
+Then install the project:
 
 ```bash
-pip install -e .
-```
-
-To also install dev dependencies (pytest):
-
-```bash
-pip install -e ".[dev]"
+python -m pip install -e .
 ```
 
 ## Usage
