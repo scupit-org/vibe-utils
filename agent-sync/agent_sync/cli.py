@@ -77,6 +77,10 @@ def main(argv: list[str] | None = None) -> None:
 
 def _print_result(result: SyncResult, command: str, verbose: bool) -> None:
     """Print diagnostics and summary to stderr."""
+    if verbose:
+        for message in result.verbose_messages:
+            print(f"[verbose] {message}", file=sys.stderr)
+
     for diag in result.errors:
         _print_diagnostic(diag)
     for diag in result.warnings:

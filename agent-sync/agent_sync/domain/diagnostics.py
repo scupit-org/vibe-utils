@@ -93,6 +93,18 @@ def e009_skill_dir_missing_entrypoint(dir_path: Path) -> Diagnostic:
     )
 
 
+def e010_codex_skill_root_conflict(name: str, paths: list[Path]) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="E010",
+        message=(
+            "Codex skill name conflict across '.agents/skills' and '.codex/skills': "
+            f"'{name}'"
+        ),
+        context={"name": name, "paths": [str(p) for p in paths]},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Warnings
 # ---------------------------------------------------------------------------
@@ -132,5 +144,27 @@ def w005_malformed_nested_skill(path: Path, detail: str) -> Diagnostic:
         severity="warning",
         code="W005",
         message=f"Nested SKILL.md asset could not be parsed and will be copied verbatim: {detail}",
+        source_path=path,
+    )
+
+
+def w006_codex_skill_in_wrong_directory(path: Path, expected_root: Path) -> Diagnostic:
+    return Diagnostic(
+        severity="warning",
+        code="W006",
+        message=(
+            "Codex skill is under '.codex/skills' instead of '.agents/skills'; "
+            f"it will still be processed. Expected root: {expected_root}"
+        ),
+        source_path=path,
+        context={"expected_root": str(expected_root)},
+    )
+
+
+def w007_staging_cleanup_failed(path: Path, detail: str) -> Diagnostic:
+    return Diagnostic(
+        severity="warning",
+        code="W007",
+        message=f"Temporary staging directory could not be fully cleaned up: {detail}",
         source_path=path,
     )

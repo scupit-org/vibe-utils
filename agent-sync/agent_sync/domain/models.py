@@ -91,6 +91,7 @@ class SyncResult:
     dropped_fields: list[DroppedFieldCount] = field(default_factory=list)
     warnings: list[Diagnostic] = field(default_factory=list)
     errors: list[Diagnostic] = field(default_factory=list)
+    verbose_messages: list[str] = field(default_factory=list)
     dry_run: bool = False
 
     @property

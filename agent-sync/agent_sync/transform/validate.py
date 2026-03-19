@@ -10,6 +10,7 @@ from agent_sync.domain.diagnostics import (
     e006_duplicate_skill_name,
     e007_duplicate_subagent_name,
     e008_duplicate_output_path,
+    e010_codex_skill_root_conflict,
     w004_unknown_frontmatter_keys,
     w005_malformed_nested_skill,
 )
@@ -89,12 +90,21 @@ def _check_duplicate_skill_names(
     manifest: SyncManifest,
     diagnostics: list[Diagnostic],
 ) -> None:
-    """E006: Duplicate canonical skill names."""
+    """E006/E010: Duplicate canonical skill names and Codex cross-root conflicts."""
     by_name: dict[str, list[Path]] = defaultdict(list)
+    root_kinds_by_name: dict[str, set[str]] = defaultdict(set)
     for skill in manifest.skills:
         by_name[skill.name].append(skill.entrypoint_path)
+        root_kind = skill.reserved_extra_metadata.get("codex_skill_root_kind")
+        if isinstance(root_kind, str):
+            root_kinds_by_name[skill.name].add(root_kind)
 
     for name, paths in sorted(by_name.items()):
+        root_kinds = root_kinds_by_name.get(name, set())
+        if root_kinds == {"canonical", "misplaced"}:
+            diagnostics.append(e010_codex_skill_root_conflict(name, paths))
+        if len(paths) == 2 and root_kinds == {"canonical", "misplaced"}:
+            continue
         if len(paths) > 1:
             diagnostics.append(e006_duplicate_skill_name(name, paths))
 

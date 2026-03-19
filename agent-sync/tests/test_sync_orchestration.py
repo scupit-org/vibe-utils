@@ -1,5 +1,6 @@
 """Integration tests for agent_sync.app.sync."""
 
+import shutil
 import tomllib
 from pathlib import Path
 
@@ -70,6 +71,7 @@ class TestDryRun:
         # No output directories should exist.
         assert not (repo / ".claude" / "skills").exists()
         assert not (repo / ".agents" / "skills").exists()
+        assert not (repo / ".tmp").exists()
 
 
 class TestErrorsAbort:
@@ -136,6 +138,28 @@ class TestStagingSafety:
         assert not stale_file.exists()
         # But the new skill should exist.
         assert (repo / ".claude" / "skills" / "greeting" / "SKILL.md").exists()
+
+    def test_cleanup_failure_emits_warning(self, fixture_repo, monkeypatch):
+        repo = fixture_repo("basic_skill")
+        orch = SyncOrchestrator(repo, source_tool="cursor", dry_run=True)
+        real_rmtree = shutil.rmtree
+        staging_dir = repo.parent / "manual-staging"
+        staging_dir.mkdir()
+
+        def flaky_rmtree(path, *args, **kwargs):
+            target = Path(path)
+            if target == staging_dir:
+                raise OSError("cleanup failed")
+            return real_rmtree(path, *args, **kwargs)
+
+        monkeypatch.setattr(orch, "_create_staging_dir", lambda: staging_dir)
+        monkeypatch.setattr("agent_sync.app.sync.shutil.rmtree", flaky_rmtree)
+
+        result = orch.run_sync()
+
+        assert result.success
+        codes = [d.code for d in result.warnings]
+        assert "W007" in codes
 
 
 class TestValidateCommand:
@@ -247,3 +271,25 @@ class TestCodexSourceSync:
         assert not result.success
         codes = [d.code for d in result.errors]
         assert "E001" in codes
+
+    def test_generates_from_dotcodex_skills(self, fixture_repo):
+        repo = fixture_repo("codex_source_sync_dotcodex")
+        orch = SyncOrchestrator(repo, source_tool="codex")
+        result = orch.run_sync()
+
+        assert result.success
+        assert result.skills_written == 1
+        assert result.subagents_written == 1
+        codes = [d.code for d in result.warnings]
+        assert "W006" in codes
+        assert (repo / ".cursor" / "skills" / "greeting" / "SKILL.md").exists()
+        assert (repo / ".claude" / "skills" / "greeting" / "SKILL.md").exists()
+
+    def test_conflicting_skill_roots_abort(self, fixture_repo):
+        repo = fixture_repo("codex_conflicting_skill_roots")
+        orch = SyncOrchestrator(repo, source_tool="codex")
+        result = orch.run_sync()
+
+        assert not result.success
+        codes = [d.code for d in result.errors]
+        assert "E010" in codes

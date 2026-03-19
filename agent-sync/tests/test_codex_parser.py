@@ -102,3 +102,38 @@ class TestParseMissingCodexSource:
         m = parse_codex_source(repo)
         assert len(m.skills) == 0
         assert len(m.subagents) == 0
+
+
+class TestParseCodexSkillsFromDotCodex:
+    def test_fields(self, fixture_repo):
+        repo = fixture_repo("codex_source_sync_dotcodex")
+        m = parse_codex_source(repo)
+
+        assert not m.has_errors
+        assert len(m.skills) == 1
+        assert len(m.subagents) == 1
+        assert m.skills[0].source_skill_dir == repo / ".codex" / "skills" / "greeting"
+        codes = [d.code for d in m.warnings]
+        assert "W006" in codes
+
+
+class TestParseCodexMixedSkillRoots:
+    def test_merges_roots_and_warns_for_misplaced_skills(self, fixture_repo):
+        repo = fixture_repo("codex_mixed_skill_roots")
+        m = parse_codex_source(repo)
+
+        assert not m.has_errors
+        assert len(m.skills) == 2
+        assert {skill.name for skill in m.skills} == {"canonical", "misplaced"}
+        codes = [d.code for d in m.warnings]
+        assert codes.count("W006") == 1
+
+
+class TestParseCodexConflictingSkillRoots:
+    def test_conflicting_names_defer_to_validation(self, fixture_repo):
+        repo = fixture_repo("codex_conflicting_skill_roots")
+        m = parse_codex_source(repo)
+
+        assert not m.has_errors
+        codes = [d.code for d in m.warnings]
+        assert "W006" in codes

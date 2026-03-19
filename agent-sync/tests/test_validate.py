@@ -75,6 +75,60 @@ class TestDuplicateSkillNames:
         diags = validate_manifest(m, source_tool="cursor")
         assert "E006" not in [d.code for d in diags]
 
+    def test_codex_cross_root_pair_skips_generic_duplicate(self):
+        canonical = _skill(
+            "shared",
+            source_tool="codex",
+            source_skill_dir=Path("/repo/.agents/skills/shared"),
+            relative_skill_dir=PurePosixPath("shared"),
+            entrypoint_path=Path("/repo/.agents/skills/shared/SKILL.md"),
+            reserved_extra_metadata={"codex_skill_root_kind": "canonical"},
+        )
+        misplaced = _skill(
+            "shared",
+            source_tool="codex",
+            source_skill_dir=Path("/repo/.codex/skills/shared"),
+            relative_skill_dir=PurePosixPath("shared"),
+            entrypoint_path=Path("/repo/.codex/skills/shared/SKILL.md"),
+            reserved_extra_metadata={"codex_skill_root_kind": "misplaced"},
+        )
+        diags = validate_manifest(
+            SyncManifest(skills=[canonical, misplaced]),
+            source_tool="codex",
+        )
+        assert "E006" not in [d.code for d in diags]
+
+    def test_codex_cross_root_plus_extra_duplicate_keeps_generic_duplicate(self):
+        skills = [
+            _skill(
+                "shared",
+                source_tool="codex",
+                source_skill_dir=Path("/repo/.agents/skills/shared"),
+                relative_skill_dir=PurePosixPath("shared"),
+                entrypoint_path=Path("/repo/.agents/skills/shared/SKILL.md"),
+                reserved_extra_metadata={"codex_skill_root_kind": "canonical"},
+            ),
+            _skill(
+                "shared",
+                source_tool="codex",
+                source_skill_dir=Path("/repo/.agents/skills/shared-2"),
+                relative_skill_dir=PurePosixPath("shared-2"),
+                entrypoint_path=Path("/repo/.agents/skills/shared-2/SKILL.md"),
+                reserved_extra_metadata={"codex_skill_root_kind": "canonical"},
+            ),
+            _skill(
+                "shared",
+                source_tool="codex",
+                source_skill_dir=Path("/repo/.codex/skills/shared"),
+                relative_skill_dir=PurePosixPath("shared"),
+                entrypoint_path=Path("/repo/.codex/skills/shared/SKILL.md"),
+                reserved_extra_metadata={"codex_skill_root_kind": "misplaced"},
+            ),
+        ]
+        diags = validate_manifest(SyncManifest(skills=skills), source_tool="codex")
+        assert "E006" in [d.code for d in diags]
+        assert "E010" in [d.code for d in diags]
+
 
 class TestDuplicateSubagentNames:
     def test_error(self):

@@ -13,6 +13,7 @@ from agent_sync.domain.diagnostics import (
     e004_missing_description,
     w001_filename_name_mismatch,
     w003_deferred_field_stored,
+    w006_codex_skill_in_wrong_directory,
 )
 from agent_sync.domain.models import Diagnostic, SkillSpec, SubagentSpec, SyncManifest
 from agent_sync.parse.markdown import parse_skills_from_md
@@ -20,16 +21,57 @@ from agent_sync.parse.markdown import parse_skills_from_md
 
 # ── Skills ───────────────────────────────────────────────────────────────
 
+CODEX_SKILL_DIR_CANDIDATES: tuple[tuple[str, ...], ...] = (
+    (".agents", "skills"),
+    (".codex", "skills"),
+)
+CODEX_CANONICAL_SKILLS_DIR = (".agents", "skills")
+CODEX_MISPLACED_SKILLS_DIR = (".codex", "skills")
+
+
+def get_codex_skill_dirs(repo_root: Path) -> list[Path]:
+    """Return existing Codex skill directories in preferred lookup order."""
+    dirs: list[Path] = []
+    for parts in CODEX_SKILL_DIR_CANDIDATES:
+        candidate = repo_root.joinpath(*parts)
+        if candidate.is_dir():
+            dirs.append(candidate)
+    return dirs
+
+
 def parse_codex_skills(
     source_root: Path,
-    skills_dir: Path,
+    skills_dirs: list[Path],
 ) -> tuple[list[SkillSpec], list[Diagnostic]]:
-    """Parse Codex skills from ``.agents/skills/``.
+    """Parse Codex skills from supported Codex skill roots.
 
     Uses shared Markdown parsing, then checks each skill directory for an
     ``agents/openai.yaml`` sidecar to determine ``disable_model_invocation``.
     """
-    skills, diagnostics = parse_skills_from_md("codex", source_root, skills_dir)
+    skills: list[SkillSpec] = []
+    diagnostics: list[Diagnostic] = []
+    canonical_root = source_root.joinpath(*CODEX_CANONICAL_SKILLS_DIR)
+    misplaced_root = source_root.joinpath(*CODEX_MISPLACED_SKILLS_DIR)
+
+    for skills_dir in skills_dirs:
+        parsed_skills, parsed_diags = parse_skills_from_md(
+            "codex", source_root, skills_dir,
+        )
+        skills.extend(parsed_skills)
+        diagnostics.extend(parsed_diags)
+
+        for skill in parsed_skills:
+            skill.reserved_extra_metadata["codex_skill_root_kind"] = (
+                "canonical"
+                if skills_dir.resolve() == canonical_root.resolve()
+                else "misplaced"
+            )
+            if skills_dir.resolve() == misplaced_root.resolve():
+                diagnostics.append(
+                    w006_codex_skill_in_wrong_directory(
+                        skill.entrypoint_path, canonical_root,
+                    )
+                )
 
     # Codex stores invocation policy in agents/openai.yaml, not in SKILL.md
     # frontmatter.  Override the parsed value with the sidecar, and strip
@@ -161,13 +203,13 @@ def parse_codex_source(repo_root: Path) -> SyncManifest:
 
     Returns a :class:`SyncManifest` which may contain errors.
     """
-    skills_dir = repo_root / ".agents" / "skills"
+    skills_dirs = get_codex_skill_dirs(repo_root)
     agents_dir = repo_root / ".codex" / "agents"
 
     all_warnings: list[Diagnostic] = []
     all_errors: list[Diagnostic] = []
 
-    skills, skill_diags = parse_codex_skills(repo_root, skills_dir)
+    skills, skill_diags = parse_codex_skills(repo_root, skills_dirs)
     for d in skill_diags:
         (all_errors if d.severity == "error" else all_warnings).append(d)
 

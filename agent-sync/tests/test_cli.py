@@ -39,6 +39,16 @@ class TestCliSync:
         assert result.returncode == 0
         assert "dry run" in result.stderr.lower()
 
+    def test_sync_verbose_reports_manifest_details(self, fixture_repo):
+        repo = fixture_repo("codex_source_sync_dotcodex")
+        result = _run_cli(
+            "sync", "--repo-root", str(repo), "--source-tool", "codex", "--verbose",
+            "--dry-run",
+        )
+        assert result.returncode == 0
+        assert "[verbose] codex source lookup:" in result.stderr
+        assert "[verbose] parsed manifest: 1 skill(s), 1 subagent(s)" in result.stderr
+
 
 class TestCliValidate:
     def test_validate_success(self, fixture_repo):
@@ -99,6 +109,31 @@ class TestCliSourceTool:
         )
         assert result.returncode == 0
         assert "passed" in result.stderr.lower()
+
+    def test_validate_codex_source_from_dotcodex_skills(self, fixture_repo):
+        repo = fixture_repo("codex_source_sync_dotcodex")
+        result = _run_cli(
+            "validate", "--repo-root", str(repo), "--source-tool", "codex",
+        )
+        assert result.returncode == 0
+        assert "passed" in result.stderr.lower()
+        assert "[W006]" in result.stderr
+
+    def test_validate_codex_conflicting_skill_roots(self, fixture_repo):
+        repo = fixture_repo("codex_conflicting_skill_roots")
+        result = _run_cli(
+            "validate", "--repo-root", str(repo), "--source-tool", "codex",
+        )
+        assert result.returncode == 1
+        assert "[E010]" in result.stderr
+
+    def test_validate_codex_missing_source_points_to_agents_skills(self, fixture_repo):
+        repo = fixture_repo("missing_source")
+        result = _run_cli(
+            "validate", "--repo-root", str(repo), "--source-tool", "codex",
+        )
+        assert result.returncode == 1
+        assert ".agents\\skills" in result.stderr
 
 
 class TestCliHelp:
