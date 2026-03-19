@@ -129,6 +129,57 @@ class TestCodexSkillWriter:
         copied = tmp_path / "out" / ".agents" / "skills" / "data" / "scripts" / "run.sh"
         assert copied.exists()
 
+    def test_uses_manifest_asset_list(self, tmp_path):
+        src = tmp_path / "src" / "listed"
+        src.mkdir(parents=True)
+        (src / "SKILL.md").write_text("")
+        (src / "ignored.txt").write_text("ignore me")
+
+        skill = _skill(
+            source_skill_dir=src,
+            relative_skill_dir=PurePosixPath("listed"),
+            copied_asset_paths=[],
+        )
+        writer = CodexSkillWriter(tmp_path / "out")
+        writer.write_skill(skill)
+
+        copied = tmp_path / "out" / ".agents" / "skills" / "listed" / "ignored.txt"
+        assert not copied.exists()
+
+    def test_transforms_nested_skill_asset(self, tmp_path):
+        src = tmp_path / "src" / "bundle"
+        nested = src / "references" / "sample"
+        nested.mkdir(parents=True)
+        (src / "SKILL.md").write_text("")
+        (nested / "SKILL.md").write_text(
+            "---\n"
+            "name: reference\n"
+            "description: Example reference skill\n"
+            "disable-model-invocation: true\n"
+            "model: claude-4.6-opus-high\n"
+            "---\n"
+            "Reference body.\n"
+        )
+
+        skill = _skill(
+            source_skill_dir=src,
+            relative_skill_dir=PurePosixPath("bundle"),
+            copied_asset_paths=[PurePosixPath("references/sample/SKILL.md")],
+        )
+        writer = CodexSkillWriter(tmp_path / "out")
+        writer.write_skill(skill)
+
+        copied = (
+            tmp_path / "out" / ".agents" / "skills" / "bundle"
+            / "references" / "sample" / "SKILL.md"
+        )
+        fm, body = split_frontmatter(copied.read_text())
+        assert fm["name"] == "reference"
+        assert fm["description"] == "Example reference skill"
+        assert "disable-model-invocation" not in fm
+        assert "model" not in fm
+        assert "Reference body." in body
+
 
 class TestCodexSubagentWriter:
     def test_basic_toml(self, tmp_path):

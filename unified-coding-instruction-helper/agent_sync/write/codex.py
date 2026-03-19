@@ -9,7 +9,7 @@ import tomli_w
 
 from agent_sync.domain.models import SkillSpec, SubagentSpec, SyncManifest
 from agent_sync.transform.model_map import get_target_model
-from agent_sync.write.common import copy_asset_tree, generate_yaml_frontmatter
+from agent_sync.write.common import copy_skill_assets, generate_yaml_frontmatter
 
 
 class CodexSkillWriter:
@@ -23,9 +23,16 @@ class CodexSkillWriter:
         out_dir.mkdir(parents=True, exist_ok=True)
 
         # Copy companion assets first.
-        copy_asset_tree(skill.source_skill_dir, out_dir, exclude_filenames={"SKILL.md"})
+        copy_skill_assets(
+            skill.source_skill_dir,
+            out_dir,
+            skill.copied_asset_paths,
+            target_tool="codex",
+        )
 
-        # Generate SKILL.md — Codex: name, description, body only.  No model.
+        # Skills express reusable capabilities. They do not select models, so
+        # skill model metadata is intentionally ignored in generated output.
+        # Generate SKILL.md — Codex: name, description, body only.
         fields: dict[str, Any] = {
             "name": skill.name,
             "description": skill.description,

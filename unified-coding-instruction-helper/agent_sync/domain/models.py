@@ -73,6 +73,7 @@ class SyncResult:
 
     skills_written: int = 0
     subagents_written: int = 0
+    dropped_fields: list["DroppedFieldCount"] = field(default_factory=list)
     warnings: list[Diagnostic] = field(default_factory=list)
     errors: list[Diagnostic] = field(default_factory=list)
     dry_run: bool = False
@@ -80,3 +81,13 @@ class SyncResult:
     @property
     def success(self) -> bool:
         return len(self.errors) == 0
+
+
+@dataclass(frozen=True, slots=True)
+class DroppedFieldCount:
+    """Aggregate count of an intentionally omitted field in target output."""
+
+    target_tool: Literal["claude", "codex"]
+    entity_kind: Literal["skill", "subagent"]
+    field_name: str
+    count: int

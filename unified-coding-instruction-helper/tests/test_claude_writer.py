@@ -2,9 +2,7 @@
 
 from pathlib import Path, PurePosixPath
 
-import yaml
-
-from agent_sync.domain.models import SkillSpec, SubagentSpec, SyncManifest
+from agent_sync.domain.models import SkillSpec, SubagentSpec
 from agent_sync.parse.frontmatter import split_frontmatter
 from agent_sync.write.claude import ClaudeSkillWriter, ClaudeSubagentWriter
 
@@ -70,7 +68,7 @@ class TestClaudeSkillWriter:
 
         out_file = tmp_path / "out" / ".claude" / "skills" / "smart" / "SKILL.md"
         fm, _ = split_frontmatter(out_file.read_text())
-        assert fm["model"] == "claude-opus-4-6"
+        assert "model" not in fm
 
     def test_skill_disable_invocation(self, tmp_path):
         src = tmp_path / "src" / "restricted"
@@ -136,6 +134,57 @@ class TestClaudeSkillWriter:
         copied = tmp_path / "out" / ".claude" / "skills" / "data" / "templates" / "out.html"
         assert copied.exists()
         assert copied.read_text() == "<html></html>"
+
+    def test_uses_manifest_asset_list(self, tmp_path):
+        src = tmp_path / "src" / "listed"
+        src.mkdir(parents=True)
+        (src / "SKILL.md").write_text("")
+        (src / "ignored.txt").write_text("ignore me")
+
+        skill = _skill(
+            source_skill_dir=src,
+            relative_skill_dir=PurePosixPath("listed"),
+            copied_asset_paths=[],
+        )
+        writer = ClaudeSkillWriter(tmp_path / "out")
+        writer.write_skill(skill)
+
+        copied = tmp_path / "out" / ".claude" / "skills" / "listed" / "ignored.txt"
+        assert not copied.exists()
+
+    def test_transforms_nested_skill_asset(self, tmp_path):
+        src = tmp_path / "src" / "bundle"
+        nested = src / "references" / "sample"
+        nested.mkdir(parents=True)
+        (src / "SKILL.md").write_text("")
+        (nested / "SKILL.md").write_text(
+            "---\n"
+            "name: reference\n"
+            "description: Example reference skill\n"
+            "disable-model-invocation: true\n"
+            "model: claude-4.6-opus-high\n"
+            "---\n"
+            "Reference body.\n"
+        )
+
+        skill = _skill(
+            source_skill_dir=src,
+            relative_skill_dir=PurePosixPath("bundle"),
+            copied_asset_paths=[PurePosixPath("references/sample/SKILL.md")],
+        )
+        writer = ClaudeSkillWriter(tmp_path / "out")
+        writer.write_skill(skill)
+
+        copied = (
+            tmp_path / "out" / ".claude" / "skills" / "bundle"
+            / "references" / "sample" / "SKILL.md"
+        )
+        fm, body = split_frontmatter(copied.read_text())
+        assert fm["name"] == "reference"
+        assert fm["description"] == "Example reference skill"
+        assert fm["disable-model-invocation"] is True
+        assert "model" not in fm
+        assert "Reference body." in body
 
 
 class TestClaudeSubagentWriter:

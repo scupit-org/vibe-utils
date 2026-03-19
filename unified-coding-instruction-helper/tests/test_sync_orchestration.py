@@ -35,6 +35,25 @@ class TestFullSync:
         assert claude_agent.exists()
         assert codex_agent.exists()
 
+    def test_nested_skill_reference_is_copied_once(self, fixture_repo):
+        repo = fixture_repo("nested_skill_reference")
+        orch = SyncOrchestrator(repo)
+        result = orch.run_sync()
+
+        assert result.success
+        assert result.skills_written == 1
+
+        claude_ref = (
+            repo / ".claude" / "skills" / "packages" / "parent"
+            / "references" / "example" / "SKILL.md"
+        )
+        codex_ref = (
+            repo / ".agents" / "skills" / "packages" / "parent"
+            / "references" / "example" / "SKILL.md"
+        )
+        assert claude_ref.exists()
+        assert codex_ref.exists()
+
 
 class TestDryRun:
     def test_no_files_written(self, fixture_repo):
@@ -120,3 +139,23 @@ class TestValidateCommand:
         orch = SyncOrchestrator(repo)
         result = orch.run_validate()
         assert not result.success
+
+
+class TestDroppedFieldSummary:
+    def test_validate_collects_dropped_fields(self, fixture_repo):
+        repo = fixture_repo("reporting_summary")
+        orch = SyncOrchestrator(repo)
+        result = orch.run_validate()
+
+        assert result.success
+
+        summary = {
+            (item.target_tool, item.entity_kind, item.field_name): item.count
+            for item in result.dropped_fields
+        }
+        assert summary[("claude", "skill", "model")] == 1
+        assert summary[("codex", "skill", "model")] == 1
+        assert summary[("claude", "subagent", "readonly")] == 1
+        assert summary[("codex", "subagent", "readonly")] == 1
+        assert summary[("claude", "subagent", "is_background")] == 1
+        assert summary[("codex", "subagent", "is_background")] == 1

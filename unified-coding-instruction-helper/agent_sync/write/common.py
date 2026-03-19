@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import shutil
-from pathlib import Path
-from typing import Any
+from pathlib import Path, PurePosixPath
+from typing import Any, Literal
 
 import yaml
+
+from agent_sync.parse.frontmatter import FrontmatterParseError, split_frontmatter
 
 PathPartsTuple = tuple[str, ...]
 
@@ -50,15 +52,12 @@ def generate_skill_md(
     description: str,
     body_markdown: str,
     *,
-    model: str | None = None,
     disable_model_invocation: bool = False,
 ) -> str:
     """Render a complete ``SKILL.md`` file."""
     fields: dict[str, Any] = {"name": name, "description": description}
     if disable_model_invocation:
         fields["disable-model-invocation"] = True
-    if model is not None:
-        fields["model"] = model
 
     frontmatter = generate_yaml_frontmatter(fields)
     return frontmatter + body_markdown
@@ -80,28 +79,64 @@ def generate_subagent_md(
     return frontmatter + prompt_markdown
 
 
-def copy_asset_tree(
+def copy_skill_assets(
     source_dir: Path,
     dest_dir: Path,
-    exclude_filenames: set[str],
+    asset_paths: list[PurePosixPath],
+    *,
+    target_tool: Literal["claude", "codex"],
 ) -> list[Path]:
-    """Recursively copy files from *source_dir* to *dest_dir*.
-
-    Skips files whose name (not path) is in *exclude_filenames*.
-    Returns a list of copied files relative to *dest_dir*.
-    """
+    """Copy manifest-declared skill assets into *dest_dir*."""
     copied: list[Path] = []
 
-    for src_path in sorted(source_dir.rglob("*")):
-        if not src_path.is_file():
-            continue
-        if src_path.name in exclude_filenames:
-            continue
-
-        rel = src_path.relative_to(source_dir)
+    for rel_asset in asset_paths:
+        rel = Path(rel_asset)
+        src_path = source_dir / rel
         dst_path = dest_dir / rel
         dst_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src_path, dst_path)
+
+        if src_path.name == "SKILL.md":
+            _write_transformed_skill_asset(src_path, dst_path, target_tool)
+        else:
+            shutil.copy2(src_path, dst_path)
         copied.append(rel)
 
     return copied
+
+
+def _write_transformed_skill_asset(
+    source_path: Path,
+    dest_path: Path,
+    target_tool: Literal["claude", "codex"],
+) -> None:
+    """Transform nested SKILL.md assets when possible, else preserve verbatim."""
+    text = source_path.read_text(encoding="utf-8")
+
+    try:
+        frontmatter, body = split_frontmatter(text)
+    except FrontmatterParseError:
+        dest_path.write_text(text, encoding="utf-8")
+        return
+
+    name = frontmatter.get("name")
+    description = frontmatter.get("description")
+    if not isinstance(name, str) or not isinstance(description, str):
+        dest_path.write_text(text, encoding="utf-8")
+        return
+
+    disable_model_invocation = bool(frontmatter.get("disable-model-invocation", False))
+    if target_tool == "claude":
+        transformed = generate_skill_md(
+            name=name,
+            description=description,
+            body_markdown=body,
+            disable_model_invocation=disable_model_invocation,
+        )
+    else:
+        transformed = generate_skill_md(
+            name=name,
+            description=description,
+            body_markdown=body,
+        )
+
+    dest_path.write_text(transformed, encoding="utf-8")

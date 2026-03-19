@@ -32,8 +32,9 @@ def parse_cursor_skills(
     if not skills_dir.is_dir():
         return skills, diagnostics
 
-    # Pass 1: discover all skill directories (those containing SKILL.md).
-    skill_entrypoints: list[Path] = sorted(skills_dir.rglob("SKILL.md"))
+    # Discover skill roots with a pruned walk. Nested package paths are valid,
+    # but once a skill root is found, descendant SKILL.md files are assets.
+    skill_entrypoints = _discover_skill_entrypoints(skills_dir)
     skill_dirs: set[Path] = {ep.parent.resolve() for ep in skill_entrypoints}
 
     # Detect directories that have files but no SKILL.md.
@@ -43,7 +44,7 @@ def parse_cursor_skills(
     for entrypoint in skill_entrypoints:
         skill_dir = entrypoint.parent
         spec, diags = _parse_single_skill(
-            source_root, skills_dir, skill_dir, entrypoint, skill_dirs,
+            source_root, skills_dir, skill_dir, entrypoint,
         )
         diagnostics.extend(diags)
         if spec is not None:
@@ -57,7 +58,6 @@ def _parse_single_skill(
     skills_dir: Path,
     skill_dir: Path,
     entrypoint: Path,
-    all_skill_dirs: set[Path],
 ) -> tuple[SkillSpec | None, list[Diagnostic]]:
     """Parse a single SKILL.md.  Returns ``(spec_or_None, diagnostics)``."""
     diagnostics: list[Diagnostic] = []
@@ -70,6 +70,8 @@ def _parse_single_skill(
 
     name = frontmatter.pop("name", None)
     description = frontmatter.pop("description", None)
+    # Skills are session capabilities, not model selectors. Keep model only as
+    # canonical source metadata for compatibility and reporting.
     model = frontmatter.pop("model", None)
     disable_inv = frontmatter.pop("disable-model-invocation", False)
 
@@ -87,9 +89,8 @@ def _parse_single_skill(
     rel = skill_dir.relative_to(skills_dir)
     relative_skill_dir = PurePosixPath(rel.as_posix())
 
-    # Collect companion asset paths, excluding SKILL.md and files belonging
-    # to nested skill directories.
-    copied_assets = _collect_asset_paths(skill_dir, all_skill_dirs)
+    # Collect companion asset paths, excluding only the skill root entrypoint.
+    copied_assets = _collect_asset_paths(skill_dir)
 
     spec = SkillSpec(
         source_tool="cursor",
@@ -110,9 +111,8 @@ def _parse_single_skill(
 
 def _collect_asset_paths(
     skill_dir: Path,
-    all_skill_dirs: set[Path],
 ) -> list[PurePosixPath]:
-    """Collect non-entrypoint files in *skill_dir*, excluding nested skill dirs."""
+    """Collect non-entrypoint files in *skill_dir*."""
     assets: list[PurePosixPath] = []
     resolved = skill_dir.resolve()
 
@@ -122,25 +122,28 @@ def _collect_asset_paths(
         if path.name == "SKILL.md" and path.parent.resolve() == resolved:
             continue
 
-        # Exclude files that live inside a nested skill directory.
-        parent_resolved = path.parent.resolve()
-        if parent_resolved != resolved:
-            is_nested = False
-            check = parent_resolved
-            while check != resolved:
-                if check in all_skill_dirs and check != resolved:
-                    is_nested = True
-                    break
-                check = check.parent
-                if check == check.parent:
-                    break
-            if is_nested:
-                continue
-
         rel = path.relative_to(skill_dir)
         assets.append(PurePosixPath(rel.as_posix()))
 
     return assets
+
+
+def _discover_skill_entrypoints(skills_dir: Path) -> list[Path]:
+    """Find skill roots under *skills_dir* without descending into skills."""
+    entrypoints: list[Path] = []
+
+    def walk(dir_path: Path) -> None:
+        entrypoint = dir_path / "SKILL.md"
+        if entrypoint.is_file():
+            entrypoints.append(entrypoint)
+            return
+
+        for child in sorted(dir_path.iterdir()):
+            if child.is_dir():
+                walk(child)
+
+    walk(skills_dir)
+    return entrypoints
 
 
 def _check_orphan_dirs(

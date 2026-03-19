@@ -50,6 +50,14 @@ class TestCliValidate:
         result = _run_cli("validate", "--repo-root", str(repo))
         assert result.returncode == 1
 
+    def test_validate_prints_dropped_fields(self, fixture_repo):
+        repo = fixture_repo("reporting_summary")
+        result = _run_cli("validate", "--repo-root", str(repo))
+        assert result.returncode == 0
+        assert "Dropped fields:" in result.stderr
+        assert "claude skill model (1)" in result.stderr
+        assert "codex subagent readonly (1)" in result.stderr
+
 
 class TestCliHelp:
     def test_help(self):

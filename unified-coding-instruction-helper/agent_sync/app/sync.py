@@ -7,9 +7,9 @@ import tempfile
 from pathlib import Path
 
 from agent_sync.domain.diagnostics import e001_source_root_missing
-from agent_sync.domain.models import Diagnostic, SyncManifest, SyncResult
+from agent_sync.domain.models import Diagnostic, DroppedFieldCount, SyncManifest, SyncResult
 from agent_sync.parse.cursor import parse_cursor_source
-from agent_sync.transform.normalize import normalize_manifest
+from agent_sync.transform.normalize import collect_dropped_fields
 from agent_sync.transform.validate import validate_manifest
 from agent_sync.write.claude import ClaudeSkillWriter, ClaudeSubagentWriter
 from agent_sync.write.codex import CodexSkillWriter, CodexSubagentWriter
@@ -35,13 +35,14 @@ class SyncOrchestrator:
 
     def run_sync(self) -> SyncResult:
         """Full sync: parse → validate → stage → replace managed subtrees."""
-        manifest, all_diags = self._parse_and_validate()
+        manifest, all_diags, dropped_fields = self._parse_and_validate()
 
         errors = [d for d in all_diags if d.severity == "error"]
         warnings = [d for d in all_diags if d.severity == "warning"]
 
         if errors:
             return SyncResult(
+                dropped_fields=dropped_fields,
                 errors=errors,
                 warnings=warnings,
                 dry_run=self.dry_run,
@@ -56,6 +57,7 @@ class SyncOrchestrator:
                 return SyncResult(
                     skills_written=skills_written,
                     subagents_written=subagents_written,
+                    dropped_fields=dropped_fields,
                     warnings=warnings,
                     dry_run=True,
                 )
@@ -65,42 +67,47 @@ class SyncOrchestrator:
         return SyncResult(
             skills_written=skills_written,
             subagents_written=subagents_written,
+            dropped_fields=dropped_fields,
             warnings=warnings,
             dry_run=False,
         )
 
     def run_validate(self) -> SyncResult:
         """Parse and validate only — no file writes."""
-        _, all_diags = self._parse_and_validate()
+        _, all_diags, dropped_fields = self._parse_and_validate()
 
         errors = [d for d in all_diags if d.severity == "error"]
         warnings = [d for d in all_diags if d.severity == "warning"]
 
-        return SyncResult(errors=errors, warnings=warnings)
+        return SyncResult(
+            dropped_fields=dropped_fields,
+            errors=errors,
+            warnings=warnings,
+        )
 
     # ── Internal ─────────────────────────────────────────────────────────
 
-    def _parse_and_validate(self) -> tuple[SyncManifest, list[Diagnostic]]:
-        """Run parse + normalize + validate, return manifest + all diagnostics."""
+    def _parse_and_validate(
+        self,
+    ) -> tuple[SyncManifest, list[Diagnostic], list[DroppedFieldCount]]:
+        """Run parse + validate + reporting analysis."""
         source_dir = self.repo_root / self.source_dir_name
         if not source_dir.is_dir():
             diag = e001_source_root_missing(source_dir)
-            return SyncManifest(), [diag]
+            return SyncManifest(), [diag], []
 
         manifest = parse_cursor_source(self.repo_root, self.source_dir_name)
 
         # Collect parse-time diagnostics.
         all_diags: list[Diagnostic] = list(manifest.errors) + list(manifest.warnings)
 
-        # Normalization (generates W002 warnings).
-        norm_warnings = normalize_manifest(manifest)
-        all_diags.extend(norm_warnings)
-
         # Cross-entity validation.
         val_diags = validate_manifest(manifest)
         all_diags.extend(val_diags)
 
-        return manifest, all_diags
+        dropped_fields = collect_dropped_fields(manifest)
+
+        return manifest, all_diags, dropped_fields
 
     def _stage_outputs(
         self, manifest: SyncManifest, staging_dir: Path,

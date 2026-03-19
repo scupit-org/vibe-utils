@@ -34,6 +34,21 @@ class TestParseSkillWithAssets:
         assert "scripts/helper.py" in asset_strs
 
 
+class TestParseNestedSkillReference:
+    def test_nested_reference_is_asset_not_skill(self, fixture_repo):
+        repo = fixture_repo("nested_skill_reference")
+        m = parse_cursor_source(repo)
+
+        assert len(m.skills) == 1
+        assert not m.has_errors
+
+        s = m.skills[0]
+        assert s.relative_skill_dir == PurePosixPath("packages/parent")
+        asset_strs = [str(a) for a in s.copied_asset_paths]
+        assert "references/example/SKILL.md" in asset_strs
+        assert "references/example/helper.txt" in asset_strs
+
+
 class TestParseSkillDisableInvocation:
     def test_flag_set(self, fixture_repo):
         repo = fixture_repo("skill_disable_invocation")

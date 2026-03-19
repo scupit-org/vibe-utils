@@ -7,7 +7,7 @@ from pathlib import Path
 from agent_sync.domain.models import SkillSpec, SubagentSpec, SyncManifest
 from agent_sync.transform.model_map import get_target_model
 from agent_sync.write.common import (
-    copy_asset_tree,
+    copy_skill_assets,
     generate_skill_md,
     generate_subagent_md,
 )
@@ -32,14 +32,19 @@ class ClaudeSkillWriter:
         out_dir.mkdir(parents=True, exist_ok=True)
 
         # Copy companion assets first.
-        copy_asset_tree(skill.source_skill_dir, out_dir, exclude_filenames={"SKILL.md"})
+        copy_skill_assets(
+            skill.source_skill_dir,
+            out_dir,
+            skill.copied_asset_paths,
+            target_tool="claude",
+        )
 
-        # Generate SKILL.md.
+        # Skills add capabilities to the session; they do not dictate model
+        # selection, so skill model metadata is intentionally ignored.
         content = generate_skill_md(
             name=skill.name,
             description=skill.description,
             body_markdown=skill.body_markdown,
-            model=_resolve_model(skill.model, "claude"),
             disable_model_invocation=skill.disable_model_invocation,
         )
         (out_dir / "SKILL.md").write_text(content, encoding="utf-8")

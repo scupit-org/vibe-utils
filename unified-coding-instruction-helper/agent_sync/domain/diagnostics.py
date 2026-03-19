@@ -107,16 +107,6 @@ def w001_filename_name_mismatch(path: Path, stem: str, name: str) -> Diagnostic:
     )
 
 
-def w002_skill_model_dropped_codex(path: Path, model: str) -> Diagnostic:
-    return Diagnostic(
-        severity="warning",
-        code="W002",
-        message=f"Skill model '{model}' will be dropped for Codex skill output",
-        source_path=path,
-        context={"model": model},
-    )
-
-
 def w003_deferred_field_stored(path: Path, field_name: str) -> Diagnostic:
     return Diagnostic(
         severity="warning",

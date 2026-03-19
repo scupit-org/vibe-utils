@@ -97,11 +97,13 @@ def _print_result(result: SyncResult, command: str, verbose: bool) -> None:
         warn_count = len(result.warnings)
         warn_str = f" {warn_count} warning(s)." if warn_count else ""
         print(f"Sync complete{mode}: {written} written.{warn_str}", file=sys.stderr)
+        _print_dropped_fields(result)
     elif command == "validate":
         if result.success:
             warn_count = len(result.warnings)
             warn_str = f" {warn_count} warning(s)." if warn_count else ""
             print(f"Validation passed.{warn_str}", file=sys.stderr)
+            _print_dropped_fields(result)
         else:
             print(
                 f"Validation failed: {len(result.errors)} error(s).",
@@ -113,3 +115,14 @@ def _print_diagnostic(diag: Diagnostic) -> None:
     prefix = f"[{diag.code}]"
     path_part = f" {diag.source_path}:" if diag.source_path else ""
     print(f"{prefix}{path_part} {diag.message}", file=sys.stderr)
+
+
+def _print_dropped_fields(result: SyncResult) -> None:
+    if not result.dropped_fields:
+        return
+
+    parts = [
+        f"{item.target_tool} {item.entity_kind} {item.field_name} ({item.count})"
+        for item in result.dropped_fields
+    ]
+    print(f"Dropped fields: {', '.join(parts)}", file=sys.stderr)

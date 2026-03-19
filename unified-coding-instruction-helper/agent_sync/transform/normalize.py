@@ -2,28 +2,38 @@
 
 from __future__ import annotations
 
-from agent_sync.domain.diagnostics import w002_skill_model_dropped_codex
-from agent_sync.domain.models import Diagnostic, SyncManifest
-from agent_sync.transform.model_map import lookup
+from collections import defaultdict
+
+from agent_sync.domain.models import DroppedFieldCount, SyncManifest
 
 
-def normalize_manifest(manifest: SyncManifest) -> list[Diagnostic]:
-    """Surface warnings that require cross-target knowledge.
+def collect_dropped_fields(manifest: SyncManifest) -> list[DroppedFieldCount]:
+    """Aggregate intentionally omitted fields across generated targets.
 
-    Writers call :func:`lookup` directly when they need the mapping.
-    This step exists to emit warnings like W002 (skill model dropped
-    for a particular target).
+    Skill ``model`` is parsed for compatibility, but intentionally ignored
+    in output because skills represent capabilities added to a session,
+    not a model-selection mechanism. Deferred subagent fields remain
+    canonical-only in v1 and are reported here.
     """
-    warnings: list[Diagnostic] = []
+    counts: dict[tuple[str, str, str], int] = defaultdict(int)
 
     for skill in manifest.skills:
-        if skill.model is None:
-            continue
-        row = lookup("cursor", skill.model, None)
-        # W002: skill model will be dropped for Codex skill output.
-        if row is None or row.codex is None:
-            warnings.append(
-                w002_skill_model_dropped_codex(skill.entrypoint_path, skill.model)
-            )
+        if skill.model is not None:
+            counts[("claude", "skill", "model")] += 1
+            counts[("codex", "skill", "model")] += 1
 
-    return warnings
+    for subagent in manifest.subagents:
+        if subagent.readonly is not None:
+            counts[("claude", "subagent", "readonly")] += 1
+            counts[("codex", "subagent", "readonly")] += 1
+        if subagent.is_background is not None:
+            counts[("claude", "subagent", "is_background")] += 1
+            counts[("codex", "subagent", "is_background")] += 1
+
+    return [
+        DroppedFieldCount(
+            target_tool=target_tool, entity_kind=entity_kind,
+            field_name=field_name, count=count,
+        )
+        for (target_tool, entity_kind, field_name), count in sorted(counts.items())
+    ]
