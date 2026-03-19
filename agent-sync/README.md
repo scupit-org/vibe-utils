@@ -93,7 +93,7 @@ This reads Cursor's skill and subagent definitions, validates them, and writes e
 
 | Flag | Default | Description |
 |---|---|---|
-| `--source-tool` | *(required)* | Source tool to read from: `cursor`, `claude`, or `codex` |
+| `-s`, `--source-tool` | *(required)* | Source tool to read from: `cursor`, `claude`, or `codex` |
 | `--repo-root` | `.` (current directory) | Path to the repository root |
 | `--dry-run` | off | Validate and report what would be written without modifying files |
 | `--verbose` | off | Show detailed output |
@@ -101,29 +101,40 @@ This reads Cursor's skill and subagent definitions, validates them, and writes e
 ### `validate` — check definitions without writing
 
 ```bash
-agent-sync validate --source-tool cursor --repo-root /path/to/repo
+agent-sync validate -s cursor
 ```
 
 Parses and validates the source definitions. Exits with code 1 if there are errors. Useful for CI or pre-commit checks.
 
-### Examples
+### Quick start
 
-Sync from Cursor (the most common workflow):
+From the root of your repo:
 
 ```bash
-agent-sync sync --source-tool cursor
+agent-sync sync -s cursor
 ```
 
-Sync from Claude Code to Cursor and Codex:
+### Examples
+
+Sync from Cursor:
 
 ```bash
-agent-sync sync --source-tool claude
+agent-sync sync -s cursor
+```
+
+or from other tools:
+
+```bash
+# or Claude Code
+agent-sync sync -s claude
+# or Codex
+agent-sync sync -s codex
 ```
 
 Preview what would be generated without writing anything:
 
 ```bash
-agent-sync sync --source-tool codex --dry-run
+agent-sync sync -s codex --dry-run
 ```
 
 ## What gets written (and what doesn't)

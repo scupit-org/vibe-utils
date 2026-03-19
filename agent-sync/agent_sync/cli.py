@@ -26,7 +26,7 @@ def _add_common_args(sub: argparse.ArgumentParser) -> None:
         help="Repository root (default: current directory)",
     )
     sub.add_argument(
-        "--source-tool", type=parse_tool_name, required=True,
+        "-s", "--source-tool", type=parse_tool_name, required=True,
         help="Source tool whose definitions to read",
     )
     sub.add_argument("--verbose", action="store_true")
