@@ -15,32 +15,32 @@ PathPartsTuple = tuple[str, ...]
 
 # ── Per-tool output path mappings ────────────────────────────────────────
 
-ALL_SKILL_OUTPUT_ROOTS: dict[str, PathPartsTuple] = {
+ALL_SKILL_OUTPUT_ROOTS: dict[ToolName, PathPartsTuple] = {
     "cursor": (".cursor", "skills"),
     "claude": (".claude", "skills"),
     "codex": (".agents", "skills"),
 }
 
-ALL_SUBAGENT_OUTPUT_TARGETS: dict[str, tuple[PathPartsTuple, str]] = {
+ALL_SUBAGENT_OUTPUT_TARGETS: dict[ToolName, tuple[PathPartsTuple, str]] = {
     "cursor": ((".cursor", "agents"), ".md"),
     "claude": ((".claude", "agents"), ".md"),
     "codex": ((".codex", "agents"), ".toml"),
 }
 
 
-def get_skill_output_roots(*, exclude_tool: str) -> list[PathPartsTuple]:
+def get_skill_output_roots(*, exclude_tool: ToolName) -> list[PathPartsTuple]:
     """Return skill output roots for all target tools except *exclude_tool*."""
     return [v for k, v in ALL_SKILL_OUTPUT_ROOTS.items() if k != exclude_tool]
 
 
 def get_subagent_output_targets(
-    *, exclude_tool: str,
+    *, exclude_tool: ToolName,
 ) -> list[tuple[PathPartsTuple, str]]:
     """Return subagent output targets for all target tools except *exclude_tool*."""
     return [v for k, v in ALL_SUBAGENT_OUTPUT_TARGETS.items() if k != exclude_tool]
 
 
-def get_managed_subtrees(*, exclude_tool: str) -> list[PathPartsTuple]:
+def get_managed_subtrees(*, exclude_tool: ToolName) -> list[PathPartsTuple]:
     """Return managed subtrees for all target tools except *exclude_tool*."""
     roots = get_skill_output_roots(exclude_tool=exclude_tool)
     sub_targets = get_subagent_output_targets(exclude_tool=exclude_tool)
@@ -104,16 +104,16 @@ def generate_subagent_md(
 # ── Model resolution ─────────────────────────────────────────────────────
 
 def resolve_model(
-    source_tool: str,
+    source_tool: ToolName,
     source_model: str | None,
-    target_tool: str,
+    target_tool: ToolName,
     reasoning_effort: str | None = None,
 ) -> str | None:
     """Resolve a source model string to a target tool's model name, or ``None``."""
     if source_model is None:
         return None
     entry: ModelEntry | None = get_target_model(
-        source_tool, source_model, target_tool, reasoning_effort,  # type: ignore[arg-type]
+        source_tool, source_model, target_tool, reasoning_effort,
     )
     return entry.model_name if entry else None
 

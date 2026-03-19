@@ -4,18 +4,22 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from agent_sync.domain.models import DroppedFieldCount, SyncManifest
-
-ALL_TOOLS = ("cursor", "claude", "codex")
+from agent_sync.domain.models import (
+    ALL_TOOL_NAMES,
+    DroppedFieldCount,
+    EntityKind,
+    SyncManifest,
+    ToolName,
+)
 
 # Skill model is intentionally preserved by the Cursor writer but dropped by
 # Claude and Codex writers.
-_TOOLS_THAT_DROP_SKILL_MODEL = {"claude", "codex"}
+_TOOLS_THAT_DROP_SKILL_MODEL: set[ToolName] = {"claude", "codex"}
 
 
 def collect_dropped_fields(
     manifest: SyncManifest,
-    source_tool: str = "cursor",
+    source_tool: ToolName,
 ) -> list[DroppedFieldCount]:
     """Aggregate intentionally omitted fields across generated targets.
 
@@ -24,8 +28,8 @@ def collect_dropped_fields(
     fields (``readonly``, ``is_background``) remain canonical-only in v1
     and are reported here for all active targets.
     """
-    target_tools = [t for t in ALL_TOOLS if t != source_tool]
-    counts: dict[tuple[str, str, str], int] = defaultdict(int)
+    target_tools: list[ToolName] = [tool for tool in ALL_TOOL_NAMES if tool != source_tool]
+    counts: dict[tuple[ToolName, EntityKind, str], int] = defaultdict(int)
 
     for skill in manifest.skills:
         if skill.model is not None:

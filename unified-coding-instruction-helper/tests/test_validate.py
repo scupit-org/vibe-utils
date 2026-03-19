@@ -39,19 +39,19 @@ def _subagent(name: str = "a", stem: str | None = None, **kwargs) -> SubagentSpe
 class TestUnknownModel:
     def test_skill_unknown_model(self):
         m = SyncManifest(skills=[_skill(model="llama-3-70b")])
-        diags = validate_manifest(m)
+        diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
         assert "E005" in codes
 
     def test_subagent_unknown_model(self):
         m = SyncManifest(subagents=[_subagent(model="llama-3-70b")])
-        diags = validate_manifest(m)
+        diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
         assert "E005" in codes
 
     def test_known_model_no_error(self):
         m = SyncManifest(skills=[_skill(model="claude-4.6-opus-high")])
-        diags = validate_manifest(m)
+        diags = validate_manifest(m, source_tool="cursor")
         error_codes = [d.code for d in diags if d.severity == "error"]
         assert "E005" not in error_codes
 
@@ -66,13 +66,13 @@ class TestDuplicateSkillNames:
                    relative_skill_dir=PurePosixPath("bar"),
                    entrypoint_path=Path("/repo/.cursor/skills/bar/SKILL.md")),
         ])
-        diags = validate_manifest(m)
+        diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
         assert "E006" in codes
 
     def test_unique_names_no_error(self):
         m = SyncManifest(skills=[_skill("a"), _skill("b")])
-        diags = validate_manifest(m)
+        diags = validate_manifest(m, source_tool="cursor")
         assert "E006" not in [d.code for d in diags]
 
 
@@ -82,7 +82,7 @@ class TestDuplicateSubagentNames:
             _subagent("helper", stem="a"),
             _subagent("helper", stem="b"),
         ])
-        diags = validate_manifest(m)
+        diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
         assert "E007" in codes
 
@@ -93,7 +93,7 @@ class TestDuplicateOutputPaths:
             _subagent("x", stem="same"),
             _subagent("y", stem="same"),
         ])
-        diags = validate_manifest(m)
+        diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
         assert "E008" in codes
 
@@ -101,13 +101,13 @@ class TestDuplicateOutputPaths:
 class TestUnknownFrontmatterKeys:
     def test_warning(self):
         m = SyncManifest(skills=[_skill(extra_frontmatter={"custom_key": "val"})])
-        diags = validate_manifest(m)
+        diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
         assert "W004" in codes
 
     def test_no_warning_when_empty(self):
         m = SyncManifest(skills=[_skill()])
-        diags = validate_manifest(m)
+        diags = validate_manifest(m, source_tool="cursor")
         assert "W004" not in [d.code for d in diags]
 
 
@@ -117,7 +117,7 @@ class TestCleanManifest:
             skills=[_skill("a"), _skill("b")],
             subagents=[_subagent("x"), _subagent("y")],
         )
-        diags = validate_manifest(m)
+        diags = validate_manifest(m, source_tool="cursor")
         errors = [d for d in diags if d.severity == "error"]
         assert len(errors) == 0
 
@@ -132,7 +132,7 @@ class TestNestedAssetModels:
             copied_asset_paths=[PurePosixPath("nested/SKILL.md")],
         )
         m = SyncManifest(skills=[skill])
-        diags = validate_manifest(m)
+        diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
         assert "E005" in codes
 
@@ -146,7 +146,7 @@ class TestNestedAssetModels:
             copied_asset_paths=[PurePosixPath("references/example/SKILL.md")],
         )
         m = SyncManifest(skills=[skill])
-        diags = validate_manifest(m)
+        diags = validate_manifest(m, source_tool="cursor")
         error_codes = [d.code for d in diags if d.severity == "error"]
         assert "E005" not in error_codes
 
@@ -159,7 +159,7 @@ class TestNestedAssetModels:
             copied_asset_paths=[PurePosixPath("nested/SKILL.md")],
         )
         m = SyncManifest(skills=[skill])
-        diags = validate_manifest(m)
+        diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
         assert "W005" in codes
 

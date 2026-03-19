@@ -116,6 +116,9 @@ def _parse_single_codex_subagent(
     readonly = data.get("readonly")
     is_background = data.get("is_background")
 
+    assert isinstance(name, str), "name must be a string"
+    assert isinstance(description, str), "description must be a string"
+
     stem = path.stem
     if stem != name:
         diagnostics.append(w001_filename_name_mismatch(path, stem, name))

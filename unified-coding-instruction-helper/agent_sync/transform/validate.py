@@ -13,7 +13,7 @@ from agent_sync.domain.diagnostics import (
     w004_unknown_frontmatter_keys,
     w005_malformed_nested_skill,
 )
-from agent_sync.domain.models import Diagnostic, SyncManifest
+from agent_sync.domain.models import Diagnostic, SyncManifest, ToolName
 from agent_sync.parse.frontmatter import FrontmatterParseError, split_frontmatter
 from agent_sync.transform.model_map import is_known_model
 from agent_sync.write.common import get_skill_output_roots, get_subagent_output_targets
@@ -21,7 +21,7 @@ from agent_sync.write.common import get_skill_output_roots, get_subagent_output_
 
 def validate_manifest(
     manifest: SyncManifest,
-    source_tool: str = "cursor",
+    source_tool: ToolName,
 ) -> list[Diagnostic]:
     """Run all cross-entity validation checks.
 
@@ -43,7 +43,7 @@ def validate_manifest(
 def _check_unknown_models(
     manifest: SyncManifest,
     diagnostics: list[Diagnostic],
-    source_tool: str,
+    source_tool: ToolName,
 ) -> None:
     """E005: Unknown model string not in allowed vocabulary."""
     for skill in manifest.skills:
@@ -60,7 +60,7 @@ def _check_unknown_models(
 def _check_nested_asset_models(
     manifest: SyncManifest,
     diagnostics: list[Diagnostic],
-    source_tool: str,
+    source_tool: ToolName,
 ) -> None:
     """E005/W005: Validate nested SKILL.md companion assets."""
     for skill in manifest.skills:
@@ -116,7 +116,7 @@ def _check_duplicate_subagent_names(
 def _check_duplicate_output_paths(
     manifest: SyncManifest,
     diagnostics: list[Diagnostic],
-    source_tool: str,
+    source_tool: ToolName,
 ) -> None:
     """E008: Duplicate output file paths for any single target."""
     skill_roots = get_skill_output_roots(exclude_tool=source_tool)

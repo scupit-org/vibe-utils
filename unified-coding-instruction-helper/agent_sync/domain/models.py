@@ -7,6 +7,8 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
 ToolName = Literal["cursor", "claude", "codex"]
+EntityKind = Literal["skill", "subagent"]
+ALL_TOOL_NAMES: tuple[ToolName, ...] = ("cursor", "claude", "codex")
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,13 +72,23 @@ class SyncManifest:
         return len(self.errors) > 0
 
 
+@dataclass(frozen=True, slots=True)
+class DroppedFieldCount:
+    """Aggregate count of an intentionally omitted field in target output."""
+
+    target_tool: ToolName
+    entity_kind: EntityKind
+    field_name: str
+    count: int
+
+
 @dataclass(slots=True)
 class SyncResult:
     """Result of a sync or validate operation, used for CLI output."""
 
     skills_written: int = 0
     subagents_written: int = 0
-    dropped_fields: list["DroppedFieldCount"] = field(default_factory=list)
+    dropped_fields: list[DroppedFieldCount] = field(default_factory=list)
     warnings: list[Diagnostic] = field(default_factory=list)
     errors: list[Diagnostic] = field(default_factory=list)
     dry_run: bool = False
@@ -84,13 +96,3 @@ class SyncResult:
     @property
     def success(self) -> bool:
         return len(self.errors) == 0
-
-
-@dataclass(frozen=True, slots=True)
-class DroppedFieldCount:
-    """Aggregate count of an intentionally omitted field in target output."""
-
-    target_tool: ToolName
-    entity_kind: Literal["skill", "subagent"]
-    field_name: str
-    count: int

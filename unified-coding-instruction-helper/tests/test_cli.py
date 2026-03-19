@@ -21,19 +21,21 @@ def _run_cli(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess
 class TestCliSync:
     def test_sync_success(self, fixture_repo):
         repo = fixture_repo("basic_skill")
-        result = _run_cli("sync", "--repo-root", str(repo))
+        result = _run_cli("sync", "--repo-root", str(repo), "--source-tool", "cursor")
         assert result.returncode == 0
         assert "Sync complete" in result.stderr
 
     def test_sync_errors(self, fixture_repo):
         repo = fixture_repo("missing_source")
-        result = _run_cli("sync", "--repo-root", str(repo))
+        result = _run_cli("sync", "--repo-root", str(repo), "--source-tool", "cursor")
         assert result.returncode == 1
         assert "[E001]" in result.stderr
 
     def test_sync_dry_run(self, fixture_repo):
         repo = fixture_repo("basic_skill")
-        result = _run_cli("sync", "--repo-root", str(repo), "--dry-run")
+        result = _run_cli(
+            "sync", "--repo-root", str(repo), "--source-tool", "cursor", "--dry-run",
+        )
         assert result.returncode == 0
         assert "dry run" in result.stderr.lower()
 
@@ -41,18 +43,24 @@ class TestCliSync:
 class TestCliValidate:
     def test_validate_success(self, fixture_repo):
         repo = fixture_repo("basic_skill")
-        result = _run_cli("validate", "--repo-root", str(repo))
+        result = _run_cli(
+            "validate", "--repo-root", str(repo), "--source-tool", "cursor",
+        )
         assert result.returncode == 0
         assert "passed" in result.stderr.lower()
 
     def test_validate_errors(self, fixture_repo):
         repo = fixture_repo("malformed_frontmatter")
-        result = _run_cli("validate", "--repo-root", str(repo))
+        result = _run_cli(
+            "validate", "--repo-root", str(repo), "--source-tool", "cursor",
+        )
         assert result.returncode == 1
 
     def test_validate_prints_dropped_fields(self, fixture_repo):
         repo = fixture_repo("reporting_summary")
-        result = _run_cli("validate", "--repo-root", str(repo))
+        result = _run_cli(
+            "validate", "--repo-root", str(repo), "--source-tool", "cursor",
+        )
         assert result.returncode == 0
         assert "Dropped fields:" in result.stderr
         assert "claude skill model (1)" in result.stderr
@@ -99,3 +107,8 @@ class TestCliHelp:
         assert result.returncode == 0
         assert "sync" in result.stdout
         assert "validate" in result.stdout
+
+    def test_source_tool_required(self):
+        result = _run_cli("sync", "--repo-root", "repo")
+        assert result.returncode != 0
+        assert "--source-tool" in result.stderr

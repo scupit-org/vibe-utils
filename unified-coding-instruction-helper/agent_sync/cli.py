@@ -7,10 +7,16 @@ import sys
 from pathlib import Path
 
 from agent_sync.app.sync import SyncOrchestrator
-from agent_sync.domain.models import Diagnostic, SyncResult
+from agent_sync.domain.models import ALL_TOOL_NAMES, Diagnostic, SyncResult, ToolName
 
 
-SUPPORTED_TOOLS = ("claude", "codex", "cursor")
+def parse_tool_name(value: str) -> ToolName:
+    """Parse a CLI tool name into the canonical ToolName type."""
+    if value not in ALL_TOOL_NAMES:
+        raise argparse.ArgumentTypeError(
+            f"invalid choice: {value!r} (choose from {', '.join(ALL_TOOL_NAMES)})"
+        )
+    return value
 
 
 def _add_common_args(sub: argparse.ArgumentParser) -> None:
@@ -20,9 +26,8 @@ def _add_common_args(sub: argparse.ArgumentParser) -> None:
         help="Repository root (default: current directory)",
     )
     sub.add_argument(
-        "--source-tool", type=str, default="cursor",
-        choices=SUPPORTED_TOOLS,
-        help="Source tool whose definitions to read (default: cursor)",
+        "--source-tool", type=parse_tool_name, required=True,
+        help="Source tool whose definitions to read",
     )
     sub.add_argument("--verbose", action="store_true")
 

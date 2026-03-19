@@ -7,7 +7,14 @@ import tempfile
 from pathlib import Path
 
 from agent_sync.domain.diagnostics import e001_source_root_missing
-from agent_sync.domain.models import Diagnostic, DroppedFieldCount, SyncManifest, SyncResult
+from agent_sync.domain.models import (
+    ALL_TOOL_NAMES,
+    Diagnostic,
+    DroppedFieldCount,
+    SyncManifest,
+    SyncResult,
+    ToolName,
+)
 from agent_sync.parse.claude import parse_claude_source
 from agent_sync.parse.codex import parse_codex_source
 from agent_sync.parse.cursor import parse_cursor_source
@@ -21,11 +28,12 @@ from agent_sync.write.cursor import CursorSkillWriter, CursorSubagentWriter
 
 class SyncOrchestrator:
     """Drives the full sync or validate pipeline."""
+    source_tool: ToolName
 
     def __init__(
         self,
         repo_root: Path,
-        source_tool: str = "cursor",
+        source_tool: ToolName,
         dry_run: bool = False,
         verbose: bool = False,
     ) -> None:
@@ -142,7 +150,9 @@ class SyncOrchestrator:
         self, manifest: SyncManifest, staging_dir: Path,
     ) -> tuple[int, int]:
         """Write all outputs into *staging_dir*.  Returns (skills, subagents) counts."""
-        target_tools = {"cursor", "claude", "codex"} - {self.source_tool}
+        target_tools: list[ToolName] = [
+            tool for tool in ALL_TOOL_NAMES if tool != self.source_tool
+        ]
 
         if "claude" in target_tools:
             ClaudeSkillWriter(staging_dir).write_all(manifest)

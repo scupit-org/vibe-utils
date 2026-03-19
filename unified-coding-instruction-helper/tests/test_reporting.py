@@ -38,7 +38,7 @@ class TestDroppedFieldReporting:
     def test_skill_model_counted_for_both_targets(self):
         manifest = SyncManifest(skills=[_skill(model="claude-4.6-opus-high")])
 
-        dropped = collect_dropped_fields(manifest)
+        dropped = collect_dropped_fields(manifest, source_tool="cursor")
         summary = {
             (item.target_tool, item.entity_kind, item.field_name): item.count
             for item in dropped
@@ -50,7 +50,7 @@ class TestDroppedFieldReporting:
     def test_deferred_subagent_fields_counted_for_both_targets(self):
         manifest = SyncManifest(subagents=[_subagent(readonly=True, is_background=False)])
 
-        dropped = collect_dropped_fields(manifest)
+        dropped = collect_dropped_fields(manifest, source_tool="cursor")
         summary = {
             (item.target_tool, item.entity_kind, item.field_name): item.count
             for item in dropped
@@ -62,7 +62,7 @@ class TestDroppedFieldReporting:
         assert summary[("codex", "subagent", "is_background")] == 1
 
     def test_empty_manifest_has_no_dropped_fields(self):
-        assert collect_dropped_fields(SyncManifest()) == []
+        assert collect_dropped_fields(SyncManifest(), source_tool="cursor") == []
 
     def test_cursor_target_does_not_drop_skill_model(self):
         """When source is claude, cursor is a target but it preserves skill model."""

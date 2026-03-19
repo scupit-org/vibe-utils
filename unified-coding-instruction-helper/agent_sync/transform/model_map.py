@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from agent_sync.domain.models import ToolName
+from agent_sync.domain.models import ALL_TOOL_NAMES, ToolName
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,8 +112,8 @@ def _make_key(model_name: str, reasoning_effort: str | None) -> str:
 
 def _row_has_priority(row: CrossToolModelRow) -> bool:
     """Return True if any entry in *row* has ``takes_priority_for_overlaps``."""
-    for tool in ("cursor", "claude", "codex"):
-        entry = row.get(tool)  # type: ignore[arg-type]
+    for tool in ALL_TOOL_NAMES:
+        entry = row.get(tool)
         if entry is not None and entry.takes_priority_for_overlaps:
             return True
     return False
@@ -138,9 +138,7 @@ def _build_lookup(tool: ToolName) -> dict[str, CrossToolModelRow]:
 
 
 _BY_TOOL: dict[ToolName, dict[str, CrossToolModelRow]] = {
-    "cursor": _build_lookup("cursor"),
-    "claude": _build_lookup("claude"),
-    "codex": _build_lookup("codex"),
+    tool: _build_lookup(tool) for tool in ALL_TOOL_NAMES
 }
 
 def lookup(

@@ -10,7 +10,7 @@ from agent_sync.parse.frontmatter import split_frontmatter
 class TestFullSync:
     def test_basic(self, fixture_repo):
         repo = fixture_repo("basic_skill")
-        orch = SyncOrchestrator(repo)
+        orch = SyncOrchestrator(repo, source_tool="cursor")
         result = orch.run_sync()
 
         assert result.success
@@ -26,7 +26,7 @@ class TestFullSync:
 
     def test_with_subagent(self, fixture_repo):
         repo = fixture_repo("basic_subagent")
-        orch = SyncOrchestrator(repo)
+        orch = SyncOrchestrator(repo, source_tool="cursor")
         result = orch.run_sync()
 
         assert result.success
@@ -39,7 +39,7 @@ class TestFullSync:
 
     def test_nested_skill_reference_is_copied_once(self, fixture_repo):
         repo = fixture_repo("nested_skill_reference")
-        orch = SyncOrchestrator(repo)
+        orch = SyncOrchestrator(repo, source_tool="cursor")
         result = orch.run_sync()
 
         assert result.success
@@ -60,7 +60,7 @@ class TestFullSync:
 class TestDryRun:
     def test_no_files_written(self, fixture_repo):
         repo = fixture_repo("basic_skill")
-        orch = SyncOrchestrator(repo, dry_run=True)
+        orch = SyncOrchestrator(repo, source_tool="cursor", dry_run=True)
         result = orch.run_sync()
 
         assert result.success
@@ -75,7 +75,7 @@ class TestDryRun:
 class TestErrorsAbort:
     def test_no_source_dir(self, fixture_repo):
         repo = fixture_repo("missing_source")
-        orch = SyncOrchestrator(repo)
+        orch = SyncOrchestrator(repo, source_tool="cursor")
         result = orch.run_sync()
 
         assert not result.success
@@ -84,7 +84,7 @@ class TestErrorsAbort:
 
     def test_malformed_frontmatter_aborts(self, fixture_repo):
         repo = fixture_repo("malformed_frontmatter")
-        orch = SyncOrchestrator(repo)
+        orch = SyncOrchestrator(repo, source_tool="cursor")
         result = orch.run_sync()
 
         assert not result.success
@@ -93,7 +93,7 @@ class TestErrorsAbort:
 
     def test_unknown_model_in_nested_asset_aborts(self, fixture_repo):
         repo = fixture_repo("nested_skill_unknown_model")
-        orch = SyncOrchestrator(repo)
+        orch = SyncOrchestrator(repo, source_tool="cursor")
         result = orch.run_sync()
 
         assert not result.success
@@ -111,7 +111,7 @@ class TestStagingSafety:
         assert settings_path.exists()
         assert config_path.exists()
 
-        orch = SyncOrchestrator(repo)
+        orch = SyncOrchestrator(repo, source_tool="cursor")
         result = orch.run_sync()
         assert result.success
 
@@ -128,7 +128,7 @@ class TestStagingSafety:
         stale_file = stale_dir / "SKILL.md"
         stale_file.write_text("stale")
 
-        orch = SyncOrchestrator(repo)
+        orch = SyncOrchestrator(repo, source_tool="cursor")
         result = orch.run_sync()
         assert result.success
 
@@ -141,13 +141,13 @@ class TestStagingSafety:
 class TestValidateCommand:
     def test_validate_success(self, fixture_repo):
         repo = fixture_repo("basic_skill")
-        orch = SyncOrchestrator(repo)
+        orch = SyncOrchestrator(repo, source_tool="cursor")
         result = orch.run_validate()
         assert result.success
 
     def test_validate_errors(self, fixture_repo):
         repo = fixture_repo("malformed_frontmatter")
-        orch = SyncOrchestrator(repo)
+        orch = SyncOrchestrator(repo, source_tool="cursor")
         result = orch.run_validate()
         assert not result.success
 
@@ -155,7 +155,7 @@ class TestValidateCommand:
 class TestDroppedFieldSummary:
     def test_validate_collects_dropped_fields(self, fixture_repo):
         repo = fixture_repo("reporting_summary")
-        orch = SyncOrchestrator(repo)
+        orch = SyncOrchestrator(repo, source_tool="cursor")
         result = orch.run_validate()
 
         assert result.success
