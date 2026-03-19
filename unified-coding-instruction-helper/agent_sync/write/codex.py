@@ -27,6 +27,7 @@ class CodexSkillWriter:
             skill.source_skill_dir,
             out_dir,
             skill.copied_asset_paths,
+            source_tool=skill.source_tool,
             target_tool="codex",
         )
 
@@ -63,10 +64,13 @@ class CodexSubagentWriter:
     def write_subagent(self, subagent: SubagentSpec) -> Path:
         self.output_root.mkdir(parents=True, exist_ok=True)
 
-        # Resolve Cursor model → Codex target.
+        # Resolve source model → Codex target.
         codex_entry = None
         if subagent.model is not None:
-            codex_entry = get_target_model("cursor", subagent.model, "codex")
+            codex_entry = get_target_model(
+                subagent.source_tool, subagent.model, "codex",
+                subagent.source_reasoning_effort,
+            )
 
         # Build TOML fields in specified order.
         data: dict[str, Any] = {

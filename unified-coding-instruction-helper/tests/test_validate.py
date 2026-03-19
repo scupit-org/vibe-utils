@@ -120,3 +120,93 @@ class TestCleanManifest:
         diags = validate_manifest(m)
         errors = [d for d in diags if d.severity == "error"]
         assert len(errors) == 0
+
+
+class TestNestedAssetModels:
+    def test_unknown_model_in_nested_skill_md(self, fixture_repo):
+        repo = fixture_repo("nested_skill_unknown_model")
+        skill = _skill(
+            source_skill_dir=repo / ".cursor" / "skills" / "parent",
+            relative_skill_dir=PurePosixPath("parent"),
+            entrypoint_path=repo / ".cursor" / "skills" / "parent" / "SKILL.md",
+            copied_asset_paths=[PurePosixPath("nested/SKILL.md")],
+        )
+        m = SyncManifest(skills=[skill])
+        diags = validate_manifest(m)
+        codes = [d.code for d in diags]
+        assert "E005" in codes
+
+    def test_known_model_in_nested_skill_md(self, fixture_repo):
+        repo = fixture_repo("nested_skill_reference")
+        skill = _skill(
+            source_skill_dir=repo / ".cursor" / "skills" / "packages" / "parent",
+            relative_skill_dir=PurePosixPath("packages/parent"),
+            entrypoint_path=repo / ".cursor" / "skills" / "packages" / "parent" / "SKILL.md",
+            model="claude-4.6-opus-high",
+            copied_asset_paths=[PurePosixPath("references/example/SKILL.md")],
+        )
+        m = SyncManifest(skills=[skill])
+        diags = validate_manifest(m)
+        error_codes = [d.code for d in diags if d.severity == "error"]
+        assert "E005" not in error_codes
+
+    def test_malformed_nested_skill_emits_warning(self, fixture_repo):
+        repo = fixture_repo("nested_skill_malformed")
+        skill = _skill(
+            source_skill_dir=repo / ".cursor" / "skills" / "parent",
+            relative_skill_dir=PurePosixPath("parent"),
+            entrypoint_path=repo / ".cursor" / "skills" / "parent" / "SKILL.md",
+            copied_asset_paths=[PurePosixPath("nested/SKILL.md")],
+        )
+        m = SyncManifest(skills=[skill])
+        diags = validate_manifest(m)
+        codes = [d.code for d in diags]
+        assert "W005" in codes
+
+
+class TestNonCursorSourceTool:
+    def test_claude_model_known_with_claude_source(self):
+        m = SyncManifest(subagents=[
+            _subagent(source_tool="claude", model="claude-opus-4-6"),
+        ])
+        diags = validate_manifest(m, source_tool="claude")
+        error_codes = [d.code for d in diags if d.severity == "error"]
+        assert "E005" not in error_codes
+
+    def test_claude_model_unknown_with_cursor_source(self):
+        """A Claude model name is invalid when source is Cursor."""
+        m = SyncManifest(subagents=[
+            _subagent(model="claude-opus-4-6"),
+        ])
+        diags = validate_manifest(m, source_tool="cursor")
+        error_codes = [d.code for d in diags if d.severity == "error"]
+        assert "E005" in error_codes
+
+    def test_codex_model_with_reasoning_effort(self):
+        m = SyncManifest(subagents=[
+            _subagent(
+                source_tool="codex", model="gpt-5.4",
+                source_reasoning_effort="high",
+            ),
+        ])
+        diags = validate_manifest(m, source_tool="codex")
+        error_codes = [d.code for d in diags if d.severity == "error"]
+        assert "E005" not in error_codes
+
+    def test_codex_model_without_reasoning_effort_is_unknown(self):
+        m = SyncManifest(subagents=[
+            _subagent(source_tool="codex", model="gpt-5.4"),
+        ])
+        diags = validate_manifest(m, source_tool="codex")
+        error_codes = [d.code for d in diags if d.severity == "error"]
+        assert "E005" in error_codes
+
+    def test_duplicate_output_paths_with_claude_source(self):
+        """With claude source, targets include cursor — check for cursor output conflicts."""
+        m = SyncManifest(subagents=[
+            _subagent("x", stem="same", source_tool="claude"),
+            _subagent("y", stem="same", source_tool="claude"),
+        ])
+        diags = validate_manifest(m, source_tool="claude")
+        codes = [d.code for d in diags]
+        assert "E008" in codes

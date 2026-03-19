@@ -125,3 +125,12 @@ def w004_unknown_frontmatter_keys(path: Path, keys: list[str]) -> Diagnostic:
         source_path=path,
         context={"keys": keys},
     )
+
+
+def w005_malformed_nested_skill(path: Path, detail: str) -> Diagnostic:
+    return Diagnostic(
+        severity="warning",
+        code="W005",
+        message=f"Nested SKILL.md asset could not be parsed and will be copied verbatim: {detail}",
+        source_path=path,
+    )

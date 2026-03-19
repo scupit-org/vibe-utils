@@ -4,32 +4,51 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal
+from typing import Any
 
 import yaml
 
+from agent_sync.domain.models import ToolName
 from agent_sync.parse.frontmatter import FrontmatterParseError, split_frontmatter
-
+from agent_sync.transform.model_map import ModelEntry, get_target_model
 PathPartsTuple = tuple[str, ...]
 
-# ── Output path constants ─────────────────────────────────────────────────
-# Defined once, shared by writers, validators, and the sync orchestrator.
+# ── Per-tool output path mappings ────────────────────────────────────────
 
-SKILL_OUTPUT_ROOTS: list[PathPartsTuple] = [
-    (".claude", "skills"),
-    (".agents", "skills"),
-]
+ALL_SKILL_OUTPUT_ROOTS: dict[str, PathPartsTuple] = {
+    "cursor": (".cursor", "skills"),
+    "claude": (".claude", "skills"),
+    "codex": (".agents", "skills"),
+}
 
-SUBAGENT_OUTPUT_TARGETS: list[tuple[PathPartsTuple, str]] = [
-    ((".claude", "agents"), ".md"),
-    ((".codex", "agents"), ".toml"),
-]
+ALL_SUBAGENT_OUTPUT_TARGETS: dict[str, tuple[PathPartsTuple, str]] = {
+    "cursor": ((".cursor", "agents"), ".md"),
+    "claude": ((".claude", "agents"), ".md"),
+    "codex": ((".codex", "agents"), ".toml"),
+}
 
-MANAGED_SUBTREES: list[PathPartsTuple] = [
-    *SKILL_OUTPUT_ROOTS,
-    *(parts for parts, _ in SUBAGENT_OUTPUT_TARGETS),
-]
 
+def get_skill_output_roots(*, exclude_tool: str) -> list[PathPartsTuple]:
+    """Return skill output roots for all target tools except *exclude_tool*."""
+    return [v for k, v in ALL_SKILL_OUTPUT_ROOTS.items() if k != exclude_tool]
+
+
+def get_subagent_output_targets(
+    *, exclude_tool: str,
+) -> list[tuple[PathPartsTuple, str]]:
+    """Return subagent output targets for all target tools except *exclude_tool*."""
+    return [v for k, v in ALL_SUBAGENT_OUTPUT_TARGETS.items() if k != exclude_tool]
+
+
+def get_managed_subtrees(*, exclude_tool: str) -> list[PathPartsTuple]:
+    """Return managed subtrees for all target tools except *exclude_tool*."""
+    roots = get_skill_output_roots(exclude_tool=exclude_tool)
+    sub_targets = get_subagent_output_targets(exclude_tool=exclude_tool)
+    return [*roots, *(parts for parts, _ in sub_targets)]
+
+
+
+# ── Markdown generation ──────────────────────────────────────────────────
 
 def generate_yaml_frontmatter(fields: dict[str, Any]) -> str:
     """Render a YAML frontmatter block (``---\\n...\\n---\\n``).
@@ -53,9 +72,12 @@ def generate_skill_md(
     body_markdown: str,
     *,
     disable_model_invocation: bool = False,
+    model: str | None = None,
 ) -> str:
     """Render a complete ``SKILL.md`` file."""
     fields: dict[str, Any] = {"name": name, "description": description}
+    if model is not None:
+        fields["model"] = model
     if disable_model_invocation:
         fields["disable-model-invocation"] = True
 
@@ -79,35 +101,53 @@ def generate_subagent_md(
     return frontmatter + prompt_markdown
 
 
+# ── Model resolution ─────────────────────────────────────────────────────
+
+def resolve_model(
+    source_tool: str,
+    source_model: str | None,
+    target_tool: str,
+    reasoning_effort: str | None = None,
+) -> str | None:
+    """Resolve a source model string to a target tool's model name, or ``None``."""
+    if source_model is None:
+        return None
+    entry: ModelEntry | None = get_target_model(
+        source_tool, source_model, target_tool, reasoning_effort,  # type: ignore[arg-type]
+    )
+    return entry.model_name if entry else None
+
+
+# ── Asset copying ────────────────────────────────────────────────────────
+
 def copy_skill_assets(
     source_dir: Path,
     dest_dir: Path,
     asset_paths: list[PurePosixPath],
     *,
-    target_tool: Literal["claude", "codex"],
-) -> list[Path]:
+    source_tool: ToolName,
+    target_tool: ToolName,
+) -> None:
     """Copy manifest-declared skill assets into *dest_dir*."""
-    copied: list[Path] = []
-
     for rel_asset in asset_paths:
-        rel = Path(rel_asset)
-        src_path = source_dir / rel
-        dst_path = dest_dir / rel
+        src_path = source_dir / rel_asset
+        dst_path = dest_dir / rel_asset
         dst_path.parent.mkdir(parents=True, exist_ok=True)
 
         if src_path.name == "SKILL.md":
-            _write_transformed_skill_asset(src_path, dst_path, target_tool)
+            _write_transformed_skill_asset(
+                src_path, dst_path, source_tool=source_tool, target_tool=target_tool,
+            )
         else:
             shutil.copy2(src_path, dst_path)
-        copied.append(rel)
-
-    return copied
 
 
 def _write_transformed_skill_asset(
     source_path: Path,
     dest_path: Path,
-    target_tool: Literal["claude", "codex"],
+    *,
+    source_tool: ToolName,
+    target_tool: ToolName,
 ) -> None:
     """Transform nested SKILL.md assets when possible, else preserve verbatim."""
     text = source_path.read_text(encoding="utf-8")
@@ -125,7 +165,24 @@ def _write_transformed_skill_asset(
         return
 
     disable_model_invocation = bool(frontmatter.get("disable-model-invocation", False))
-    if target_tool == "claude":
+    source_model = frontmatter.get("model")
+
+    if target_tool == "cursor":
+        # Cursor preserves both model and disable-model-invocation.
+        # Resolve the source model to a Cursor model name.
+        resolved_model: str | None = None
+        if isinstance(source_model, str):
+            entry = get_target_model(source_tool, source_model, "cursor")
+            resolved_model = entry.model_name if entry else None
+        transformed = generate_skill_md(
+            name=name,
+            description=description,
+            body_markdown=body,
+            disable_model_invocation=disable_model_invocation,
+            model=resolved_model,
+        )
+    elif target_tool == "claude":
+        # Claude supports disable-model-invocation but drops model.
         transformed = generate_skill_md(
             name=name,
             description=description,
@@ -133,6 +190,7 @@ def _write_transformed_skill_asset(
             disable_model_invocation=disable_model_invocation,
         )
     else:
+        # Codex drops both model and disable-model-invocation from SKILL.md.
         transformed = generate_skill_md(
             name=name,
             description=description,

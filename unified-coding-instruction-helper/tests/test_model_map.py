@@ -73,7 +73,7 @@ class TestLookupByClaude:
         row = lookup("claude", "claude-opus-4-6", None)
         assert row is not None
         assert row.cursor is not None
-        assert row.cursor.model_name.startswith("claude-4.6-opus")
+        assert row.cursor.model_name == "claude-4.6-opus-high-thinking"
 
 
 class TestLookupByCodex:

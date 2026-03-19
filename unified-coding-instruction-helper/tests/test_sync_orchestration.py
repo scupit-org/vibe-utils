@@ -1,8 +1,10 @@
 """Integration tests for agent_sync.app.sync."""
 
+import tomllib
 from pathlib import Path
 
 from agent_sync.app.sync import SyncOrchestrator
+from agent_sync.parse.frontmatter import split_frontmatter
 
 
 class TestFullSync:
@@ -89,6 +91,15 @@ class TestErrorsAbort:
         # No output written.
         assert not (repo / ".claude" / "skills").exists()
 
+    def test_unknown_model_in_nested_asset_aborts(self, fixture_repo):
+        repo = fixture_repo("nested_skill_unknown_model")
+        orch = SyncOrchestrator(repo)
+        result = orch.run_sync()
+
+        assert not result.success
+        codes = [d.code for d in result.errors]
+        assert "E005" in codes
+
 
 class TestStagingSafety:
     def test_preserves_unmanaged_files(self, fixture_repo):
@@ -159,3 +170,80 @@ class TestDroppedFieldSummary:
         assert summary[("codex", "subagent", "readonly")] == 1
         assert summary[("claude", "subagent", "is_background")] == 1
         assert summary[("codex", "subagent", "is_background")] == 1
+
+
+class TestClaudeSourceSync:
+    def test_generates_cursor_and_codex(self, fixture_repo):
+        repo = fixture_repo("claude_source_sync")
+        orch = SyncOrchestrator(repo, source_tool="claude")
+        result = orch.run_sync()
+
+        assert result.success
+        assert result.skills_written == 1
+        assert result.subagents_written == 1
+
+        # Cursor output.
+        cursor_skill = repo / ".cursor" / "skills" / "greeting" / "SKILL.md"
+        assert cursor_skill.exists()
+        cursor_agent = repo / ".cursor" / "agents" / "reviewer.md"
+        assert cursor_agent.exists()
+
+        # Codex output.
+        codex_skill = repo / ".agents" / "skills" / "greeting" / "SKILL.md"
+        assert codex_skill.exists()
+        codex_agent = repo / ".codex" / "agents" / "reviewer.toml"
+        assert codex_agent.exists()
+
+        # Claude source dirs should NOT be touched.
+        assert (repo / ".claude" / "skills" / "greeting" / "SKILL.md").exists()
+        assert (repo / ".claude" / "agents" / "reviewer.md").exists()
+
+    def test_model_resolved_in_cursor_output(self, fixture_repo):
+        repo = fixture_repo("claude_source_sync")
+        orch = SyncOrchestrator(repo, source_tool="claude")
+        orch.run_sync()
+
+        cursor_agent = repo / ".cursor" / "agents" / "reviewer.md"
+        fm, _ = split_frontmatter(cursor_agent.read_text())
+        # claude-opus-4-6 should resolve to the priority Cursor model name.
+        assert fm["model"] == "claude-4.6-opus-high-thinking"
+
+
+class TestCodexSourceSync:
+    def test_generates_cursor_and_claude(self, fixture_repo):
+        repo = fixture_repo("codex_source_sync")
+        orch = SyncOrchestrator(repo, source_tool="codex")
+        result = orch.run_sync()
+
+        assert result.success
+        assert result.skills_written == 1
+        assert result.subagents_written == 1
+
+        # Cursor output.
+        cursor_skill = repo / ".cursor" / "skills" / "greeting" / "SKILL.md"
+        assert cursor_skill.exists()
+        cursor_agent = repo / ".cursor" / "agents" / "analyzer.md"
+        assert cursor_agent.exists()
+
+        # Claude output.
+        claude_skill = repo / ".claude" / "skills" / "greeting" / "SKILL.md"
+        assert claude_skill.exists()
+        claude_agent = repo / ".claude" / "agents" / "analyzer.md"
+        assert claude_agent.exists()
+
+    def test_model_resolved_in_cursor_output(self, fixture_repo):
+        repo = fixture_repo("codex_source_sync")
+        orch = SyncOrchestrator(repo, source_tool="codex")
+        orch.run_sync()
+
+        cursor_agent = repo / ".cursor" / "agents" / "analyzer.md"
+        fm, _ = split_frontmatter(cursor_agent.read_text())
+        assert fm["model"] == "gpt-5.4-high"
+
+    def test_codex_source_missing_dirs(self, fixture_repo):
+        repo = fixture_repo("missing_source")
+        orch = SyncOrchestrator(repo, source_tool="codex")
+        result = orch.run_sync()
+        assert not result.success
+        codes = [d.code for d in result.errors]
+        assert "E001" in codes

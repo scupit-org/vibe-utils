@@ -8,12 +8,15 @@ from pathlib import Path
 
 from agent_sync.domain.diagnostics import e001_source_root_missing
 from agent_sync.domain.models import Diagnostic, DroppedFieldCount, SyncManifest, SyncResult
+from agent_sync.parse.claude import parse_claude_source
+from agent_sync.parse.codex import parse_codex_source
 from agent_sync.parse.cursor import parse_cursor_source
 from agent_sync.transform.normalize import collect_dropped_fields
 from agent_sync.transform.validate import validate_manifest
 from agent_sync.write.claude import ClaudeSkillWriter, ClaudeSubagentWriter
 from agent_sync.write.codex import CodexSkillWriter, CodexSubagentWriter
-from agent_sync.write.common import MANAGED_SUBTREES
+from agent_sync.write.common import get_managed_subtrees
+from agent_sync.write.cursor import CursorSkillWriter, CursorSubagentWriter
 
 
 class SyncOrchestrator:
@@ -22,12 +25,12 @@ class SyncOrchestrator:
     def __init__(
         self,
         repo_root: Path,
-        source_dir_name: str = ".cursor",
+        source_tool: str = "cursor",
         dry_run: bool = False,
         verbose: bool = False,
     ) -> None:
         self.repo_root = repo_root.resolve()
-        self.source_dir_name = source_dir_name
+        self.source_tool = source_tool
         self.dry_run = dry_run
         self.verbose = verbose
 
@@ -91,43 +94,74 @@ class SyncOrchestrator:
         self,
     ) -> tuple[SyncManifest, list[Diagnostic], list[DroppedFieldCount]]:
         """Run parse + validate + reporting analysis."""
-        source_dir = self.repo_root / self.source_dir_name
-        if not source_dir.is_dir():
-            diag = e001_source_root_missing(source_dir)
+        # Source existence check.
+        if not self._source_exists():
+            diag = self._source_missing_diagnostic()
             return SyncManifest(), [diag], []
 
-        manifest = parse_cursor_source(self.repo_root, self.source_dir_name)
+        manifest = self._parse_source()
 
         # Collect parse-time diagnostics.
         all_diags: list[Diagnostic] = list(manifest.errors) + list(manifest.warnings)
 
         # Cross-entity validation.
-        val_diags = validate_manifest(manifest)
+        val_diags = validate_manifest(manifest, source_tool=self.source_tool)
         all_diags.extend(val_diags)
 
-        dropped_fields = collect_dropped_fields(manifest)
+        dropped_fields = collect_dropped_fields(manifest, source_tool=self.source_tool)
 
         return manifest, all_diags, dropped_fields
+
+    def _source_exists(self) -> bool:
+        """Check if the source tool's directories exist."""
+        if self.source_tool == "codex":
+            agents_dir = self.repo_root / ".agents"
+            codex_dir = self.repo_root / ".codex"
+            return agents_dir.is_dir() or codex_dir.is_dir()
+        source_dir = self.repo_root / f".{self.source_tool}"
+        return source_dir.is_dir()
+
+    def _source_missing_diagnostic(self) -> Diagnostic:
+        """Return an E001 diagnostic for the missing source directory."""
+        if self.source_tool == "codex":
+            return e001_source_root_missing(self.repo_root / ".agents")
+        return e001_source_root_missing(self.repo_root / f".{self.source_tool}")
+
+    def _parse_source(self) -> SyncManifest:
+        """Dispatch to the correct parser based on source tool."""
+        if self.source_tool == "cursor":
+            return parse_cursor_source(self.repo_root)
+        elif self.source_tool == "claude":
+            return parse_claude_source(self.repo_root)
+        elif self.source_tool == "codex":
+            return parse_codex_source(self.repo_root)
+        else:
+            raise ValueError(f"Unknown source tool: {self.source_tool}")
 
     def _stage_outputs(
         self, manifest: SyncManifest, staging_dir: Path,
     ) -> tuple[int, int]:
         """Write all outputs into *staging_dir*.  Returns (skills, subagents) counts."""
-        claude_skills = ClaudeSkillWriter(staging_dir)
-        claude_agents = ClaudeSubagentWriter(staging_dir)
-        codex_skills = CodexSkillWriter(staging_dir)
-        codex_agents = CodexSubagentWriter(staging_dir)
+        target_tools = {"cursor", "claude", "codex"} - {self.source_tool}
 
-        claude_skills.write_all(manifest)
-        claude_agents.write_all(manifest)
-        codex_skills.write_all(manifest)
-        codex_agents.write_all(manifest)
+        if "claude" in target_tools:
+            ClaudeSkillWriter(staging_dir).write_all(manifest)
+            ClaudeSubagentWriter(staging_dir).write_all(manifest)
+
+        if "codex" in target_tools:
+            CodexSkillWriter(staging_dir).write_all(manifest)
+            CodexSubagentWriter(staging_dir).write_all(manifest)
+
+        if "cursor" in target_tools:
+            CursorSkillWriter(staging_dir).write_all(manifest)
+            CursorSubagentWriter(staging_dir).write_all(manifest)
 
         return len(manifest.skills), len(manifest.subagents)
 
     def _replace_managed_subtrees(self, staging_dir: Path) -> None:
         """Wipe each managed subtree in *repo_root*, then move staged output in."""
-        for parts in MANAGED_SUBTREES:
+        subtrees = get_managed_subtrees(exclude_tool=self.source_tool)
+        for parts in subtrees:
             target = self.repo_root.joinpath(*parts)
             staged = staging_dir.joinpath(*parts)
 

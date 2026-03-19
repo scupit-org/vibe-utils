@@ -9,9 +9,8 @@ requires adding rows — not a cross-product of new dicts.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
 
-ToolName = Literal["cursor", "claude", "codex"]
+from agent_sync.domain.models import ToolName
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +19,7 @@ class ModelEntry:
 
     model_name: str
     reasoning_effort: str | None = None
+    takes_priority_for_overlaps: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +48,8 @@ MODEL_ROWS: list[CrossToolModelRow] = [
         claude=ModelEntry("claude-sonnet-4-6"),
     ),
     CrossToolModelRow(
-        cursor=ModelEntry("claude-4.6-sonnet-medium-thinking"),
+        cursor=ModelEntry("claude-4.6-sonnet-medium-thinking",
+                          takes_priority_for_overlaps=True),
         claude=ModelEntry("claude-sonnet-4-6"),
     ),
 
@@ -62,7 +63,8 @@ MODEL_ROWS: list[CrossToolModelRow] = [
         claude=ModelEntry("claude-opus-4-6"),
     ),
     CrossToolModelRow(
-        cursor=ModelEntry("claude-4.6-opus-high-thinking"),
+        cursor=ModelEntry("claude-4.6-opus-high-thinking",
+                          takes_priority_for_overlaps=True),
         claude=ModelEntry("claude-opus-4-6"),
     ),
     CrossToolModelRow(
@@ -76,7 +78,8 @@ MODEL_ROWS: list[CrossToolModelRow] = [
         claude=ModelEntry("claude-haiku-4-5"),
     ),
     CrossToolModelRow(
-        cursor=ModelEntry("claude-4.5-haiku-thinking"),
+        cursor=ModelEntry("claude-4.5-haiku-thinking",
+                          takes_priority_for_overlaps=True),
         claude=ModelEntry("claude-haiku-4-5"),
     ),
 
@@ -107,13 +110,30 @@ def _make_key(model_name: str, reasoning_effort: str | None) -> str:
     return f"{model_name}::{reasoning_effort or 'unknown'}"
 
 
+def _row_has_priority(row: CrossToolModelRow) -> bool:
+    """Return True if any entry in *row* has ``takes_priority_for_overlaps``."""
+    for tool in ("cursor", "claude", "codex"):
+        entry = row.get(tool)  # type: ignore[arg-type]
+        if entry is not None and entry.takes_priority_for_overlaps:
+            return True
+    return False
+
+
 def _build_lookup(tool: ToolName) -> dict[str, CrossToolModelRow]:
-    """Build a ``{key: row}`` dict for *tool*."""
+    """Build a ``{key: row}`` dict for *tool*.
+
+    When multiple rows produce the same key for a given *tool* (many-to-one
+    mappings), the row with ``takes_priority_for_overlaps=True`` on any of
+    its entries wins.  Otherwise the first row encountered is kept.
+    """
     result: dict[str, CrossToolModelRow] = {}
     for row in MODEL_ROWS:
         entry = row.get(tool)
-        if entry is not None:
-            result[_make_key(entry.model_name, entry.reasoning_effort)] = row
+        if entry is None:
+            continue
+        key = _make_key(entry.model_name, entry.reasoning_effort)
+        if key not in result or _row_has_priority(row):
+            result[key] = row
     return result
 
 

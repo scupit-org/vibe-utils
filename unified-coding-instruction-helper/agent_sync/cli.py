@@ -10,9 +10,7 @@ from agent_sync.app.sync import SyncOrchestrator
 from agent_sync.domain.models import Diagnostic, SyncResult
 
 
-SOURCE_TOOL_DEFAULTS: dict[str, str] = {
-    "cursor": ".cursor",
-}
+SUPPORTED_TOOLS = ("claude", "codex", "cursor")
 
 
 def _add_common_args(sub: argparse.ArgumentParser) -> None:
@@ -23,12 +21,8 @@ def _add_common_args(sub: argparse.ArgumentParser) -> None:
     )
     sub.add_argument(
         "--source-tool", type=str, default="cursor",
-        choices=sorted(SOURCE_TOOL_DEFAULTS),
+        choices=SUPPORTED_TOOLS,
         help="Source tool whose definitions to read (default: cursor)",
-    )
-    sub.add_argument(
-        "--source-dir", type=str, default=None,
-        help="Source directory name (default: derived from --source-tool)",
     )
     sub.add_argument("--verbose", action="store_true")
 
@@ -36,7 +30,7 @@ def _add_common_args(sub: argparse.ArgumentParser) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agent-sync",
-        description="Sync Cursor project definitions to Claude Code and Codex formats.",
+        description="Sync coding agent definitions between Cursor, Claude Code, and Codex.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -60,12 +54,9 @@ def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # Derive --source-dir from --source-tool when not explicitly provided.
-    source_dir = args.source_dir or SOURCE_TOOL_DEFAULTS[args.source_tool]
-
     orchestrator = SyncOrchestrator(
         repo_root=args.repo_root,
-        source_dir_name=source_dir,
+        source_tool=args.source_tool,
         dry_run=getattr(args, "dry_run", False),
         verbose=args.verbose,
     )

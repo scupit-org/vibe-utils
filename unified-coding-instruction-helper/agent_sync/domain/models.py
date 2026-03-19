@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
+ToolName = Literal["cursor", "claude", "codex"]
+
 
 @dataclass(frozen=True, slots=True)
 class Diagnostic:
@@ -22,7 +24,7 @@ class Diagnostic:
 class SkillSpec:
     """Canonical representation of a skill parsed from source."""
 
-    source_tool: Literal["cursor", "claude", "codex"]
+    source_tool: ToolName
     source_root: Path
     source_skill_dir: Path
     relative_skill_dir: PurePosixPath
@@ -41,13 +43,14 @@ class SkillSpec:
 class SubagentSpec:
     """Canonical representation of a subagent parsed from source."""
 
-    source_tool: Literal["cursor", "claude", "codex"]
+    source_tool: ToolName
     source_path: Path
     filename_stem: str
     name: str
     description: str
     prompt_markdown: str
     model: str | None = None
+    source_reasoning_effort: str | None = None
     readonly: bool | None = None
     is_background: bool | None = None
     extra_frontmatter: dict[str, Any] = field(default_factory=dict)
@@ -87,7 +90,7 @@ class SyncResult:
 class DroppedFieldCount:
     """Aggregate count of an intentionally omitted field in target output."""
 
-    target_tool: Literal["claude", "codex"]
+    target_tool: ToolName
     entity_kind: Literal["skill", "subagent"]
     field_name: str
     count: int

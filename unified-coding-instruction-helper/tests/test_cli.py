@@ -59,6 +59,40 @@ class TestCliValidate:
         assert "codex subagent readonly (1)" in result.stderr
 
 
+class TestCliSourceTool:
+    def test_sync_claude_source(self, fixture_repo):
+        repo = fixture_repo("claude_source_sync")
+        result = _run_cli(
+            "sync", "--repo-root", str(repo), "--source-tool", "claude",
+        )
+        assert result.returncode == 0
+        assert "Sync complete" in result.stderr
+
+    def test_sync_codex_source(self, fixture_repo):
+        repo = fixture_repo("codex_source_sync")
+        result = _run_cli(
+            "sync", "--repo-root", str(repo), "--source-tool", "codex",
+        )
+        assert result.returncode == 0
+        assert "Sync complete" in result.stderr
+
+    def test_validate_claude_source(self, fixture_repo):
+        repo = fixture_repo("claude_source_sync")
+        result = _run_cli(
+            "validate", "--repo-root", str(repo), "--source-tool", "claude",
+        )
+        assert result.returncode == 0
+        assert "passed" in result.stderr.lower()
+
+    def test_validate_codex_source(self, fixture_repo):
+        repo = fixture_repo("codex_source_sync")
+        result = _run_cli(
+            "validate", "--repo-root", str(repo), "--source-tool", "codex",
+        )
+        assert result.returncode == 0
+        assert "passed" in result.stderr.lower()
+
+
 class TestCliHelp:
     def test_help(self):
         result = _run_cli("--help")

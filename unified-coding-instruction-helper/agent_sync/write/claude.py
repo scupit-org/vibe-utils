@@ -5,20 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from agent_sync.domain.models import SkillSpec, SubagentSpec, SyncManifest
-from agent_sync.transform.model_map import get_target_model
 from agent_sync.write.common import (
     copy_skill_assets,
     generate_skill_md,
     generate_subagent_md,
+    resolve_model,
 )
-
-
-def _resolve_model(source_model: str | None, target_tool: str) -> str | None:
-    """Resolve a Cursor model string to a target tool's model name, or None."""
-    if source_model is None:
-        return None
-    entry = get_target_model("cursor", source_model, target_tool)  # type: ignore[arg-type]
-    return entry.model_name if entry else None
 
 
 class ClaudeSkillWriter:
@@ -36,6 +28,7 @@ class ClaudeSkillWriter:
             skill.source_skill_dir,
             out_dir,
             skill.copied_asset_paths,
+            source_tool=skill.source_tool,
             target_tool="claude",
         )
 
@@ -67,7 +60,10 @@ class ClaudeSubagentWriter:
             name=subagent.name,
             description=subagent.description,
             prompt_markdown=subagent.prompt_markdown,
-            model=_resolve_model(subagent.model, "claude"),
+            model=resolve_model(
+                subagent.source_tool, subagent.model, "claude",
+                subagent.source_reasoning_effort,
+            ),
         )
         out_path = self.output_root / f"{subagent.filename_stem}.md"
         out_path.write_text(content, encoding="utf-8")

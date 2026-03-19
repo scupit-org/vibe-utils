@@ -11,13 +11,18 @@ from agent_sync.domain.diagnostics import (
     e007_duplicate_subagent_name,
     e008_duplicate_output_path,
     w004_unknown_frontmatter_keys,
+    w005_malformed_nested_skill,
 )
 from agent_sync.domain.models import Diagnostic, SyncManifest
+from agent_sync.parse.frontmatter import FrontmatterParseError, split_frontmatter
 from agent_sync.transform.model_map import is_known_model
-from agent_sync.write.common import SKILL_OUTPUT_ROOTS, SUBAGENT_OUTPUT_TARGETS
+from agent_sync.write.common import get_skill_output_roots, get_subagent_output_targets
 
 
-def validate_manifest(manifest: SyncManifest) -> list[Diagnostic]:
+def validate_manifest(
+    manifest: SyncManifest,
+    source_tool: str = "cursor",
+) -> list[Diagnostic]:
     """Run all cross-entity validation checks.
 
     Per-file checks (E001-E004, E009, W001, W003) are emitted at parse time.
@@ -25,10 +30,11 @@ def validate_manifest(manifest: SyncManifest) -> list[Diagnostic]:
     """
     diagnostics: list[Diagnostic] = []
 
-    _check_unknown_models(manifest, diagnostics)
+    _check_unknown_models(manifest, diagnostics, source_tool)
+    _check_nested_asset_models(manifest, diagnostics, source_tool)
     _check_duplicate_skill_names(manifest, diagnostics)
     _check_duplicate_subagent_names(manifest, diagnostics)
-    _check_duplicate_output_paths(manifest, diagnostics)
+    _check_duplicate_output_paths(manifest, diagnostics, source_tool)
     _check_unknown_frontmatter_keys(manifest, diagnostics)
 
     return diagnostics
@@ -37,15 +43,46 @@ def validate_manifest(manifest: SyncManifest) -> list[Diagnostic]:
 def _check_unknown_models(
     manifest: SyncManifest,
     diagnostics: list[Diagnostic],
+    source_tool: str,
 ) -> None:
     """E005: Unknown model string not in allowed vocabulary."""
     for skill in manifest.skills:
-        if skill.model is not None and not is_known_model("cursor", skill.model):
+        if skill.model is not None and not is_known_model(source_tool, skill.model):
             diagnostics.append(e005_unknown_model(skill.entrypoint_path, skill.model))
 
     for sub in manifest.subagents:
-        if sub.model is not None and not is_known_model("cursor", sub.model):
+        if sub.model is not None and not is_known_model(
+            source_tool, sub.model, sub.source_reasoning_effort,
+        ):
             diagnostics.append(e005_unknown_model(sub.source_path, sub.model))
+
+
+def _check_nested_asset_models(
+    manifest: SyncManifest,
+    diagnostics: list[Diagnostic],
+    source_tool: str,
+) -> None:
+    """E005/W005: Validate nested SKILL.md companion assets."""
+    for skill in manifest.skills:
+        for rel_asset in skill.copied_asset_paths:
+            if rel_asset.name != "SKILL.md":
+                continue
+            asset_path = skill.source_skill_dir / rel_asset
+            if not asset_path.is_file():
+                continue
+            try:
+                text = asset_path.read_text(encoding="utf-8")
+            except OSError as exc:
+                diagnostics.append(w005_malformed_nested_skill(asset_path, str(exc)))
+                continue
+            try:
+                fm, _ = split_frontmatter(text)
+            except FrontmatterParseError as exc:
+                diagnostics.append(w005_malformed_nested_skill(asset_path, str(exc)))
+                continue
+            model = fm.get("model")
+            if isinstance(model, str) and not is_known_model(source_tool, model):
+                diagnostics.append(e005_unknown_model(asset_path, model))
 
 
 def _check_duplicate_skill_names(
@@ -79,15 +116,19 @@ def _check_duplicate_subagent_names(
 def _check_duplicate_output_paths(
     manifest: SyncManifest,
     diagnostics: list[Diagnostic],
+    source_tool: str,
 ) -> None:
     """E008: Duplicate output file paths for any single target."""
+    skill_roots = get_skill_output_roots(exclude_tool=source_tool)
+    subagent_targets = get_subagent_output_targets(exclude_tool=source_tool)
+
     checks: list[tuple[str, list[tuple[str, Path]]]] = []
-    for parts in SKILL_OUTPUT_ROOTS:
+    for parts in skill_roots:
         root = "/".join(parts)
         checks.append(
             (root, [(str(s.relative_skill_dir), s.entrypoint_path) for s in manifest.skills])
         )
-    for parts, ext in SUBAGENT_OUTPUT_TARGETS:
+    for parts, ext in subagent_targets:
         root = "/".join(parts)
         checks.append(
             (root, [(s.filename_stem + ext, s.source_path) for s in manifest.subagents])

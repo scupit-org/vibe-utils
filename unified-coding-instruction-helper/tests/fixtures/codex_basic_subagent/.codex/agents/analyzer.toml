@@ -1,0 +1,3 @@
+name = "analyzer"
+description = "Analyzes data"
+developer_instructions = "You analyze data and produce reports.\n"
