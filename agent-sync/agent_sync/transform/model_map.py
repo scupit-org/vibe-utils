@@ -41,6 +41,9 @@ MODEL_ROWS: list[CrossToolModelRow] = [
     CrossToolModelRow(
         cursor=ModelEntry("composer-1.5"),
     ),
+    CrossToolModelRow(
+        cursor=ModelEntry("composer-2"),
+    ),
 
     # Claude Sonnet family
     CrossToolModelRow(

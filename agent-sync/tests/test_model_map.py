@@ -9,10 +9,11 @@ from agent_sync.transform.model_map import (
 
 class TestLookupByCursor:
     def test_composer_no_cross_tool(self):
-        row = lookup("cursor", "composer-1.5", None)
-        assert row is not None
-        assert row.claude is None
-        assert row.codex is None
+        for model in ("composer-1.5", "composer-2"):
+            row = lookup("cursor", model, None)
+            assert row is not None
+            assert row.claude is None
+            assert row.codex is None
 
     def test_claude_sonnet_to_claude(self):
         row = lookup("cursor", "claude-4.6-sonnet-medium", None)

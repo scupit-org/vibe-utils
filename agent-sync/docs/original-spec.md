@@ -208,6 +208,7 @@ Implement model translation as two explicit dictionaries plus a resolver.
 ```text
 inherit / omitted            -> None
 composer-1.5                 -> None
+composer-2                   -> None
 
 claude-4.6-sonnet-medium
 claude-4.6-sonnet-medium-thinking
@@ -239,6 +240,7 @@ Rationale:
 ```text
 inherit / omitted            -> model=None, reasoning=None
 composer-1.5                 -> model=None, reasoning=None
+composer-2                   -> model=None, reasoning=None
 
 gpt-5.4-low                  -> model="gpt-5.4", reasoning="low"
 gpt-5.4-medium               -> model="gpt-5.4", reasoning="medium"
