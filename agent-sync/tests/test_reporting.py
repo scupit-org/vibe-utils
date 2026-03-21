@@ -1,13 +1,20 @@
 """Tests for dropped-field reporting."""
 
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 
-from agent_sync.domain.models import SkillSpec, SubagentSpec, SyncManifest
+from agent_sync.domain.models import (
+    SkillSpec,
+    SkillSpecOverride,
+    SubagentSpec,
+    SubagentSpecOverride,
+    SyncManifest,
+)
 from agent_sync.transform.normalize import collect_dropped_fields
 
 
-def _skill(**kwargs) -> SkillSpec:
-    defaults = dict(
+def _skill(override: SkillSpecOverride | None = None) -> SkillSpec:
+    base = SkillSpec(
         source_tool="cursor",
         source_root=Path("/repo"),
         source_skill_dir=Path("/repo/.cursor/skills/greeting"),
@@ -17,12 +24,13 @@ def _skill(**kwargs) -> SkillSpec:
         description="A greeting skill",
         body_markdown="Say hello.\n",
     )
-    defaults.update(kwargs)
-    return SkillSpec(**defaults)
+    if override is None:
+        return base
+    return replace(base, **override)
 
 
-def _subagent(**kwargs) -> SubagentSpec:
-    defaults = dict(
+def _subagent(override: SubagentSpecOverride | None = None) -> SubagentSpec:
+    base = SubagentSpec(
         source_tool="cursor",
         source_path=Path("/repo/.cursor/agents/reviewer.md"),
         filename_stem="reviewer",
@@ -30,13 +38,14 @@ def _subagent(**kwargs) -> SubagentSpec:
         description="Reviews code",
         prompt_markdown="You review code.\n",
     )
-    defaults.update(kwargs)
-    return SubagentSpec(**defaults)
+    if override is None:
+        return base
+    return replace(base, **override)
 
 
 class TestDroppedFieldReporting:
     def test_skill_model_counted_for_both_targets(self):
-        manifest = SyncManifest(skills=[_skill(model="claude-4.6-opus-high")])
+        manifest = SyncManifest(skills=[_skill({"model": "claude-4.6-opus-high"})])
 
         dropped = collect_dropped_fields(manifest, source_tool="cursor")
         summary = {
@@ -48,7 +57,7 @@ class TestDroppedFieldReporting:
         assert summary[("codex", "skill", "model")] == 1
 
     def test_deferred_subagent_fields_counted_for_both_targets(self):
-        manifest = SyncManifest(subagents=[_subagent(readonly=True, is_background=False)])
+        manifest = SyncManifest(subagents=[_subagent({"readonly": True, "is_background": False})])
 
         dropped = collect_dropped_fields(manifest, source_tool="cursor")
         summary = {
@@ -66,9 +75,7 @@ class TestDroppedFieldReporting:
 
     def test_cursor_target_does_not_drop_skill_model(self):
         """When source is claude, cursor is a target but it preserves skill model."""
-        manifest = SyncManifest(skills=[_skill(
-            source_tool="claude", model="claude-opus-4-6",
-        )])
+        manifest = SyncManifest(skills=[_skill({"source_tool": "claude", "model": "claude-opus-4-6"})])
 
         dropped = collect_dropped_fields(manifest, source_tool="claude")
         summary = {
@@ -83,9 +90,7 @@ class TestDroppedFieldReporting:
 
     def test_deferred_fields_counted_for_all_targets(self):
         """readonly/is_background are dropped for all active targets."""
-        manifest = SyncManifest(subagents=[_subagent(
-            source_tool="claude", readonly=True,
-        )])
+        manifest = SyncManifest(subagents=[_subagent({"source_tool": "claude", "readonly": True})])
 
         dropped = collect_dropped_fields(manifest, source_tool="claude")
         summary = {

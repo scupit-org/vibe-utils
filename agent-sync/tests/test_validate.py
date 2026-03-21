@@ -1,13 +1,20 @@
 """Tests for agent_sync.transform.validate."""
 
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 
-from agent_sync.domain.models import SkillSpec, SubagentSpec, SyncManifest
+from agent_sync.domain.models import (
+    SkillSpec,
+    SkillSpecOverride,
+    SubagentSpec,
+    SubagentSpecOverride,
+    SyncManifest,
+)
 from agent_sync.transform.validate import validate_manifest
 
 
-def _skill(name: str = "s", **kwargs) -> SkillSpec:
-    defaults = dict(
+def _skill(name: str = "s", override: SkillSpecOverride | None = None) -> SkillSpec:
+    base = SkillSpec(
         source_tool="cursor",
         source_root=Path("/repo"),
         source_skill_dir=Path(f"/repo/.cursor/skills/{name}"),
@@ -17,14 +24,19 @@ def _skill(name: str = "s", **kwargs) -> SkillSpec:
         description="desc",
         body_markdown="body",
     )
-    defaults.update(kwargs)
-    return SkillSpec(**defaults)
+    if override is None:
+        return base
+    return replace(base, **override)
 
 
-def _subagent(name: str = "a", stem: str | None = None, **kwargs) -> SubagentSpec:
+def _subagent(
+    name: str = "a",
+    stem: str | None = None,
+    override: SubagentSpecOverride | None = None,
+) -> SubagentSpec:
     if stem is None:
         stem = name
-    defaults = dict(
+    base = SubagentSpec(
         source_tool="cursor",
         source_path=Path(f"/repo/.cursor/agents/{stem}.md"),
         filename_stem=stem,
@@ -32,25 +44,26 @@ def _subagent(name: str = "a", stem: str | None = None, **kwargs) -> SubagentSpe
         description="desc",
         prompt_markdown="body",
     )
-    defaults.update(kwargs)
-    return SubagentSpec(**defaults)
+    if override is None:
+        return base
+    return replace(base, **override)
 
 
 class TestUnknownModel:
     def test_skill_unknown_model(self):
-        m = SyncManifest(skills=[_skill(model="llama-3-70b")])
+        m = SyncManifest(skills=[_skill(override={"model": "llama-3-70b"})])
         diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
         assert "E005" in codes
 
     def test_subagent_unknown_model(self):
-        m = SyncManifest(subagents=[_subagent(model="llama-3-70b")])
+        m = SyncManifest(subagents=[_subagent(override={"model": "llama-3-70b"})])
         diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
         assert "E005" in codes
 
     def test_known_model_no_error(self):
-        m = SyncManifest(skills=[_skill(model="claude-4.6-opus-high")])
+        m = SyncManifest(skills=[_skill(override={"model": "claude-4.6-opus-high"})])
         diags = validate_manifest(m, source_tool="cursor")
         error_codes = [d.code for d in diags if d.severity == "error"]
         assert "E005" not in error_codes
@@ -59,12 +72,16 @@ class TestUnknownModel:
 class TestDuplicateSkillNames:
     def test_error(self):
         m = SyncManifest(skills=[
-            _skill("greeting", source_skill_dir=Path("/repo/.cursor/skills/foo"),
-                   relative_skill_dir=PurePosixPath("foo"),
-                   entrypoint_path=Path("/repo/.cursor/skills/foo/SKILL.md")),
-            _skill("greeting", source_skill_dir=Path("/repo/.cursor/skills/bar"),
-                   relative_skill_dir=PurePosixPath("bar"),
-                   entrypoint_path=Path("/repo/.cursor/skills/bar/SKILL.md")),
+            _skill("greeting", {
+                "source_skill_dir": Path("/repo/.cursor/skills/foo"),
+                "relative_skill_dir": PurePosixPath("foo"),
+                "entrypoint_path": Path("/repo/.cursor/skills/foo/SKILL.md"),
+            }),
+            _skill("greeting", {
+                "source_skill_dir": Path("/repo/.cursor/skills/bar"),
+                "relative_skill_dir": PurePosixPath("bar"),
+                "entrypoint_path": Path("/repo/.cursor/skills/bar/SKILL.md"),
+            }),
         ])
         diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
@@ -76,22 +93,20 @@ class TestDuplicateSkillNames:
         assert "E006" not in [d.code for d in diags]
 
     def test_codex_cross_root_pair_skips_generic_duplicate(self):
-        canonical = _skill(
-            "shared",
-            source_tool="codex",
-            source_skill_dir=Path("/repo/.agents/skills/shared"),
-            relative_skill_dir=PurePosixPath("shared"),
-            entrypoint_path=Path("/repo/.agents/skills/shared/SKILL.md"),
-            reserved_extra_metadata={"codex_skill_root_kind": "canonical"},
-        )
-        misplaced = _skill(
-            "shared",
-            source_tool="codex",
-            source_skill_dir=Path("/repo/.codex/skills/shared"),
-            relative_skill_dir=PurePosixPath("shared"),
-            entrypoint_path=Path("/repo/.codex/skills/shared/SKILL.md"),
-            reserved_extra_metadata={"codex_skill_root_kind": "misplaced"},
-        )
+        canonical = _skill("shared", {
+            "source_tool": "codex",
+            "source_skill_dir": Path("/repo/.agents/skills/shared"),
+            "relative_skill_dir": PurePosixPath("shared"),
+            "entrypoint_path": Path("/repo/.agents/skills/shared/SKILL.md"),
+            "reserved_extra_metadata": {"codex_skill_root_kind": "canonical"},
+        })
+        misplaced = _skill("shared", {
+            "source_tool": "codex",
+            "source_skill_dir": Path("/repo/.codex/skills/shared"),
+            "relative_skill_dir": PurePosixPath("shared"),
+            "entrypoint_path": Path("/repo/.codex/skills/shared/SKILL.md"),
+            "reserved_extra_metadata": {"codex_skill_root_kind": "misplaced"},
+        })
         diags = validate_manifest(
             SyncManifest(skills=[canonical, misplaced]),
             source_tool="codex",
@@ -100,30 +115,27 @@ class TestDuplicateSkillNames:
 
     def test_codex_cross_root_plus_extra_duplicate_keeps_generic_duplicate(self):
         skills = [
-            _skill(
-                "shared",
-                source_tool="codex",
-                source_skill_dir=Path("/repo/.agents/skills/shared"),
-                relative_skill_dir=PurePosixPath("shared"),
-                entrypoint_path=Path("/repo/.agents/skills/shared/SKILL.md"),
-                reserved_extra_metadata={"codex_skill_root_kind": "canonical"},
-            ),
-            _skill(
-                "shared",
-                source_tool="codex",
-                source_skill_dir=Path("/repo/.agents/skills/shared-2"),
-                relative_skill_dir=PurePosixPath("shared-2"),
-                entrypoint_path=Path("/repo/.agents/skills/shared-2/SKILL.md"),
-                reserved_extra_metadata={"codex_skill_root_kind": "canonical"},
-            ),
-            _skill(
-                "shared",
-                source_tool="codex",
-                source_skill_dir=Path("/repo/.codex/skills/shared"),
-                relative_skill_dir=PurePosixPath("shared"),
-                entrypoint_path=Path("/repo/.codex/skills/shared/SKILL.md"),
-                reserved_extra_metadata={"codex_skill_root_kind": "misplaced"},
-            ),
+            _skill("shared", {
+                "source_tool": "codex",
+                "source_skill_dir": Path("/repo/.agents/skills/shared"),
+                "relative_skill_dir": PurePosixPath("shared"),
+                "entrypoint_path": Path("/repo/.agents/skills/shared/SKILL.md"),
+                "reserved_extra_metadata": {"codex_skill_root_kind": "canonical"},
+            }),
+            _skill("shared", {
+                "source_tool": "codex",
+                "source_skill_dir": Path("/repo/.agents/skills/shared-2"),
+                "relative_skill_dir": PurePosixPath("shared-2"),
+                "entrypoint_path": Path("/repo/.agents/skills/shared-2/SKILL.md"),
+                "reserved_extra_metadata": {"codex_skill_root_kind": "canonical"},
+            }),
+            _skill("shared", {
+                "source_tool": "codex",
+                "source_skill_dir": Path("/repo/.codex/skills/shared"),
+                "relative_skill_dir": PurePosixPath("shared"),
+                "entrypoint_path": Path("/repo/.codex/skills/shared/SKILL.md"),
+                "reserved_extra_metadata": {"codex_skill_root_kind": "misplaced"},
+            }),
         ]
         diags = validate_manifest(SyncManifest(skills=skills), source_tool="codex")
         assert "E006" in [d.code for d in diags]
@@ -154,7 +166,7 @@ class TestDuplicateOutputPaths:
 
 class TestUnknownFrontmatterKeys:
     def test_warning(self):
-        m = SyncManifest(skills=[_skill(extra_frontmatter={"custom_key": "val"})])
+        m = SyncManifest(skills=[_skill(override={"extra_frontmatter": {"custom_key": "val"}})])
         diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
         assert "W004" in codes
@@ -179,12 +191,12 @@ class TestCleanManifest:
 class TestNestedAssetModels:
     def test_unknown_model_in_nested_skill_md(self, fixture_repo):
         repo = fixture_repo("nested_skill_unknown_model")
-        skill = _skill(
-            source_skill_dir=repo / ".cursor" / "skills" / "parent",
-            relative_skill_dir=PurePosixPath("parent"),
-            entrypoint_path=repo / ".cursor" / "skills" / "parent" / "SKILL.md",
-            copied_asset_paths=[PurePosixPath("nested/SKILL.md")],
-        )
+        skill = _skill(override={
+            "source_skill_dir": repo / ".cursor" / "skills" / "parent",
+            "relative_skill_dir": PurePosixPath("parent"),
+            "entrypoint_path": repo / ".cursor" / "skills" / "parent" / "SKILL.md",
+            "copied_asset_paths": [PurePosixPath("nested/SKILL.md")],
+        })
         m = SyncManifest(skills=[skill])
         diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
@@ -192,13 +204,13 @@ class TestNestedAssetModels:
 
     def test_known_model_in_nested_skill_md(self, fixture_repo):
         repo = fixture_repo("nested_skill_reference")
-        skill = _skill(
-            source_skill_dir=repo / ".cursor" / "skills" / "packages" / "parent",
-            relative_skill_dir=PurePosixPath("packages/parent"),
-            entrypoint_path=repo / ".cursor" / "skills" / "packages" / "parent" / "SKILL.md",
-            model="claude-4.6-opus-high",
-            copied_asset_paths=[PurePosixPath("references/example/SKILL.md")],
-        )
+        skill = _skill(override={
+            "source_skill_dir": repo / ".cursor" / "skills" / "packages" / "parent",
+            "relative_skill_dir": PurePosixPath("packages/parent"),
+            "entrypoint_path": repo / ".cursor" / "skills" / "packages" / "parent" / "SKILL.md",
+            "model": "claude-4.6-opus-high",
+            "copied_asset_paths": [PurePosixPath("references/example/SKILL.md")],
+        })
         m = SyncManifest(skills=[skill])
         diags = validate_manifest(m, source_tool="cursor")
         error_codes = [d.code for d in diags if d.severity == "error"]
@@ -206,12 +218,12 @@ class TestNestedAssetModels:
 
     def test_malformed_nested_skill_emits_warning(self, fixture_repo):
         repo = fixture_repo("nested_skill_malformed")
-        skill = _skill(
-            source_skill_dir=repo / ".cursor" / "skills" / "parent",
-            relative_skill_dir=PurePosixPath("parent"),
-            entrypoint_path=repo / ".cursor" / "skills" / "parent" / "SKILL.md",
-            copied_asset_paths=[PurePosixPath("nested/SKILL.md")],
-        )
+        skill = _skill(override={
+            "source_skill_dir": repo / ".cursor" / "skills" / "parent",
+            "relative_skill_dir": PurePosixPath("parent"),
+            "entrypoint_path": repo / ".cursor" / "skills" / "parent" / "SKILL.md",
+            "copied_asset_paths": [PurePosixPath("nested/SKILL.md")],
+        })
         m = SyncManifest(skills=[skill])
         diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
@@ -221,7 +233,7 @@ class TestNestedAssetModels:
 class TestNonCursorSourceTool:
     def test_claude_model_known_with_claude_source(self):
         m = SyncManifest(subagents=[
-            _subagent(source_tool="claude", model="claude-opus-4-6"),
+            _subagent(override={"source_tool": "claude", "model": "claude-opus-4-6"}),
         ])
         diags = validate_manifest(m, source_tool="claude")
         error_codes = [d.code for d in diags if d.severity == "error"]
@@ -230,7 +242,7 @@ class TestNonCursorSourceTool:
     def test_claude_model_unknown_with_cursor_source(self):
         """A Claude model name is invalid when source is Cursor."""
         m = SyncManifest(subagents=[
-            _subagent(model="claude-opus-4-6"),
+            _subagent(override={"model": "claude-opus-4-6"}),
         ])
         diags = validate_manifest(m, source_tool="cursor")
         error_codes = [d.code for d in diags if d.severity == "error"]
@@ -238,10 +250,11 @@ class TestNonCursorSourceTool:
 
     def test_codex_model_with_reasoning_effort(self):
         m = SyncManifest(subagents=[
-            _subagent(
-                source_tool="codex", model="gpt-5.4",
-                source_reasoning_effort="high",
-            ),
+            _subagent(override={
+                "source_tool": "codex",
+                "model": "gpt-5.4",
+                "source_reasoning_effort": "high",
+            }),
         ])
         diags = validate_manifest(m, source_tool="codex")
         error_codes = [d.code for d in diags if d.severity == "error"]
@@ -249,7 +262,7 @@ class TestNonCursorSourceTool:
 
     def test_codex_model_without_reasoning_effort_is_unknown(self):
         m = SyncManifest(subagents=[
-            _subagent(source_tool="codex", model="gpt-5.4"),
+            _subagent(override={"source_tool": "codex", "model": "gpt-5.4"}),
         ])
         diags = validate_manifest(m, source_tool="codex")
         error_codes = [d.code for d in diags if d.severity == "error"]
@@ -258,8 +271,8 @@ class TestNonCursorSourceTool:
     def test_duplicate_output_paths_with_claude_source(self):
         """With claude source, targets include cursor — check for cursor output conflicts."""
         m = SyncManifest(subagents=[
-            _subagent("x", stem="same", source_tool="claude"),
-            _subagent("y", stem="same", source_tool="claude"),
+            _subagent("x", stem="same", override={"source_tool": "claude"}),
+            _subagent("y", stem="same", override={"source_tool": "claude"}),
         ])
         diags = validate_manifest(m, source_tool="claude")
         codes = [d.code for d in diags]

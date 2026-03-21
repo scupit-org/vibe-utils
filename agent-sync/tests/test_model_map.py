@@ -25,6 +25,7 @@ class TestLookupByCursor:
     def test_claude_sonnet_thinking_to_claude(self):
         row = lookup("cursor", "claude-4.6-sonnet-medium-thinking", None)
         assert row is not None
+        assert row.claude is not None
         assert row.claude.model_name == "claude-sonnet-4-6"
 
     def test_claude_opus_to_claude(self):
@@ -32,12 +33,14 @@ class TestLookupByCursor:
                        "claude-4.6-opus-high-thinking", "claude-4.6-opus-max-thinking"]:
             row = lookup("cursor", model, None)
             assert row is not None, f"Missing row for {model}"
+            assert row.claude is not None, f"Missing Claude entry for {model}"
             assert row.claude.model_name == "claude-opus-4-6", f"Failed for {model}"
 
     def test_claude_haiku_to_claude(self):
         for model in ["claude-4.5-haiku", "claude-4.5-haiku-thinking"]:
             row = lookup("cursor", model, None)
             assert row is not None
+            assert row.claude is not None, f"Missing Claude entry for {model}"
             assert row.claude.model_name == "claude-haiku-4-5", f"Failed for {model}"
 
     def test_gpt_to_codex(self):

@@ -1,7 +1,6 @@
 """Integration tests for agent_sync.app.sync."""
 
 import shutil
-import tomllib
 from pathlib import Path
 
 from agent_sync.app.sync import SyncOrchestrator

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
 ToolName = Literal["cursor", "claude", "codex"]
 EntityKind = Literal["skill", "subagent"]
@@ -41,6 +41,24 @@ class SkillSpec:
     copied_asset_paths: list[PurePosixPath] = field(default_factory=list)
 
 
+class SkillSpecOverride(TypedDict, total=False):
+    """Partial overrides for SkillSpec; mirrors SkillSpec with every field optional."""
+
+    source_tool: ToolName
+    source_root: Path
+    source_skill_dir: Path
+    relative_skill_dir: PurePosixPath
+    entrypoint_path: Path
+    name: str
+    description: str
+    body_markdown: str
+    disable_model_invocation: bool
+    model: str | None
+    extra_frontmatter: dict[str, Any]
+    reserved_extra_metadata: dict[str, Any]
+    copied_asset_paths: list[PurePosixPath]
+
+
 @dataclass(frozen=True, slots=True)
 class SubagentSpec:
     """Canonical representation of a subagent parsed from source."""
@@ -56,6 +74,22 @@ class SubagentSpec:
     readonly: bool | None = None
     is_background: bool | None = None
     extra_frontmatter: dict[str, Any] = field(default_factory=dict)
+
+
+class SubagentSpecOverride(TypedDict, total=False):
+    """Partial overrides for SubagentSpec; mirrors SubagentSpec with every field optional."""
+
+    source_tool: ToolName
+    source_path: Path
+    filename_stem: str
+    name: str
+    description: str
+    prompt_markdown: str
+    model: str | None
+    source_reasoning_effort: str | None
+    readonly: bool | None
+    is_background: bool | None
+    extra_frontmatter: dict[str, Any]
 
 
 @dataclass(slots=True)

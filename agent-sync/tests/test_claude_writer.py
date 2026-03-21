@@ -1,14 +1,20 @@
 """Tests for agent_sync.write.claude."""
 
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 
-from agent_sync.domain.models import SkillSpec, SubagentSpec
+from agent_sync.domain.models import (
+    SkillSpec,
+    SkillSpecOverride,
+    SubagentSpec,
+    SubagentSpecOverride,
+)
 from agent_sync.parse.frontmatter import split_frontmatter
 from agent_sync.write.claude import ClaudeSkillWriter, ClaudeSubagentWriter
 
 
-def _skill(**kwargs) -> SkillSpec:
-    defaults = dict(
+def _skill(override: SkillSpecOverride | None = None) -> SkillSpec:
+    base = SkillSpec(
         source_tool="cursor",
         source_root=Path("/repo"),
         source_skill_dir=Path("/repo/.cursor/skills/greeting"),
@@ -18,12 +24,13 @@ def _skill(**kwargs) -> SkillSpec:
         description="A greeting skill",
         body_markdown="Say hello.\n",
     )
-    defaults.update(kwargs)
-    return SkillSpec(**defaults)
+    if override is None:
+        return base
+    return replace(base, **override)
 
 
-def _subagent(**kwargs) -> SubagentSpec:
-    defaults = dict(
+def _subagent(override: SubagentSpecOverride | None = None) -> SubagentSpec:
+    base = SubagentSpec(
         source_tool="cursor",
         source_path=Path("/repo/.cursor/agents/reviewer.md"),
         filename_stem="reviewer",
@@ -31,8 +38,9 @@ def _subagent(**kwargs) -> SubagentSpec:
         description="Reviews code",
         prompt_markdown="You review code.\n",
     )
-    defaults.update(kwargs)
-    return SubagentSpec(**defaults)
+    if override is None:
+        return base
+    return replace(base, **override)
 
 
 class TestClaudeSkillWriter:
@@ -42,7 +50,7 @@ class TestClaudeSkillWriter:
         src.mkdir(parents=True)
         (src / "SKILL.md").write_text("---\nname: greeting\n---\nold\n")
 
-        skill = _skill(source_skill_dir=src)
+        skill = _skill({"source_skill_dir": src})
         writer = ClaudeSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -58,11 +66,11 @@ class TestClaudeSkillWriter:
         src.mkdir(parents=True)
         (src / "SKILL.md").write_text("")
 
-        skill = _skill(
-            source_skill_dir=src,
-            relative_skill_dir=PurePosixPath("smart"),
-            model="claude-4.6-opus-high",
-        )
+        skill = _skill({
+            "source_skill_dir": src,
+            "relative_skill_dir": PurePosixPath("smart"),
+            "model": "claude-4.6-opus-high",
+        })
         writer = ClaudeSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -75,11 +83,11 @@ class TestClaudeSkillWriter:
         src.mkdir(parents=True)
         (src / "SKILL.md").write_text("")
 
-        skill = _skill(
-            source_skill_dir=src,
-            relative_skill_dir=PurePosixPath("restricted"),
-            disable_model_invocation=True,
-        )
+        skill = _skill({
+            "source_skill_dir": src,
+            "relative_skill_dir": PurePosixPath("restricted"),
+            "disable_model_invocation": True,
+        })
         writer = ClaudeSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -92,7 +100,7 @@ class TestClaudeSkillWriter:
         src.mkdir(parents=True)
         (src / "SKILL.md").write_text("")
 
-        skill = _skill(source_skill_dir=src, relative_skill_dir=PurePosixPath("basic"))
+        skill = _skill({"source_skill_dir": src, "relative_skill_dir": PurePosixPath("basic")})
         writer = ClaudeSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -105,11 +113,11 @@ class TestClaudeSkillWriter:
         src.mkdir(parents=True)
         (src / "SKILL.md").write_text("")
 
-        skill = _skill(
-            source_skill_dir=src,
-            relative_skill_dir=PurePosixPath("gpt"),
-            model="gpt-5.4-high",
-        )
+        skill = _skill({
+            "source_skill_dir": src,
+            "relative_skill_dir": PurePosixPath("gpt"),
+            "model": "gpt-5.4-high",
+        })
         writer = ClaudeSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -123,11 +131,11 @@ class TestClaudeSkillWriter:
         (src / "SKILL.md").write_text("")
         (src / "templates" / "out.html").write_text("<html></html>")
 
-        skill = _skill(
-            source_skill_dir=src,
-            relative_skill_dir=PurePosixPath("data"),
-            copied_asset_paths=[PurePosixPath("templates/out.html")],
-        )
+        skill = _skill({
+            "source_skill_dir": src,
+            "relative_skill_dir": PurePosixPath("data"),
+            "copied_asset_paths": [PurePosixPath("templates/out.html")],
+        })
         writer = ClaudeSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -141,11 +149,11 @@ class TestClaudeSkillWriter:
         (src / "SKILL.md").write_text("")
         (src / "ignored.txt").write_text("ignore me")
 
-        skill = _skill(
-            source_skill_dir=src,
-            relative_skill_dir=PurePosixPath("listed"),
-            copied_asset_paths=[],
-        )
+        skill = _skill({
+            "source_skill_dir": src,
+            "relative_skill_dir": PurePosixPath("listed"),
+            "copied_asset_paths": [],
+        })
         writer = ClaudeSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -167,11 +175,11 @@ class TestClaudeSkillWriter:
             "Reference body.\n"
         )
 
-        skill = _skill(
-            source_skill_dir=src,
-            relative_skill_dir=PurePosixPath("bundle"),
-            copied_asset_paths=[PurePosixPath("references/sample/SKILL.md")],
-        )
+        skill = _skill({
+            "source_skill_dir": src,
+            "relative_skill_dir": PurePosixPath("bundle"),
+            "copied_asset_paths": [PurePosixPath("references/sample/SKILL.md")],
+        })
         writer = ClaudeSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -201,7 +209,7 @@ class TestClaudeSubagentWriter:
         assert "review code" in body.lower()
 
     def test_subagent_with_model(self, tmp_path):
-        sub = _subagent(model="claude-4.6-sonnet-medium")
+        sub = _subagent({"model": "claude-4.6-sonnet-medium"})
         writer = ClaudeSubagentWriter(tmp_path / "out")
         writer.write_subagent(sub)
 

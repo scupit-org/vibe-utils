@@ -1,14 +1,20 @@
 """Tests for agent_sync.write.cursor."""
 
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 
-from agent_sync.domain.models import SkillSpec, SubagentSpec
+from agent_sync.domain.models import (
+    SkillSpec,
+    SkillSpecOverride,
+    SubagentSpec,
+    SubagentSpecOverride,
+)
 from agent_sync.parse.frontmatter import split_frontmatter
 from agent_sync.write.cursor import CursorSkillWriter, CursorSubagentWriter
 
 
-def _skill(**kwargs) -> SkillSpec:
-    defaults = dict(
+def _skill(override: SkillSpecOverride | None = None) -> SkillSpec:
+    base = SkillSpec(
         source_tool="claude",
         source_root=Path("/repo"),
         source_skill_dir=Path("/repo/.claude/skills/greeting"),
@@ -18,12 +24,13 @@ def _skill(**kwargs) -> SkillSpec:
         description="A greeting skill",
         body_markdown="Say hello.\n",
     )
-    defaults.update(kwargs)
-    return SkillSpec(**defaults)
+    if override is None:
+        return base
+    return replace(base, **override)
 
 
-def _subagent(**kwargs) -> SubagentSpec:
-    defaults = dict(
+def _subagent(override: SubagentSpecOverride | None = None) -> SubagentSpec:
+    base = SubagentSpec(
         source_tool="claude",
         source_path=Path("/repo/.claude/agents/reviewer.md"),
         filename_stem="reviewer",
@@ -31,8 +38,9 @@ def _subagent(**kwargs) -> SubagentSpec:
         description="Reviews code",
         prompt_markdown="You review code.\n",
     )
-    defaults.update(kwargs)
-    return SubagentSpec(**defaults)
+    if override is None:
+        return base
+    return replace(base, **override)
 
 
 class TestCursorSkillWriter:
@@ -41,7 +49,7 @@ class TestCursorSkillWriter:
         src.mkdir(parents=True)
         (src / "SKILL.md").write_text("")
 
-        skill = _skill(source_skill_dir=src)
+        skill = _skill({"source_skill_dir": src})
         writer = CursorSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -58,12 +66,12 @@ class TestCursorSkillWriter:
         src.mkdir(parents=True)
         (src / "SKILL.md").write_text("")
 
-        skill = _skill(
-            source_tool="claude",
-            source_skill_dir=src,
-            relative_skill_dir=PurePosixPath("smart"),
-            model="claude-opus-4-6",
-        )
+        skill = _skill({
+            "source_tool": "claude",
+            "source_skill_dir": src,
+            "relative_skill_dir": PurePosixPath("smart"),
+            "model": "claude-opus-4-6",
+        })
         writer = CursorSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -77,7 +85,7 @@ class TestCursorSkillWriter:
         src.mkdir(parents=True)
         (src / "SKILL.md").write_text("")
 
-        skill = _skill(source_skill_dir=src, relative_skill_dir=PurePosixPath("basic"))
+        skill = _skill({"source_skill_dir": src, "relative_skill_dir": PurePosixPath("basic")})
         writer = CursorSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -91,12 +99,12 @@ class TestCursorSkillWriter:
         src.mkdir(parents=True)
         (src / "SKILL.md").write_text("")
 
-        skill = _skill(
-            source_tool="claude",
-            source_skill_dir=src,
-            relative_skill_dir=PurePosixPath("unknown"),
-            model="some-future-model",
-        )
+        skill = _skill({
+            "source_tool": "claude",
+            "source_skill_dir": src,
+            "relative_skill_dir": PurePosixPath("unknown"),
+            "model": "some-future-model",
+        })
         writer = CursorSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -109,11 +117,11 @@ class TestCursorSkillWriter:
         src.mkdir(parents=True)
         (src / "SKILL.md").write_text("")
 
-        skill = _skill(
-            source_skill_dir=src,
-            relative_skill_dir=PurePosixPath("restricted"),
-            disable_model_invocation=True,
-        )
+        skill = _skill({
+            "source_skill_dir": src,
+            "relative_skill_dir": PurePosixPath("restricted"),
+            "disable_model_invocation": True,
+        })
         writer = CursorSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -127,11 +135,11 @@ class TestCursorSkillWriter:
         (src / "SKILL.md").write_text("")
         (src / "templates" / "out.html").write_text("<html></html>")
 
-        skill = _skill(
-            source_skill_dir=src,
-            relative_skill_dir=PurePosixPath("data"),
-            copied_asset_paths=[PurePosixPath("templates/out.html")],
-        )
+        skill = _skill({
+            "source_skill_dir": src,
+            "relative_skill_dir": PurePosixPath("data"),
+            "copied_asset_paths": [PurePosixPath("templates/out.html")],
+        })
         writer = CursorSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -155,12 +163,12 @@ class TestCursorSkillWriter:
             "Reference body.\n"
         )
 
-        skill = _skill(
-            source_tool="claude",
-            source_skill_dir=src,
-            relative_skill_dir=PurePosixPath("bundle"),
-            copied_asset_paths=[PurePosixPath("references/sample/SKILL.md")],
-        )
+        skill = _skill({
+            "source_tool": "claude",
+            "source_skill_dir": src,
+            "relative_skill_dir": PurePosixPath("bundle"),
+            "copied_asset_paths": [PurePosixPath("references/sample/SKILL.md")],
+        })
         writer = CursorSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
@@ -191,7 +199,7 @@ class TestCursorSubagentWriter:
         assert "review code" in body.lower()
 
     def test_subagent_with_claude_model(self, tmp_path):
-        sub = _subagent(source_tool="claude", model="claude-sonnet-4-6")
+        sub = _subagent({"source_tool": "claude", "model": "claude-sonnet-4-6"})
         writer = CursorSubagentWriter(tmp_path / "out")
         writer.write_subagent(sub)
 
@@ -200,11 +208,11 @@ class TestCursorSubagentWriter:
         assert fm["model"] == "claude-4.6-sonnet-medium-thinking"
 
     def test_subagent_codex_model_with_reasoning(self, tmp_path):
-        sub = _subagent(
-            source_tool="codex",
-            model="gpt-5.4",
-            source_reasoning_effort="high",
-        )
+        sub = _subagent({
+            "source_tool": "codex",
+            "model": "gpt-5.4",
+            "source_reasoning_effort": "high",
+        })
         writer = CursorSubagentWriter(tmp_path / "out")
         writer.write_subagent(sub)
 
