@@ -12,6 +12,7 @@ from agent_sync.domain.models import ToolName
 from agent_sync.parse.frontmatter import FrontmatterParseError, split_frontmatter
 from agent_sync.transform.model_map import ModelEntry, get_target_model
 PathPartsTuple = tuple[str, ...]
+_FRONTMATTER_WIDTH = 2_147_483_647
 
 # ── Per-tool output path mappings ────────────────────────────────────────
 
@@ -56,12 +57,14 @@ def generate_yaml_frontmatter(fields: dict[str, Any]) -> str:
     *fields* is insertion-ordered; that order is preserved in the output.
     """
     # PyYAML's dump with default_flow_style=False and sort_keys=False
-    # preserves insertion order of the dict.
+    # preserves insertion order of the dict.  Override the default emitter
+    # width so long plain scalars like descriptions stay on one physical line.
     yaml_text = yaml.dump(
         fields,
         default_flow_style=False,
         sort_keys=False,
         allow_unicode=True,
+        width=_FRONTMATTER_WIDTH,
     )
     return f"---\n{yaml_text}---\n"
 

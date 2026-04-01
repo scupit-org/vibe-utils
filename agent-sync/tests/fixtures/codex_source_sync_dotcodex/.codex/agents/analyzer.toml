@@ -1,0 +1,5 @@
+name = "analyzer"
+description = "Analyzes data"
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+developer_instructions = "You analyze data and produce reports.\n"
