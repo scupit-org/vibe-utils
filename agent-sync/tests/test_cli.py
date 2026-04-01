@@ -4,6 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from agent_sync import __version__
+
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
@@ -171,6 +173,11 @@ class TestCliHelp:
         assert result.returncode == 0
         assert "sync" in result.stdout
         assert "validate" in result.stdout
+
+    def test_version(self):
+        result = _run_cli("--version")
+        assert result.returncode == 0
+        assert result.stdout.strip() == f"agent-sync {__version__}"
 
     def test_source_tool_required(self):
         result = _run_cli("sync", "--repo-root", "repo")

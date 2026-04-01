@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from agent_sync import __version__
 from agent_sync.app.sync import SyncOrchestrator
 from agent_sync.domain.models import ALL_TOOL_NAMES, Diagnostic, SyncResult, ToolName
 
@@ -36,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agent-sync",
         description="Sync coding agent definitions between Cursor, Claude Code, and Codex.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
