@@ -93,10 +93,13 @@ def _print_result(result: SyncResult, command: str, verbose: bool) -> None:
             parts.append(f"{result.skills_written} skill(s)")
         if result.subagents_written:
             parts.append(f"{result.subagents_written} subagent(s)")
+        if result.managed_subtrees_cleared:
+            parts.append(f"{result.managed_subtrees_cleared} managed subtree(s) cleared")
         written = ", ".join(parts) if parts else "nothing"
         warn_count = len(result.warnings)
         warn_str = f" {warn_count} warning(s)." if warn_count else ""
-        print(f"Sync complete{mode}: {written} written.{warn_str}", file=sys.stderr)
+        action = "written" if result.skills_written or result.subagents_written else "changed"
+        print(f"Sync complete{mode}: {written} {action}.{warn_str}", file=sys.stderr)
         _print_dropped_fields(result)
     elif command == "validate":
         if result.success:

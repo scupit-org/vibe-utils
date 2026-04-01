@@ -21,7 +21,38 @@ class TestCliSync:
         repo = fixture_repo("basic_skill")
         result = _run_cli("sync", "--repo-root", str(repo), "--source-tool", "cursor")
         assert result.returncode == 0
-        assert "Sync complete" in result.stderr
+        assert "Sync complete: 1 skill(s) written." in result.stderr
+
+    def test_sync_empty_source_reports_cleared_subtrees_and_leaves_no_tmp(self, fixture_repo):
+        repo = fixture_repo("empty_cursor_source")
+        stale_skill = repo / ".claude" / "skills" / "stale" / "SKILL.md"
+        stale_agent = repo / ".codex" / "agents" / "stale.toml"
+        stale_skill.parent.mkdir(parents=True)
+        stale_agent.parent.mkdir(parents=True)
+        stale_skill.write_text("stale skill")
+        stale_agent.write_text("stale agent")
+
+        result = _run_cli("sync", "--repo-root", str(repo), "--source-tool", "cursor")
+        assert result.returncode == 0
+        assert "2 managed subtree(s) cleared changed." in result.stderr
+        assert not stale_skill.exists()
+        assert not stale_agent.exists()
+        assert not (repo / ".tmp").exists()
+
+    def test_sync_empty_source_dry_run_reports_nothing_changed(self, fixture_repo):
+        repo = fixture_repo("empty_cursor_source")
+        stale_skill = repo / ".claude" / "skills" / "stale" / "SKILL.md"
+        stale_skill.parent.mkdir(parents=True)
+        stale_skill.write_text("stale skill")
+
+        result = _run_cli(
+            "sync", "--repo-root", str(repo), "--source-tool", "cursor", "--dry-run",
+        )
+
+        assert result.returncode == 0
+        assert "Sync complete (dry run): nothing changed." in result.stderr
+        assert stale_skill.exists()
+        assert not (repo / ".tmp").exists()
 
     def test_sync_errors(self, fixture_repo):
         repo = fixture_repo("missing_source")

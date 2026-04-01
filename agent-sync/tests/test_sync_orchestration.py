@@ -73,6 +73,37 @@ class TestDryRun:
         assert not (repo / ".tmp").exists()
 
 
+class TestEmptyManifestSync:
+    def test_empty_source_clears_stale_outputs_without_staging(self, fixture_repo):
+        repo = fixture_repo("empty_cursor_source")
+        stale_skill = repo / ".claude" / "skills" / "stale" / "SKILL.md"
+        stale_agent = repo / ".codex" / "agents" / "stale.toml"
+        settings_path = repo / ".claude" / "settings.json"
+        config_path = repo / ".codex" / "config.toml"
+        stale_skill.parent.mkdir(parents=True)
+        stale_agent.parent.mkdir(parents=True)
+        stale_skill.write_text("stale skill")
+        stale_agent.write_text("stale agent")
+        settings_path.write_text("{}")
+        config_path.write_text("model = 'gpt-5.4'")
+
+        orch = SyncOrchestrator(repo, source_tool="cursor")
+        result = orch.run_sync()
+
+        assert result.success
+        assert result.skills_written == 0
+        assert result.subagents_written == 0
+        assert result.managed_subtrees_cleared == 2
+        assert not stale_skill.exists()
+        assert not stale_agent.exists()
+        assert settings_path.exists()
+        assert config_path.exists()
+        assert not (repo / ".tmp").exists()
+        assert not (repo / ".claude" / "skills").exists()
+        assert not (repo / ".agents").exists()
+        assert not (repo / ".codex" / "agents").exists()
+
+
 class TestErrorsAbort:
     def test_no_source_dir(self, fixture_repo):
         repo = fixture_repo("missing_source")
@@ -137,6 +168,14 @@ class TestStagingSafety:
         assert not stale_file.exists()
         # But the new skill should exist.
         assert (repo / ".claude" / "skills" / "greeting" / "SKILL.md").exists()
+
+    def test_successful_sync_prunes_repo_staging_parent(self, fixture_repo):
+        repo = fixture_repo("basic_skill")
+        orch = SyncOrchestrator(repo, source_tool="cursor")
+        result = orch.run_sync()
+
+        assert result.success
+        assert not (repo / ".tmp").exists()
 
     def test_cleanup_failure_emits_warning(self, fixture_repo, monkeypatch):
         repo = fixture_repo("basic_skill")

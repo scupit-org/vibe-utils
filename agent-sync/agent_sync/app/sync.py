@@ -61,6 +61,21 @@ class SyncOrchestrator:
                 dry_run=self.dry_run,
             )
 
+        if self._is_empty_manifest(manifest):
+            managed_subtrees_cleared = 0
+            if self.dry_run:
+                self._log("manifest empty during dry run; skipping staging and replacement")
+            else:
+                self._log("manifest empty; clearing managed target subtrees without staging")
+                managed_subtrees_cleared = self._clear_managed_subtrees()
+            return SyncResult(
+                managed_subtrees_cleared=managed_subtrees_cleared,
+                dropped_fields=dropped_fields,
+                warnings=warnings,
+                verbose_messages=list(self._verbose_messages),
+                dry_run=self.dry_run,
+            )
+
         staging = self._create_staging_dir()
         skills_written = 0
         subagents_written = 0
@@ -147,6 +162,10 @@ class SyncOrchestrator:
 
         return manifest, all_diags, dropped_fields
 
+    def _is_empty_manifest(self, manifest: SyncManifest) -> bool:
+        """Return True when there is nothing to generate for any target tool."""
+        return not manifest.skills and not manifest.subagents
+
     def _source_exists(self) -> bool:
         """Check if the source tool's directories exist."""
         if self.source_tool == "codex":
@@ -232,7 +251,48 @@ class SyncOrchestrator:
         except OSError as exc:
             self._log(f"staging cleanup failed for {staging_dir}: {exc}")
             return w007_staging_cleanup_failed(staging_dir, str(exc))
+
+        cleanup_warning = self._cleanup_staging_parent(staging_dir)
+        if cleanup_warning is not None:
+            return cleanup_warning
         return None
+
+    def _cleanup_staging_parent(self, staging_dir: Path) -> Diagnostic | None:
+        """Prune the repo-local staging parent when it is empty."""
+        staging_parent = self.repo_root / ".tmp"
+        if staging_dir.parent != staging_parent:
+            return None
+        if not staging_parent.exists():
+            return None
+
+        try:
+            staging_parent.rmdir()
+        except OSError as exc:
+            try:
+                parent_is_empty = not any(staging_parent.iterdir())
+            except OSError:
+                parent_is_empty = True
+
+            if not parent_is_empty:
+                self._log(f"staging parent retained at {staging_parent}")
+                return None
+            self._log(f"staging parent cleanup failed for {staging_parent}: {exc}")
+            return w007_staging_cleanup_failed(staging_parent, str(exc))
+
+        self._log(f"removed empty staging parent: {staging_parent}")
+        return None
+
+    def _clear_managed_subtrees(self) -> int:
+        """Remove managed target subtrees without using staging."""
+        subtrees = get_managed_subtrees(exclude_tool=self.source_tool)
+        cleared_count = 0
+        for parts in subtrees:
+            target = self.repo_root.joinpath(*parts)
+            self._log(f"clear subtree: target={target} exists={target.exists()}")
+            if target.exists():
+                shutil.rmtree(target)
+                cleared_count += 1
+        return cleared_count
 
     def _replace_managed_subtrees(self, staging_dir: Path) -> None:
         """Wipe each managed subtree in *repo_root*, then move staged output in."""

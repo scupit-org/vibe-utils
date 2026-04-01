@@ -122,6 +122,7 @@ class SyncResult:
 
     skills_written: int = 0
     subagents_written: int = 0
+    managed_subtrees_cleared: int = 0
     dropped_fields: list[DroppedFieldCount] = field(default_factory=list)
     warnings: list[Diagnostic] = field(default_factory=list)
     errors: list[Diagnostic] = field(default_factory=list)
