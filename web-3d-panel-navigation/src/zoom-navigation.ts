@@ -7,6 +7,7 @@ import { parseAllZoomPlanes } from './zoom-plane-parser';
 import { getCenteredPlaneRect, lerpScreenRect, fullViewportRect } from './projection';
 import { remap } from './easing';
 import { calculateTransitionState } from './camera-transitions';
+import { HashUrlSync } from './url-hash-sync';
 import type {
   NavigationState, NavigationConfig, NavigationEventType,
   NavigationEventHandler, ZoomPlaneConfig, CameraState, ContainerRefs,
@@ -39,6 +40,7 @@ export class ZoomPlaneNavigator {
   private eventListeners = new Map<NavigationEventType, Set<NavigationEventHandler>>();
   private planeClickHandlers = new Map<string, EventListener>();
   private backButtonClickHandler: EventListener | null = null;
+  private urlSync: HashUrlSync | null = null;
 
   private boundHandleResize: () => void;
   private boundHandleKeydown: (e: KeyboardEvent) => void;
@@ -98,6 +100,11 @@ export class ZoomPlaneNavigator {
 
     this.boundHandleResize = () => this.handleResize();
     window.addEventListener('resize', this.boundHandleResize);
+
+    if (this.config.syncUrlHash) {
+      this.urlSync = new HashUrlSync(this, this.sceneGraph.getPlaneConfigs());
+      this.urlSync.reconcileInitial();
+    }
   }
 
   get state(): NavigationState {
@@ -231,6 +238,37 @@ export class ZoomPlaneNavigator {
     this._state = 'section';
     this.emit('stateChange', this._state);
     this.emit('zoomComplete', this._activePlaneId!);
+  }
+
+  /**
+   * Synchronously enter the section state for a panel without playing the
+   * camera or clip-reveal animations. Intended for cold-load deep links
+   * where the user landed on a URL like `#quick-links` and should see the
+   * section immediately rather than watching the zoom-in play out.
+   *
+   * Only valid from the `overview` state.
+   */
+  snapToSection(planeId: string): void {
+    if (this._state !== 'overview') {
+      console.warn(`Cannot snap to section: currently in ${this._state} state`);
+      return;
+    }
+
+    const planeConfig = this.sceneGraph.getPlaneConfig(planeId);
+    if (!planeConfig) {
+      console.error(`Zoom plane not found: ${planeId}`);
+      return;
+    }
+
+    const targetCameraState = this.cameraController.calculatePerpendicularState(
+      planeConfig, this.sceneGraph.getScale()
+    );
+    this.cameraController.setToState(targetCameraState);
+    this.sceneGraph.setPlaneOpacity(planeId, 0);
+    this.clipController.prepareForZoomIn(planeConfig.sectionId, fullViewportRect());
+
+    this._activePlaneId = planeId;
+    this.completeZoomIn();
   }
 
   async returnToOverview(): Promise<void> {
@@ -456,6 +494,9 @@ export class ZoomPlaneNavigator {
   }
 
   destroy(): void {
+    this.urlSync?.destroy();
+    this.urlSync = null;
+
     this.timeline.stop();
 
     for (const [planeId, handler] of this.planeClickHandlers) {

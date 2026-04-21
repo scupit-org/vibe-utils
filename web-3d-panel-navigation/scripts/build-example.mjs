@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as sass from 'sass';
@@ -24,4 +24,10 @@ await esbuild.build({
   target: 'es2022',
   sourcemap: true,
 });
+
+// Copy example/index.html into dist/ with asset paths rewritten so the
+// dist/ folder is hostable as-is (e.g. `./dist/main.js` -> `./main.js`).
+const html = await readFile(path.join(exampleDir, 'index.html'), 'utf8');
+const rewrittenHtml = html.replace(/(["'(])\.\/dist\//g, '$1./');
+await writeFile(path.join(outDir, 'index.html'), rewrittenHtml);
 

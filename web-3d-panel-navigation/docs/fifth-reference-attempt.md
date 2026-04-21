@@ -442,6 +442,7 @@ web-3d-panel-navigation/
 |   |-- camera-controller.ts
 |   |-- camera-transitions.ts
 |   |-- clip-controller.ts
+|   |-- url-hash-sync.ts
 |   `-- zoom-navigation.ts
 |-- example/
 |   |-- index.html
@@ -557,6 +558,24 @@ Manages content visibility classes, clip-path state, and content-container opaci
 | `prepareForZoomOut()` | Set starting state for conceal |
 | `completeZoomOut()` | Reset containers and section visibility |
 
+#### `url-hash-sync.ts`
+
+Optional bidirectional sync between `location.hash` and the active panel.
+
+| Method | Purpose |
+|--------|---------|
+| `reconcileInitial()` | On construction, snap directly into a section if the cold-load URL fragment matches a known `data-section` ID |
+| `destroy()` | Remove the `hashchange` listener and unsubscribe from navigator events |
+
+Behavior:
+
+- Subscribes to `zoomStart` and `returnStart` and writes the URL via `history.pushState`.
+- Listens for `hashchange` (covers back, forward, manual edits, and programmatic writes uniformly) and dispatches `zoomInto` / `returnToOverview`.
+- Uses an internal reentrancy flag so navigator events fired in response to a hash change do not push the URL again.
+- Mid-animation hash changes are deferred until the navigator lands in a terminal state, at which point a `stateChange` listener re-runs reconcile.
+
+Disabled when `NavigationConfig.syncUrlHash` is `false`, in which case the navigator never instantiates this module.
+
 #### `zoom-navigation.ts`
 
 Main orchestrator.
@@ -569,6 +588,7 @@ Responsibilities:
 - Overview recalculation
 - Camera and clip sequencing
 - Event emission
+- Optional URL hash synchronization (delegated to `HashUrlSync`)
 - Cleanup
 
 ### Dependency Shape
@@ -586,6 +606,7 @@ zoom-navigation.ts
 |-- animation-timeline.ts
 |-- overview-camera.ts
 |   `-- projection.ts
+|-- url-hash-sync.ts
 `-- types.ts
 ```
 
@@ -634,6 +655,16 @@ await zoomNav.returnToOverview();
 
 - Only valid from `section`
 - Resolves when the full return sequence completes
+
+#### `snapToSection(planeId: string): void`
+
+```ts
+zoomNav.snapToSection('small');
+```
+
+- Only valid from `overview`
+- Synchronously enters the `section` state without playing the camera or clip animations
+- Used internally by URL hash sync for cold-load deep links; available publicly for advanced consumers that need an instant transition
 
 ### State Properties
 
@@ -776,6 +807,7 @@ const DEFAULT_CONFIG = {
   clipDuration: 400,
   overlapRatio: 0.15,
   overviewPadding: 0.15,
+  syncUrlHash: true,
 };
 ```
 
@@ -802,6 +834,7 @@ const zoomNav = new ZoomPlaneNavigator(refs, {
 | `clipDuration` | Slows reveal and conceal |
 | `overlapRatio` | Starts the clip earlier during the camera tail |
 | `overviewPadding` | Adds more space around the scene in overview |
+| `syncUrlHash` | When true, mirrors the active panel into `location.hash` (using the panel's `data-section` ID) and reconciles state from the hash on load and on browser back/forward |
 
 The runtime merges config once, freezes it, and shares that single reference across subsystems.
 

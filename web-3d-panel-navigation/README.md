@@ -40,6 +40,23 @@ Plane elements must live inside `#zoom-planes-source` and use the existing `data
 - `ScreenRect`
 - `CameraState`
 
+## URL synchronization
+
+By default the navigator mirrors the active panel into the URL fragment so reloads preserve state and links can be shared. The fragment value is the panel's `data-section` ID:
+
+- Click a panel → URL becomes `…/#quick-links`
+- Reload → page snaps directly into that section (no animation on cold load)
+- Browser back/forward → triggers the normal zoom-out / zoom-in animations
+- Returning to overview → URL fragment is cleared
+
+The same fragments still work as plain anchor links in any future non-3D fallback rendering, since the browser will natively scroll to `<section id="quick-links">` with no JS at all.
+
+Disable with `syncUrlHash: false`:
+
+```ts
+new ZoomPlaneNavigator(refs, { syncUrlHash: false });
+```
+
 Detailed design and architecture notes live in `docs/fifth-reference-attempt.md`.
 
 ## Local scripts

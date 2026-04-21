@@ -145,6 +145,15 @@ export interface NavigationConfig {
 
   /** Padding around bounding box for overview framing, as fraction (default: 0.15) */
   overviewPadding: number;
+
+  /**
+   * If true, the navigator mirrors the active panel into the URL fragment
+   * (e.g. `#quick-links`) and reconciles state from the fragment on load
+   * and on browser back/forward. The fragment value is the panel's
+   * `data-section` ID so it remains a working anchor in non-3D fallback
+   * contexts. Default: true.
+   */
+  syncUrlHash: boolean;
 }
 
 /**
@@ -159,6 +168,7 @@ export const DEFAULT_CONFIG: NavigationConfig = {
   clipDuration: 400,
   overlapRatio: 0.15,
   overviewPadding: 0.15,
+  syncUrlHash: true,
 };
 
 /**
