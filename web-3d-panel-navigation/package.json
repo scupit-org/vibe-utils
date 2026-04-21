@@ -4,9 +4,6 @@
   "description": "Fullscreen viewport-owned 3D panel navigation with Three.js CSS3D and clip-path content reveals.",
   "type": "module",
   "license": "MIT",
-  "publishConfig": {
-    "access": "public"
-  },
   "files": [
     "dist",
     "src",
@@ -28,14 +25,15 @@
   },
   "scripts": {
     "build": "node ./scripts/build.mjs",
-    "prepare": "npm run build",
-    "example:build": "npm run build && node ./scripts/build-example.mjs"
+    "example:build": "npm run build && node ./scripts/build-example.mjs",
+    "test": "jest --runInBand"
   },
   "peerDependencies": {
     "three": "^0.182.0"
   },
   "devDependencies": {
     "esbuild": "^0.25.5",
+    "jest": "^30.3.0",
     "sass": "^1.89.2",
     "three": "^0.182.0"
   }

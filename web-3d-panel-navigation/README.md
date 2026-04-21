@@ -45,6 +45,7 @@ Detailed design and architecture notes live in `docs/fifth-reference-attempt.md`
 ## Local scripts
 
 ```bash
+npm test
 npm run build
 npm run example:build
 ```

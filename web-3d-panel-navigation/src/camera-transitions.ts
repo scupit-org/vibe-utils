@@ -6,21 +6,6 @@ import { easeInOutCubic, easeOutCubic } from './easing';
 // Helpers
 // =============================================================================
 
-/** Apply position, target, up, and FOV to camera */
-function applyToCamera(
-  camera: THREE.PerspectiveCamera,
-  position: THREE.Vector3,
-  target: THREE.Vector3,
-  up: THREE.Vector3,
-  fov: number
-): void {
-  camera.position.copy(position);
-  camera.fov = fov;
-  camera.updateProjectionMatrix();
-  camera.up.copy(up);
-  camera.lookAt(target);
-}
-
 /** Interpolate up vector and FOV */
 function lerpUpAndFov(
   from: CameraState,
@@ -57,6 +42,24 @@ export function applyTransition(
   from: CameraState, to: CameraState,
   rawT: number, camera: THREE.PerspectiveCamera
 ): void {
+  const state = calculateTransitionState(from, to, rawT);
+  camera.position.copy(state.position);
+  camera.fov = state.fov;
+  camera.updateProjectionMatrix();
+  camera.up.copy(state.up);
+  camera.lookAt(state.target);
+}
+
+/**
+ * Calculate the complete camera state for a transition progress value.
+ * Callers that track camera targets explicitly should apply this state through
+ * their camera controller instead of mutating the Three.js camera directly.
+ */
+export function calculateTransitionState(
+  from: CameraState,
+  to: CameraState,
+  rawT: number
+): CameraState {
   // Forward angle
   const fromFwd = new THREE.Vector3().subVectors(from.target, from.position).normalize();
   const toFwd = new THREE.Vector3().subVectors(to.target, to.position).normalize();
@@ -77,10 +80,10 @@ export function applyTransition(
 
   if (blend < 0.5) {
     // Early Look regime: target leads position, straight path
-    transitionEarlyLook(from, to, rawT, camera);
+    return calculateEarlyLookState(from, to, rawT);
   } else {
     // Orbit regime: matched timing, sweeping arc
-    transitionOrbit(from, to, rawT, camera);
+    return calculateOrbitState(from, to, rawT);
   }
 }
 
@@ -90,10 +93,11 @@ export function applyTransition(
  * while still sliding into its final position. This makes the rotation
  * feel concurrent with the translation rather than sequential.
  */
-function transitionEarlyLook(
-  from: CameraState, to: CameraState,
-  rawT: number, camera: THREE.PerspectiveCamera
-): void {
+function calculateEarlyLookState(
+  from: CameraState,
+  to: CameraState,
+  rawT: number
+): CameraState {
   const posT = easeInOutCubic(rawT);
 
   // Target uses a faster curve — arrives at ~70% of the animation
@@ -103,7 +107,8 @@ function transitionEarlyLook(
   const position = new THREE.Vector3().lerpVectors(from.position, to.position, posT);
   const target = new THREE.Vector3().lerpVectors(from.target, to.target, targetT);
   const { up, fov } = lerpUpAndFov(from, to, posT);
-  applyToCamera(camera, position, target, up, fov);
+
+  return { position, target, up, fov };
 }
 
 /**
@@ -111,10 +116,11 @@ function transitionEarlyLook(
  * of the two targets, maintaining roughly constant distance while
  * sweeping around. Creates an orbital/turntable feel.
  */
-function transitionOrbit(
-  from: CameraState, to: CameraState,
-  rawT: number, camera: THREE.PerspectiveCamera
-): void {
+function calculateOrbitState(
+  from: CameraState,
+  to: CameraState,
+  rawT: number
+): CameraState {
   const t = easeInOutCubic(rawT);
 
   // Linearly interpolate the look-at target
@@ -152,5 +158,5 @@ function transitionOrbit(
   }
 
   const { up, fov } = lerpUpAndFov(from, to, t);
-  applyToCamera(camera, position, target, up, fov);
+  return { position, target, up, fov };
 }

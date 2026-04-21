@@ -17,8 +17,9 @@ interface ActiveSequence {
   startTime: number; // -1 until first tick
   duration: number;
   onTick: (progress: number) => void;
-  onComplete: () => void;
+  resolve: (completed: boolean) => void;
   cancelled: boolean;
+  settled: boolean;
 }
 
 export class AnimationTimeline {
@@ -56,6 +57,8 @@ export class AnimationTimeline {
     duration: number,
     onTick: (progress: number) => void
   ): { promise: Promise<boolean>; cancel: () => void } {
+    this.cancelActiveSequences();
+
     let resolvePromise: (completed: boolean) => void;
     const promise = new Promise<boolean>((resolve) => {
       resolvePromise = resolve;
@@ -65,8 +68,9 @@ export class AnimationTimeline {
       startTime: -1,
       duration,
       onTick,
-      onComplete: () => resolvePromise!(true),
+      resolve: (completed: boolean) => resolvePromise!(completed),
       cancelled: false,
+      settled: false,
     };
 
     this.sequences.push(sequence);
@@ -74,8 +78,7 @@ export class AnimationTimeline {
     return {
       promise,
       cancel: () => {
-        sequence.cancelled = true;
-        resolvePromise!(false);
+        this.cancelSequence(sequence);
       },
     };
   }
@@ -94,6 +97,7 @@ export class AnimationTimeline {
    * Stop the rAF loop.
    */
   stop(): void {
+    this.cancelActiveSequences();
     this.running = false;
     if (this.frameId !== null) {
       cancelAnimationFrame(this.frameId);
@@ -142,8 +146,34 @@ export class AnimationTimeline {
 
       if (progress >= 1) {
         this.sequences.splice(i, 1);
-        seq.onComplete();
+        this.completeSequence(seq);
       }
     }
   };
+
+  private completeSequence(sequence: ActiveSequence): void {
+    if (sequence.settled) return;
+    sequence.settled = true;
+    sequence.resolve(true);
+  }
+
+  private cancelSequence(sequence: ActiveSequence): void {
+    if (sequence.settled) return;
+    sequence.cancelled = true;
+    sequence.settled = true;
+    this.sequences = this.sequences.filter(activeSequence => activeSequence !== sequence);
+    sequence.resolve(false);
+  }
+
+  private cancelActiveSequences(): void {
+    for (const sequence of this.sequences) {
+      if (!sequence.settled) {
+        sequence.cancelled = true;
+        sequence.settled = true;
+        sequence.resolve(false);
+      }
+    }
+
+    this.sequences = [];
+  }
 }

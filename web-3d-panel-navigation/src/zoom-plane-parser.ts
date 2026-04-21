@@ -1,5 +1,21 @@
 import type { ZoomPlaneConfig } from './types';
 
+const STRICT_NUMBER_PATTERN = /^[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?$/;
+
+function parseStrictFiniteNumber(value: string): number {
+  const trimmedValue = value.trim();
+  if (!STRICT_NUMBER_PATTERN.test(trimmedValue)) {
+    throw new Error(`Invalid number "${value}"`);
+  }
+
+  const num = Number(trimmedValue);
+  if (!Number.isFinite(num)) {
+    throw new Error(`Invalid finite number "${value}"`);
+  }
+
+  return num;
+}
+
 /**
  * Parse a comma-separated string of numbers into an array.
  * Handles whitespace around values.
@@ -19,11 +35,11 @@ function parseNumberArray(value: string, expectedLength: number): number[] {
   }
 
   const numbers = parts.map((part, index) => {
-    const num = parseFloat(part);
-    if (isNaN(num)) {
+    try {
+      return parseStrictFiniteNumber(part);
+    } catch {
       throw new Error(`Invalid number at position ${index}: "${part}"`);
     }
-    return num;
   });
 
   return numbers;
@@ -57,8 +73,14 @@ function parseToThreeTuple(
 }
 
 function parseValidPositiveFloat(value: string, id: string, attributeName: string): number {
-  const num = parseFloat(value);
-  if (isNaN(num) || num <= 0) {
+  let num: number;
+  try {
+    num = parseStrictFiniteNumber(value);
+  } catch {
+    throw new RangeError(`Zoom plane "${id}": invalid ${attributeName} "${value}"`);
+  }
+
+  if (num <= 0) {
     throw new RangeError(`Zoom plane "${id}": invalid ${attributeName} "${value}"`);
   }
   return num;

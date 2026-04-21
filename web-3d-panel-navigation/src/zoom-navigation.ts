@@ -6,7 +6,7 @@ import { calculateOverviewState } from './overview-camera';
 import { parseAllZoomPlanes } from './zoom-plane-parser';
 import { getCenteredPlaneRect, lerpScreenRect, fullViewportRect } from './projection';
 import { remap } from './easing';
-import { applyTransition } from './camera-transitions';
+import { calculateTransitionState } from './camera-transitions';
 import type {
   NavigationState, NavigationConfig, NavigationEventType,
   NavigationEventHandler, ZoomPlaneConfig, CameraState, ContainerRefs,
@@ -190,7 +190,9 @@ export class ZoomPlaneNavigator {
 
     const { promise, cancel } = this.timeline.runSequence(totalDuration, (progress) => {
       const rawCameraT = remap(progress, 0, cameraEnd);
-      applyTransition(startCameraState, targetCameraState, rawCameraT, this.sceneGraph.camera);
+      this.cameraController.setToState(
+        calculateTransitionState(startCameraState, targetCameraState, rawCameraT)
+      );
 
       if (progress >= clipStart) {
         const clipRaw = remap(progress, clipStart, 1.0);
@@ -253,7 +255,7 @@ export class ZoomPlaneNavigator {
     }
 
     document.body.style.overflow = 'hidden';
-    window.scrollTo(0, 0);
+    this.clipController.resetScroll();
 
     const perpendicularState = this.cameraController.calculatePerpendicularState(
       planeConfig, this.sceneGraph.getScale()
@@ -302,7 +304,9 @@ export class ZoomPlaneNavigator {
 
       if (progress >= cameraStart) {
         const rawCameraT = remap(progress, cameraStart, 1.0);
-        applyTransition(overviewState, startCameraState, 1 - rawCameraT, this.sceneGraph.camera);
+        this.cameraController.setToState(
+          calculateTransitionState(overviewState, startCameraState, 1 - rawCameraT)
+        );
       }
     });
 
@@ -334,7 +338,9 @@ export class ZoomPlaneNavigator {
     const { promise, cancel } = this.timeline.runSequence(
       this.config.cameraDuration,
       (progress) => {
-        applyTransition(overviewState, startCameraState, 1 - progress, this.sceneGraph.camera);
+        this.cameraController.setToState(
+          calculateTransitionState(overviewState, startCameraState, 1 - progress)
+        );
       }
     );
 

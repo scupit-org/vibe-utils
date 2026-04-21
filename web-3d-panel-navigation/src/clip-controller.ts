@@ -92,6 +92,15 @@ export class ClipController {
   }
 
   /**
+   * Reset both the viewport and the scrollable content container.
+   */
+  resetScroll(): void {
+    this.container.scrollTop = 0;
+    this.container.scrollLeft = 0;
+    window.scrollTo(0, 0);
+  }
+
+  /**
    * Set container visibility class.
    */
   setVisible(visible: boolean): void {
@@ -140,5 +149,7 @@ export class ClipController {
     this.setVisible(false);
     this.hideAllSections();
     this.resetClip();
+    this.resetScroll();
+    this.setOpacity(0);
   }
 }
