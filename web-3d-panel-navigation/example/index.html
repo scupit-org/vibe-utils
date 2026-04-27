@@ -78,6 +78,26 @@
            data-rotation="30, 25, -5">
         <span class="plane-label">News</span>
       </div>
+
+      <div class="zoom-plane"
+           data-zoom-plane="old-news"
+           data-section="old-news"
+           data-width="1200"
+           data-height="800"
+           data-tile-from-right="bottom"
+           data-tile-angle="25">
+        <span class="plane-label">Old News</span>
+      </div>
+
+      <div class="zoom-plane"
+           data-zoom-plane="games"
+           data-section="games"
+           data-width="800"
+           data-height="600"
+           data-tile-from-top="small"
+           data-tile-angle="30">
+        <span class="plane-label">Games</span>
+      </div>
     </div>
 
     <div id="scene-container"></div>
@@ -216,6 +236,35 @@
         </article>
         <h2>Announcements</h2>
         <p>Important updates and announcements. This plane demonstrates positioning below the main scene (negative Y-axis) with a tilted, complex rotation.</p>
+      </section>
+
+      <section id="old-news" class="page-section">
+        <h1>Old News</h1>
+        <p>Archived announcements and older updates from the team.</p>
+        <h2>Archive</h2>
+        <article>
+          <h3>Project Retrospective</h3>
+          <p><strong>Posted:</strong> November 12, 2025</p>
+          <p>A look back at earlier experiments, design decisions, and lessons learned from previous releases.</p>
+        </article>
+        <article>
+          <h3>Initial Prototype Notes</h3>
+          <p><strong>Posted:</strong> October 03, 2025</p>
+          <p>Notes from the first version of the navigation system and how the panel layout evolved.</p>
+        </article>
+      </section>
+
+      <section id="games" class="page-section">
+        <h1>Games</h1>
+        <p>A compact panel for playful demos, prototypes, and interactive experiments.</p>
+        <h2>Playable Ideas</h2>
+        <ul>
+          <li>Tile matching prototype</li>
+          <li>Arcade score tracker</li>
+          <li>Physics sandbox</li>
+          <li>Daily puzzle concept</li>
+        </ul>
+        <p>This tiled panel demonstrates attaching a new surface to the top edge of an already rotated panel.</p>
       </section>
     </div>
 

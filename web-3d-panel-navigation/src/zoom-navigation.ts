@@ -49,7 +49,7 @@ export class ZoomPlaneNavigator {
     this.refs = refs;
     this.config = Object.freeze({ ...DEFAULT_CONFIG, ...config });
 
-    const planeConfigs = parseAllZoomPlanes(refs.planesSource);
+    const planeConfigs = parseAllZoomPlanes(refs.planesSource, { scale: this.config.scale });
 
     this.clipController = new ClipController(refs.contentContainer);
     this.validatePlaneSections(planeConfigs);

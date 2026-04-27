@@ -215,8 +215,8 @@ Visibility state should track actual CSS completion, not a guessed duration. `tr
 
 A zoom plane is a rectangular surface in 3D space that users can click to zoom into. Each plane has:
 
-- A world position `(x, y, z)`
-- A rotation `(x, y, z)` in degrees
+- A world position `(x, y, z)`, either explicit or computed from tiled layout
+- A rotation `(x, y, z)` in degrees, either explicit or computed from tiled layout
 - A width and height in world units
 - A linked content section ID
 - An optional focal-plane marker for overview framing
@@ -238,7 +238,7 @@ A zoom plane is a rectangular surface in 3D space that users can click to zoom i
 </div>
 ```
 
-#### Required Attributes
+#### Required Base Attributes
 
 | Attribute | Description | Example |
 |-----------|-------------|---------|
@@ -246,8 +246,36 @@ A zoom plane is a rectangular surface in 3D space that users can click to zoom i
 | `data-section` | ID of the section revealed when zoomed in | `"page-about"` |
 | `data-width` | Plane width in world units | `"1920"` |
 | `data-height` | Plane height in world units | `"1080"` |
+
+#### Layout Attributes
+
+Use either explicit layout or tiled layout.
+
+| Attribute | Description | Example |
+|-----------|-------------|---------|
 | `data-position` | Position as `x, y, z` | `"-850, 0, 100"` |
 | `data-rotation` | Rotation as `x, y, z` degrees | `"0, 30, 0"` |
+| `data-tile-from-right` | Attach this plane's left edge to the reference plane's right edge | `"about"` |
+| `data-tile-from-left` | Attach this plane's right edge to the reference plane's left edge | `"about"` |
+| `data-tile-from-top` | Attach this plane's bottom edge to the reference plane's top edge | `"about"` |
+| `data-tile-from-bottom` | Attach this plane's top edge to the reference plane's bottom edge | `"about"` |
+| `data-tile-angle` | Tiled rotation angle in degrees; positive folds inward toward the reference plane's front side | `"30"` |
+
+`data-position` and `data-rotation` are the explicit layout attributes. Tiled layout omits both and uses one side reference plus an angle:
+
+```html
+<div class="zoom-plane"
+     data-zoom-plane="right"
+     data-section="page-right"
+     data-width="1280"
+     data-height="720"
+     data-tile-from-right="unique-id"
+     data-tile-angle="30">
+  <span class="plane-label">Right</span>
+</div>
+```
+
+Supported side references are `data-tile-from-right`, `data-tile-from-left`, `data-tile-from-top`, and `data-tile-from-bottom`. Positive `data-tile-angle` folds the tiled plane inward toward the reference plane's front side.
 
 #### Optional Attributes
 
@@ -265,6 +293,7 @@ Validation includes:
 - Invalid numeric values
 - Duplicate `data-zoom-plane` IDs
 - More than one `data-zoom-center` plane
+- Invalid tiled layout references, cycles, or mixed explicit/tiled layout attributes
 - Missing matching content sections inside the provided content container
 
 ---

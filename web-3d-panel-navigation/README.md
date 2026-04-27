@@ -25,7 +25,32 @@ const navigation = new ZoomPlaneNavigator({
 });
 ```
 
-Plane elements must live inside `#zoom-planes-source` and use the existing `data-zoom-plane`, `data-section`, `data-width`, `data-height`, `data-position`, and `data-rotation` attributes. Content sections must be `.page-section` elements with IDs matching `data-section`.
+Plane elements must live inside `#zoom-planes-source` and use `data-zoom-plane`, `data-section`, `data-width`, and `data-height`. Positioning can be explicit with `data-position` and `data-rotation`, or tiled from another plane with one `data-tile-from-*` attribute plus `data-tile-angle`. Content sections must be `.page-section` elements with IDs matching `data-section`.
+
+```html
+<div class="zoom-plane"
+     data-zoom-plane="center"
+     data-section="about"
+     data-width="1600"
+     data-height="900"
+     data-position="0, 0, 0"
+     data-rotation="0, 0, 0"
+     data-zoom-center>
+  <span class="plane-label">About</span>
+</div>
+
+<div class="zoom-plane"
+     data-zoom-plane="right"
+     data-section="contact"
+     data-width="1280"
+     data-height="720"
+     data-tile-from-right="center"
+     data-tile-angle="30">
+  <span class="plane-label">Contact</span>
+</div>
+```
+
+Tiled planes attach one edge to a reference plane edge. Positive `data-tile-angle` folds the tiled plane inward toward the reference plane's front side.
 
 ## Public API
 

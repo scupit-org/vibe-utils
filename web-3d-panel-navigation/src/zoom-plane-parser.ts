@@ -1,4 +1,42 @@
+import * as THREE from 'three';
 import type { ZoomPlaneConfig } from './types';
+
+type TileSide = 'right' | 'left' | 'top' | 'bottom';
+
+interface ExplicitPlaneDefinition {
+  layout: 'explicit';
+  position: [number, number, number];
+  rotation: [number, number, number];
+}
+
+interface TiledPlaneDefinition {
+  layout: 'tiled';
+  side: TileSide;
+  refId: string;
+  angle: number;
+}
+
+interface PlaneDefinition {
+  id: string;
+  sectionId: string;
+  width: number;
+  height: number;
+  element: HTMLElement;
+  isCenter: boolean;
+  layout: ExplicitPlaneDefinition | TiledPlaneDefinition;
+}
+
+export interface ParseAllZoomPlanesOptions {
+  selector?: string;
+  scale?: number;
+}
+
+const TILE_SIDE_ATTRIBUTES: Array<{ side: TileSide; datasetKey: string; attribute: string }> = [
+  { side: 'right', datasetKey: 'tileFromRight', attribute: 'data-tile-from-right' },
+  { side: 'left', datasetKey: 'tileFromLeft', attribute: 'data-tile-from-left' },
+  { side: 'top', datasetKey: 'tileFromTop', attribute: 'data-tile-from-top' },
+  { side: 'bottom', datasetKey: 'tileFromBottom', attribute: 'data-tile-from-bottom' },
+];
 
 const STRICT_NUMBER_PATTERN = /^[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?$/;
 
@@ -94,6 +132,10 @@ function extractRequiredDataAttribute(element: HTMLElement, id: string, attr: st
   return value;
 }
 
+function hasDatasetKey(element: HTMLElement, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(element.dataset, key);
+}
+
 /**
  * Parse a single HTML element into a ZoomPlaneConfig.
  *
@@ -131,6 +173,236 @@ export function parseZoomPlane(element: HTMLElement): ZoomPlaneConfig {
   };
 }
 
+function parsePlaneDefinition(element: HTMLElement): PlaneDefinition {
+  const id = element.dataset.zoomPlane;
+  if (!id) {
+    throw new ReferenceError(`Zoom plane: missing data-zoom-plane attribute`);
+  }
+
+  const widthStr: string = extractRequiredDataAttribute(element, id, 'width');
+  const heightStr: string = extractRequiredDataAttribute(element, id, 'height');
+  const hasPosition = hasDatasetKey(element, 'position');
+  const hasRotation = hasDatasetKey(element, 'rotation');
+  const tileSideAttributes = TILE_SIDE_ATTRIBUTES.filter(({ datasetKey }) =>
+    hasDatasetKey(element, datasetKey)
+  );
+  const hasTileAngle = hasDatasetKey(element, 'tileAngle');
+  const hasTiledLayout = tileSideAttributes.length > 0 || hasTileAngle;
+  const hasExplicitLayout = hasPosition || hasRotation;
+
+  const base = {
+    id,
+    sectionId: extractRequiredDataAttribute(element, id, 'section'),
+    width: parseValidPositiveFloat(widthStr, id, 'width'),
+    height: parseValidPositiveFloat(heightStr, id, 'height'),
+    element,
+    isCenter: element.hasAttribute('data-zoom-center'),
+  };
+
+  if (hasTiledLayout && hasExplicitLayout) {
+    throw new Error(
+      `Zoom plane "${id}": cannot mix data-position/data-rotation with data-tile-from-* layout attributes`
+    );
+  }
+
+  if (hasTiledLayout) {
+    if (tileSideAttributes.length !== 1) {
+      throw new Error(
+        `Zoom plane "${id}": expected exactly one data-tile-from-* attribute, got ${tileSideAttributes.length}`
+      );
+    }
+
+    const tileSide = tileSideAttributes[0];
+    const refId = element.dataset[tileSide.datasetKey];
+    if (!refId) {
+      throw new ReferenceError(`Zoom plane "${id}": missing ${tileSide.attribute} reference`);
+    }
+
+    const angleStr = extractRequiredDataAttribute(element, id, 'tileAngle');
+
+    return {
+      ...base,
+      layout: {
+        layout: 'tiled',
+        side: tileSide.side,
+        refId,
+        angle: degreesToRadians(parseStrictFiniteNumber(angleStr)),
+      },
+    };
+  }
+
+  if (!hasPosition || !hasRotation) {
+    throw new ReferenceError(
+      `Zoom plane "${id}": explicit layout requires data-position and data-rotation attributes`
+    );
+  }
+
+  const positionStr: string = extractRequiredDataAttribute(element, id, 'position');
+  const rotationStr: string = extractRequiredDataAttribute(element, id, 'rotation');
+
+  return {
+    ...base,
+    layout: {
+      layout: 'explicit',
+      position: parseToThreeTuple(positionStr, id, 'position'),
+      rotation: parseToThreeTuple(rotationStr, id, 'rotation', degreesToRadians),
+    },
+  };
+}
+
+function definitionToConfig(
+  definition: PlaneDefinition,
+  position: [number, number, number],
+  rotation: [number, number, number]
+): ZoomPlaneConfig {
+  return {
+    id: definition.id,
+    sectionId: definition.sectionId,
+    width: definition.width,
+    height: definition.height,
+    position,
+    rotation,
+    element: definition.element,
+    isCenter: definition.isCenter,
+  };
+}
+
+function resolveTiledPlane(
+  definition: PlaneDefinition,
+  reference: ZoomPlaneConfig,
+  scale: number
+): ZoomPlaneConfig {
+  const layout = definition.layout;
+  if (layout.layout !== 'tiled') {
+    throw new Error(`Zoom plane "${definition.id}": expected tiled layout`);
+  }
+
+  const referenceCenter = new THREE.Vector3(
+    reference.position[0],
+    reference.position[1],
+    reference.position[2]
+  );
+  const referenceQuaternion = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(reference.rotation[0], reference.rotation[1], reference.rotation[2], 'XYZ')
+  );
+  const referenceRight = new THREE.Vector3(1, 0, 0).applyQuaternion(referenceQuaternion);
+  const referenceUp = new THREE.Vector3(0, 1, 0).applyQuaternion(referenceQuaternion);
+
+  let relativeQuaternion: THREE.Quaternion;
+  let hinge: THREE.Vector3;
+  let center: THREE.Vector3;
+
+  // The hinge is the shared edge center. The final center is offset from that
+  // hinge by half of the tiled plane's scaled size along its own rotated axis.
+  if (layout.side === 'right') {
+    hinge = referenceCenter.clone().add(referenceRight.clone().multiplyScalar(reference.width * scale / 2));
+    relativeQuaternion = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      -layout.angle
+    );
+  } else if (layout.side === 'left') {
+    hinge = referenceCenter.clone().add(referenceRight.clone().multiplyScalar(-reference.width * scale / 2));
+    relativeQuaternion = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      layout.angle
+    );
+  } else if (layout.side === 'top') {
+    hinge = referenceCenter.clone().add(referenceUp.clone().multiplyScalar(reference.height * scale / 2));
+    relativeQuaternion = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(1, 0, 0),
+      layout.angle
+    );
+  } else {
+    hinge = referenceCenter.clone().add(referenceUp.clone().multiplyScalar(-reference.height * scale / 2));
+    relativeQuaternion = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(1, 0, 0),
+      -layout.angle
+    );
+  }
+
+  const quaternion = referenceQuaternion.clone().multiply(relativeQuaternion);
+  const newRight = new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion);
+  const newUp = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion);
+
+  if (layout.side === 'right') {
+    center = hinge.add(newRight.multiplyScalar(definition.width * scale / 2));
+  } else if (layout.side === 'left') {
+    center = hinge.add(newRight.multiplyScalar(-definition.width * scale / 2));
+  } else if (layout.side === 'top') {
+    center = hinge.add(newUp.multiplyScalar(definition.height * scale / 2));
+  } else {
+    center = hinge.add(newUp.multiplyScalar(-definition.height * scale / 2));
+  }
+
+  const euler = new THREE.Euler().setFromQuaternion(quaternion, 'XYZ');
+
+  return definitionToConfig(
+    definition,
+    [center.x, center.y, center.z],
+    [euler.x, euler.y, euler.z]
+  );
+}
+
+function resolvePlaneDefinitions(
+  definitions: PlaneDefinition[],
+  scale: number
+): ZoomPlaneConfig[] {
+  const byId = new Map<string, PlaneDefinition>();
+  const resolved = new Map<string, ZoomPlaneConfig>();
+  const resolving = new Set<string>();
+
+  for (const definition of definitions) {
+    byId.set(definition.id, definition);
+  }
+
+  const resolve = (id: string): ZoomPlaneConfig => {
+    const cached = resolved.get(id);
+    if (cached) {
+      return cached;
+    }
+
+    const definition = byId.get(id);
+    if (!definition) {
+      throw new ReferenceError(`Zoom plane "${id}" not found`);
+    }
+
+    if (resolving.has(id)) {
+      throw new Error(`Zoom plane "${id}": circular tiled layout reference detected`);
+    }
+
+    resolving.add(id);
+
+    let config: ZoomPlaneConfig;
+    if (definition.layout.layout === 'explicit') {
+      config = definitionToConfig(
+        definition,
+        definition.layout.position,
+        definition.layout.rotation
+      );
+    } else {
+      if (definition.layout.refId === definition.id) {
+        throw new Error(`Zoom plane "${definition.id}": cannot tile from itself`);
+      }
+
+      const referenceDefinition = byId.get(definition.layout.refId);
+      if (!referenceDefinition) {
+        throw new ReferenceError(
+          `Zoom plane "${definition.id}": tiled reference "${definition.layout.refId}" was not found`
+        );
+      }
+
+      const reference = resolve(referenceDefinition.id);
+      config = resolveTiledPlane(definition, reference, scale);
+    }
+
+    resolving.delete(id);
+    resolved.set(id, config);
+    return config;
+  };
+
+  return definitions.map(definition => resolve(definition.id));
+}
+
 /**
  * Parse all zoom plane elements within a container.
  *
@@ -141,40 +413,47 @@ export function parseZoomPlane(element: HTMLElement): ZoomPlaneConfig {
  */
 export function parseAllZoomPlanes(
   container: HTMLElement,
-  selector: string = '[data-zoom-plane]'
+  selectorOrOptions: string | ParseAllZoomPlanesOptions = '[data-zoom-plane]',
+  scaleOverride?: number
 ): ZoomPlaneConfig[] {
+  const selector = typeof selectorOrOptions === 'string'
+    ? selectorOrOptions
+    : selectorOrOptions.selector ?? '[data-zoom-plane]';
+  const scale = typeof selectorOrOptions === 'string'
+    ? scaleOverride ?? 1
+    : selectorOrOptions.scale ?? 1;
   const elements = container.querySelectorAll<HTMLElement>(selector);
-  const configs: ZoomPlaneConfig[] = [];
+  const definitions: PlaneDefinition[] = [];
   const seenIds = new Set<string>();
   let centerPlaneId: string | null = null;
 
   elements.forEach((element, index) => {
     try {
-      const config = parseZoomPlane(element);
+      const definition = parsePlaneDefinition(element);
 
-      if (seenIds.has(config.id)) {
-        throw new Error(`Duplicate zoom plane ID: "${config.id}"`);
+      if (seenIds.has(definition.id)) {
+        throw new Error(`Duplicate zoom plane ID: "${definition.id}"`);
       }
-      seenIds.add(config.id);
+      seenIds.add(definition.id);
 
-      if (config.isCenter) {
+      if (definition.isCenter) {
         if (centerPlaneId !== null) {
           throw new Error(
-            `Multiple center zoom planes found: "${centerPlaneId}" and "${config.id}". ` +
+            `Multiple center zoom planes found: "${centerPlaneId}" and "${definition.id}". ` +
             `Only one zoom plane can have the data-zoom-center attribute.`
           );
         }
-        centerPlaneId = config.id;
+        centerPlaneId = definition.id;
       }
 
-      configs.push(config);
+      definitions.push(definition);
     } catch (e) {
       console.error(`Failed to parse zoom plane at index ${index}:`, e);
       throw e;
     }
   });
 
-  return configs;
+  return resolvePlaneDefinitions(definitions, scale);
 }
 
 /**

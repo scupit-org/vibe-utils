@@ -262,7 +262,7 @@ documented exception below (`.back-button.hidden`), which is also the correct
 
 These are set on each `.zoom-plane` element inside `#zoom-planes-source`.
 
-### Required
+### Required Base Attributes
 
 | Attribute | Type | Description | Example |
 |-----------|------|-------------|---------|
@@ -270,8 +270,20 @@ These are set on each `.zoom-plane` element inside `#zoom-planes-source`.
 | `data-section` | string | ID of the `.page-section` to reveal | `"page-about"` |
 | `data-width` | number | Plane width in world units | `"1920"` |
 | `data-height` | number | Plane height in world units | `"1080"` |
+
+### Layout Attributes
+
+Use either explicit layout or tiled layout.
+
+| Attribute | Type | Description | Example |
+|-----------|------|-------------|---------|
 | `data-position` | `x, y, z` | World-space position | `"-850, 0, 100"` |
 | `data-rotation` | `x, y, z` | Rotation in degrees on each Euler axis | `"0, 30, 0"` |
+| `data-tile-from-right` | string | Attach this plane's left edge to the reference plane's right edge | `"about"` |
+| `data-tile-from-left` | string | Attach this plane's right edge to the reference plane's left edge | `"about"` |
+| `data-tile-from-top` | string | Attach this plane's bottom edge to the reference plane's top edge | `"about"` |
+| `data-tile-from-bottom` | string | Attach this plane's top edge to the reference plane's bottom edge | `"about"` |
+| `data-tile-angle` | number | Tiled rotation angle in degrees; positive folds inward toward the reference plane's front side | `"30"` |
 
 ### Optional
 
@@ -296,14 +308,14 @@ These are set on each `.zoom-plane` element inside `#zoom-planes-source`.
     <span class="plane-label">About</span>
   </div>
 
-  <!-- Side panel rotated 30° on Y axis -->
+  <!-- Tiled side panel: left edge connected to the focal plane's right edge -->
   <div class="zoom-plane"
        data-zoom-plane="projects"
        data-section="page-projects"
        data-width="1920"
        data-height="1080"
-       data-position="-850, 0, 100"
-       data-rotation="0, 30, 0">
+       data-tile-from-right="about"
+       data-tile-angle="30">
     <span class="plane-label">Projects</span>
   </div>
 
