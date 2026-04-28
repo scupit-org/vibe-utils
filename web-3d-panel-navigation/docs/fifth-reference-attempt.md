@@ -260,6 +260,13 @@ Use either explicit layout or tiled layout.
 | `data-tile-from-top` | Attach this plane's bottom edge to the reference plane's top edge | `"about"` |
 | `data-tile-from-bottom` | Attach this plane's top edge to the reference plane's bottom edge | `"about"` |
 | `data-tile-angle` | Tiled rotation angle in degrees; positive folds inward toward the reference plane's front side | `"30"` |
+| `data-tile-gap` | Optional spacing away from the reference edge in world units. | `"45"` |
+| `data-tile-align` | Optional edge alignment. Use `top`, `center`, or `bottom` for left/right tiles; `left`, `center`, or `right` for top/bottom tiles. | `"top"` |
+| `data-tile-align-offset` | Optional extra nudge along the alignment axis in world units. | `"-90"` |
+| `data-tile-offset` | Optional advanced additive reference-local hinge offset. `x` follows reference right, `y` follows reference up. Values use world units like `data-position`. | `"40, -20"` |
+| `data-tile-rotation-offset` | Optional reference-relative Euler rotation offset in degrees. Keeps the attached edge center anchored but can intentionally make the edge imperfectly flush. | `"0, 2, -1"` |
+
+Tiled defaults are `data-tile-gap="0"`, `data-tile-align="center"`, `data-tile-align-offset="0"`, `data-tile-offset="0, 0"`, and `data-tile-rotation-offset="0, 0, 0"`. The final hinge offset is computed from gap/alignment first, then `data-tile-align-offset`, then the manual `data-tile-offset`.
 
 `data-position` and `data-rotation` are the explicit layout attributes. Tiled layout omits both and uses one side reference plus an angle:
 
@@ -270,12 +277,15 @@ Use either explicit layout or tiled layout.
      data-width="1280"
      data-height="720"
      data-tile-from-right="unique-id"
-     data-tile-angle="30">
+     data-tile-angle="30"
+     data-tile-gap="45"
+     data-tile-align="top"
+     data-tile-rotation-offset="0, 2, -1">
   <span class="plane-label">Right</span>
 </div>
 ```
 
-Supported side references are `data-tile-from-right`, `data-tile-from-left`, `data-tile-from-top`, and `data-tile-from-bottom`. Positive `data-tile-angle` folds the tiled plane inward toward the reference plane's front side.
+Supported side references are `data-tile-from-right`, `data-tile-from-left`, `data-tile-from-top`, and `data-tile-from-bottom`. Positive `data-tile-angle` folds the tiled plane inward toward the reference plane's front side. `data-tile-gap`, `data-tile-align`, `data-tile-align-offset`, `data-tile-offset`, and `data-tile-rotation-offset` are interpreted relative to the reference plane's position and rotation.
 
 #### Optional Attributes
 
@@ -530,8 +540,12 @@ Owns the single `requestAnimationFrame` loop used by navigation.
 
 | Method | Purpose |
 |--------|---------|
-| `start(sequence)` | Start a new sequence and cancel any previous one |
-| `cancel()` | Stop the active sequence |
+| `start()` | Start the persistent requestAnimationFrame loop |
+| `stop()` | Cancel active sequences and stop the requestAnimationFrame loop |
+| `subscribe(key, callback)` | Register a persistent per-frame callback such as scene rendering |
+| `unsubscribe(key)` | Remove a persistent callback |
+| `runSequence(duration, onTick)` | Run a timed sequence and cancel any previous active sequence |
+| `hasActiveSequences()` | Report whether any timed sequences are currently active |
 
 #### `zoom-plane-parser.ts`
 
@@ -572,6 +586,7 @@ Adaptive camera motion logic.
 | Export | Purpose |
 |--------|---------|
 | `applyTransition(from, to, rawProgress, camera)` | Apply the selected transition strategy |
+| `calculateTransitionState(from, to, rawProgress)` | Return the selected transition state without mutating the camera; this is the path used by `ZoomPlaneNavigator` so `CameraController` can preserve its explicit look-at target |
 
 #### `clip-controller.ts`
 

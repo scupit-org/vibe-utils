@@ -284,6 +284,13 @@ Use either explicit layout or tiled layout.
 | `data-tile-from-top` | string | Attach this plane's bottom edge to the reference plane's top edge | `"about"` |
 | `data-tile-from-bottom` | string | Attach this plane's top edge to the reference plane's bottom edge | `"about"` |
 | `data-tile-angle` | number | Tiled rotation angle in degrees; positive folds inward toward the reference plane's front side | `"30"` |
+| `data-tile-gap` | number | Optional spacing away from the reference edge in world units. | `"45"` |
+| `data-tile-align` | string | Optional edge alignment. Use `top`, `center`, or `bottom` for left/right tiles; `left`, `center`, or `right` for top/bottom tiles. | `"top"` |
+| `data-tile-align-offset` | number | Optional extra nudge along the alignment axis in world units. | `"-90"` |
+| `data-tile-offset` | `x, y` | Optional advanced additive reference-local hinge offset. `x` follows reference right, `y` follows reference up. Values use world units like `data-position`. | `"40, -20"` |
+| `data-tile-rotation-offset` | `x, y, z` | Optional reference-relative Euler rotation offset in degrees. Keeps the attached edge center anchored but can intentionally make the edge imperfectly flush. | `"0, 2, -1"` |
+
+Tiled defaults are `data-tile-gap="0"`, `data-tile-align="center"`, `data-tile-align-offset="0"`, `data-tile-offset="0, 0"`, and `data-tile-rotation-offset="0, 0, 0"`. The final hinge offset is computed from gap/alignment first, then `data-tile-align-offset`, then the manual `data-tile-offset`.
 
 ### Optional
 
@@ -315,7 +322,10 @@ Use either explicit layout or tiled layout.
        data-width="1920"
        data-height="1080"
        data-tile-from-right="about"
-       data-tile-angle="30">
+       data-tile-angle="30"
+       data-tile-gap="45"
+       data-tile-align="top"
+       data-tile-rotation-offset="0, 2, -1">
     <span class="plane-label">Projects</span>
   </div>
 

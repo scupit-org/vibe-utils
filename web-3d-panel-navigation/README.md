@@ -45,12 +45,17 @@ Plane elements must live inside `#zoom-planes-source` and use `data-zoom-plane`,
      data-width="1280"
      data-height="720"
      data-tile-from-right="center"
-     data-tile-angle="30">
+     data-tile-angle="30"
+     data-tile-gap="45"
+     data-tile-align="top"
+     data-tile-rotation-offset="0, 2, -1">
   <span class="plane-label">Contact</span>
 </div>
 ```
 
-Tiled planes attach one edge to a reference plane edge. Positive `data-tile-angle` folds the tiled plane inward toward the reference plane's front side.
+Tiled planes attach one edge to a reference plane edge. Positive `data-tile-angle` folds the tiled plane inward toward the reference plane's front side. Use `data-tile-gap` and `data-tile-align` for common monitor-like layouts. Optional `data-tile-offset="x, y"` is a lower-level additive hinge offset in the reference plane's local right/up axes, and optional `data-tile-rotation-offset="x, y, z"` applies extra reference-relative Euler rotation in degrees.
+
+Tiled defaults are `data-tile-gap="0"`, `data-tile-align="center"`, `data-tile-align-offset="0"`, `data-tile-offset="0, 0"`, and `data-tile-rotation-offset="0, 0, 0"`. The final hinge offset is computed from gap/alignment first, then `data-tile-align-offset`, then the manual `data-tile-offset`.
 
 ## Public API
 

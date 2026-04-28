@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { ZoomPlaneConfig } from './types';
 
 type TileSide = 'right' | 'left' | 'top' | 'bottom';
+type TileAlign = 'top' | 'center' | 'bottom' | 'left' | 'right';
 
 interface ExplicitPlaneDefinition {
   layout: 'explicit';
@@ -14,6 +15,11 @@ interface TiledPlaneDefinition {
   side: TileSide;
   refId: string;
   angle: number;
+  offset: [number, number];
+  rotationOffset: [number, number, number];
+  gap: number;
+  align: TileAlign;
+  alignOffset: number;
 }
 
 interface PlaneDefinition {
@@ -110,6 +116,21 @@ function parseToThreeTuple(
   }
 }
 
+function parseToTwoTuple(
+  value: string,
+  id: string,
+  attributeName: string
+): [number, number] {
+  try {
+    const arr: number[] = parseNumberArray(value, 2);
+    return arr as [number, number];
+  } catch (e) {
+    throw new Error(
+      `Zoom plane "${id}": invalid ${attributeName} "${value}" - ${(e as Error).message}`
+    );
+  }
+}
+
 function parseValidPositiveFloat(value: string, id: string, attributeName: string): number {
   let num: number;
   try {
@@ -124,6 +145,16 @@ function parseValidPositiveFloat(value: string, id: string, attributeName: strin
   return num;
 }
 
+function parseFiniteDataAttribute(value: string, id: string, attributeName: string): number {
+  try {
+    return parseStrictFiniteNumber(value);
+  } catch (e) {
+    throw new Error(
+      `Zoom plane "${id}": invalid ${attributeName} "${value}" - ${(e as Error).message}`
+    );
+  }
+}
+
 function extractRequiredDataAttribute(element: HTMLElement, id: string, attr: string): string {
   const value = element.dataset[attr];
   if (!value) {
@@ -134,6 +165,20 @@ function extractRequiredDataAttribute(element: HTMLElement, id: string, attr: st
 
 function hasDatasetKey(element: HTMLElement, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(element.dataset, key);
+}
+
+function parseTileAlign(value: string, id: string): TileAlign {
+  if (
+    value === 'top' ||
+    value === 'center' ||
+    value === 'bottom' ||
+    value === 'left' ||
+    value === 'right'
+  ) {
+    return value;
+  }
+
+  throw new Error(`Zoom plane "${id}": invalid tileAlign "${value}"`);
 }
 
 /**
@@ -187,7 +232,18 @@ function parsePlaneDefinition(element: HTMLElement): PlaneDefinition {
     hasDatasetKey(element, datasetKey)
   );
   const hasTileAngle = hasDatasetKey(element, 'tileAngle');
-  const hasTiledLayout = tileSideAttributes.length > 0 || hasTileAngle;
+  const hasTileOffset = hasDatasetKey(element, 'tileOffset');
+  const hasTileRotationOffset = hasDatasetKey(element, 'tileRotationOffset');
+  const hasTileGap = hasDatasetKey(element, 'tileGap');
+  const hasTileAlign = hasDatasetKey(element, 'tileAlign');
+  const hasTileAlignOffset = hasDatasetKey(element, 'tileAlignOffset');
+  const hasTiledLayout = tileSideAttributes.length > 0 ||
+    hasTileAngle ||
+    hasTileOffset ||
+    hasTileRotationOffset ||
+    hasTileGap ||
+    hasTileAlign ||
+    hasTileAlignOffset;
   const hasExplicitLayout = hasPosition || hasRotation;
 
   const base = {
@@ -219,6 +275,30 @@ function parsePlaneDefinition(element: HTMLElement): PlaneDefinition {
     }
 
     const angleStr = extractRequiredDataAttribute(element, id, 'tileAngle');
+    const offset = hasTileOffset
+      ? parseToTwoTuple(extractRequiredDataAttribute(element, id, 'tileOffset'), id, 'tileOffset')
+      : [0, 0] as [number, number];
+    const rotationOffset = hasTileRotationOffset
+      ? parseToThreeTuple(
+        extractRequiredDataAttribute(element, id, 'tileRotationOffset'),
+        id,
+        'tileRotationOffset',
+        degreesToRadians
+      )
+      : [0, 0, 0] as [number, number, number];
+    const gap = hasTileGap
+      ? parseFiniteDataAttribute(extractRequiredDataAttribute(element, id, 'tileGap'), id, 'tileGap')
+      : 0;
+    const align = hasTileAlign
+      ? parseTileAlign(extractRequiredDataAttribute(element, id, 'tileAlign'), id)
+      : 'center';
+    const alignOffset = hasTileAlignOffset
+      ? parseFiniteDataAttribute(
+        extractRequiredDataAttribute(element, id, 'tileAlignOffset'),
+        id,
+        'tileAlignOffset'
+      )
+      : 0;
 
     return {
       ...base,
@@ -227,6 +307,11 @@ function parsePlaneDefinition(element: HTMLElement): PlaneDefinition {
         side: tileSide.side,
         refId,
         angle: degreesToRadians(parseStrictFiniteNumber(angleStr)),
+        offset,
+        rotationOffset,
+        gap,
+        align,
+        alignOffset,
       },
     };
   }
@@ -267,6 +352,57 @@ function definitionToConfig(
   };
 }
 
+function calculateErgonomicTileOffset(
+  layout: TiledPlaneDefinition,
+  definition: PlaneDefinition,
+  reference: ZoomPlaneConfig,
+  scale: number
+): [number, number] {
+  let gapX = 0;
+  let gapY = 0;
+  let alignX = 0;
+  let alignY = 0;
+
+  if (layout.side === 'right' || layout.side === 'left') {
+    if (layout.align !== 'top' && layout.align !== 'center' && layout.align !== 'bottom') {
+      throw new Error(
+        `Zoom plane "${definition.id}": data-tile-align="${layout.align}" is invalid for ${layout.side} tiling`
+      );
+    }
+
+    gapX = layout.side === 'right' ? layout.gap : -layout.gap;
+
+    const heightDelta = (reference.height - definition.height) * scale;
+    if (layout.align === 'top') {
+      alignY = heightDelta / 2;
+    } else if (layout.align === 'bottom') {
+      alignY = -heightDelta / 2;
+    }
+    alignY += layout.alignOffset;
+  } else {
+    if (layout.align !== 'left' && layout.align !== 'center' && layout.align !== 'right') {
+      throw new Error(
+        `Zoom plane "${definition.id}": data-tile-align="${layout.align}" is invalid for ${layout.side} tiling`
+      );
+    }
+
+    gapY = layout.side === 'top' ? layout.gap : -layout.gap;
+
+    const widthDelta = (reference.width - definition.width) * scale;
+    if (layout.align === 'left') {
+      alignX = -widthDelta / 2;
+    } else if (layout.align === 'right') {
+      alignX = widthDelta / 2;
+    }
+    alignX += layout.alignOffset;
+  }
+
+  return [
+    gapX + alignX + layout.offset[0],
+    gapY + alignY + layout.offset[1],
+  ];
+}
+
 function resolveTiledPlane(
   definition: PlaneDefinition,
   reference: ZoomPlaneConfig,
@@ -287,6 +423,10 @@ function resolveTiledPlane(
   );
   const referenceRight = new THREE.Vector3(1, 0, 0).applyQuaternion(referenceQuaternion);
   const referenceUp = new THREE.Vector3(0, 1, 0).applyQuaternion(referenceQuaternion);
+  const finalOffset = calculateErgonomicTileOffset(layout, definition, reference, scale);
+  const hingeOffset = referenceRight.clone()
+    .multiplyScalar(finalOffset[0])
+    .add(referenceUp.clone().multiplyScalar(finalOffset[1]));
 
   let relativeQuaternion: THREE.Quaternion;
   let hinge: THREE.Vector3;
@@ -320,7 +460,19 @@ function resolveTiledPlane(
     );
   }
 
-  const quaternion = referenceQuaternion.clone().multiply(relativeQuaternion);
+  hinge.add(hingeOffset);
+
+  const offsetQuaternion = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(
+      layout.rotationOffset[0],
+      layout.rotationOffset[1],
+      layout.rotationOffset[2],
+      'XYZ'
+    )
+  );
+  const quaternion = referenceQuaternion.clone()
+    .multiply(offsetQuaternion)
+    .multiply(relativeQuaternion);
   const newRight = new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion);
   const newUp = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion);
 

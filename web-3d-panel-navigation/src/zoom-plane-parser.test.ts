@@ -34,6 +34,42 @@ function expectVectorClose(actual: THREE.Vector3, expected: THREE.Vector3): void
   expect(actual.z).toBeCloseTo(expected.z);
 }
 
+function quaternionFromConfig(config: ZoomPlaneConfig): THREE.Quaternion {
+  return new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(config.rotation[0], config.rotation[1], config.rotation[2], 'XYZ')
+  );
+}
+
+function expectQuaternionClose(actual: THREE.Quaternion, expected: THREE.Quaternion): void {
+  expect(Math.abs(actual.dot(expected))).toBeCloseTo(1);
+}
+
+function referenceLocalOffset(
+  reference: ZoomPlaneConfig,
+  x: number,
+  y: number
+): THREE.Vector3 {
+  const quaternion = quaternionFromConfig(reference);
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion);
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion);
+  return right.multiplyScalar(x).add(up.multiplyScalar(y));
+}
+
+function localAxis(reference: ZoomPlaneConfig, axis: 'right' | 'up'): THREE.Vector3 {
+  const quaternion = quaternionFromConfig(reference);
+  return new THREE.Vector3(axis === 'right' ? 1 : 0, axis === 'up' ? 1 : 0, 0)
+    .applyQuaternion(quaternion)
+    .normalize();
+}
+
+function expectSameProjectionOnAxis(
+  actual: THREE.Vector3,
+  expected: THREE.Vector3,
+  axis: THREE.Vector3
+): void {
+  expect(actual.dot(axis)).toBeCloseTo(expected.dot(axis));
+}
+
 function edgeCenter(
   config: ZoomPlaneConfig,
   side: 'left' | 'right' | 'top' | 'bottom',
@@ -251,6 +287,298 @@ describe('zoom plane parser', () => {
     );
   });
 
+  it('applies tile offset in the reference plane local axes', () => {
+    const scale = 0.5;
+    const reference = createZoomPlaneElement({
+      zoomPlane: 'reference',
+      section: 'page-reference',
+      width: '1000',
+      height: '500',
+      position: '10, 20, 30',
+      rotation: '10, 45, 5',
+    });
+    const tiled = createZoomPlaneElement({
+      zoomPlane: 'tiled',
+      section: 'page-tiled',
+      width: '800',
+      height: '500',
+      tileFromRight: 'reference',
+      tileAngle: '35',
+      tileOffset: '40, -20',
+    });
+
+    const configs = parseAllZoomPlanes(createContainer([reference, tiled]), { scale });
+    const referenceConfig = getPlane(configs, 'reference');
+    const tiledConfig = getPlane(configs, 'tiled');
+    const expectedHinge = edgeCenter(referenceConfig, 'right', scale)
+      .add(referenceLocalOffset(referenceConfig, 40, -20));
+
+    expectVectorClose(edgeCenter(tiledConfig, 'left', scale), expectedHinge);
+  });
+
+  it('applies tile gap away from the reference edge for every side', () => {
+    const scale = 0.5;
+    const center = createZoomPlaneElement({
+      zoomPlane: 'center',
+      section: 'page-center',
+      width: '1000',
+      height: '500',
+      position: '0, 0, 0',
+      rotation: '0, 0, 0',
+    });
+    const right = createZoomPlaneElement({
+      zoomPlane: 'right',
+      section: 'page-right',
+      width: '800',
+      height: '500',
+      tileFromRight: 'center',
+      tileAngle: '30',
+      tileGap: '40',
+    });
+    const left = createZoomPlaneElement({
+      zoomPlane: 'left',
+      section: 'page-left',
+      width: '800',
+      height: '500',
+      tileFromLeft: 'center',
+      tileAngle: '30',
+      tileGap: '40',
+    });
+    const top = createZoomPlaneElement({
+      zoomPlane: 'top',
+      section: 'page-top',
+      width: '800',
+      height: '500',
+      tileFromTop: 'center',
+      tileAngle: '30',
+      tileGap: '40',
+    });
+    const bottom = createZoomPlaneElement({
+      zoomPlane: 'bottom',
+      section: 'page-bottom',
+      width: '800',
+      height: '500',
+      tileFromBottom: 'center',
+      tileAngle: '30',
+      tileGap: '40',
+    });
+
+    const configs = parseAllZoomPlanes(createContainer([center, right, left, top, bottom]), { scale });
+    const centerConfig = getPlane(configs, 'center');
+
+    expectVectorClose(
+      edgeCenter(getPlane(configs, 'right'), 'left', scale),
+      edgeCenter(centerConfig, 'right', scale).add(referenceLocalOffset(centerConfig, 40, 0))
+    );
+    expectVectorClose(
+      edgeCenter(getPlane(configs, 'left'), 'right', scale),
+      edgeCenter(centerConfig, 'left', scale).add(referenceLocalOffset(centerConfig, -40, 0))
+    );
+    expectVectorClose(
+      edgeCenter(getPlane(configs, 'top'), 'bottom', scale),
+      edgeCenter(centerConfig, 'top', scale).add(referenceLocalOffset(centerConfig, 0, 40))
+    );
+    expectVectorClose(
+      edgeCenter(getPlane(configs, 'bottom'), 'top', scale),
+      edgeCenter(centerConfig, 'bottom', scale).add(referenceLocalOffset(centerConfig, 0, -40))
+    );
+  });
+
+  it('aligns top and bottom edges for right-side tiled panels with different sizes', () => {
+    const scale = 0.5;
+    const center = createZoomPlaneElement({
+      zoomPlane: 'center',
+      section: 'page-center',
+      width: '1600',
+      height: '900',
+      position: '0, 0, 0',
+      rotation: '0, 0, 0',
+    });
+    const topAligned = createZoomPlaneElement({
+      zoomPlane: 'top-aligned',
+      section: 'page-top-aligned',
+      width: '1200',
+      height: '600',
+      tileFromRight: 'center',
+      tileAngle: '30',
+      tileAlign: 'top',
+    });
+    const bottomAligned = createZoomPlaneElement({
+      zoomPlane: 'bottom-aligned',
+      section: 'page-bottom-aligned',
+      width: '1200',
+      height: '600',
+      tileFromRight: 'center',
+      tileAngle: '30',
+      tileAlign: 'bottom',
+    });
+
+    const configs = parseAllZoomPlanes(createContainer([center, topAligned, bottomAligned]), { scale });
+    const centerConfig = getPlane(configs, 'center');
+    const up = localAxis(centerConfig, 'up');
+
+    expectSameProjectionOnAxis(
+      edgeCenter(getPlane(configs, 'top-aligned'), 'top', scale),
+      edgeCenter(centerConfig, 'top', scale),
+      up
+    );
+    expectSameProjectionOnAxis(
+      edgeCenter(getPlane(configs, 'bottom-aligned'), 'bottom', scale),
+      edgeCenter(centerConfig, 'bottom', scale),
+      up
+    );
+  });
+
+  it('aligns left and right edges for top-side tiled panels with different sizes', () => {
+    const scale = 0.5;
+    const center = createZoomPlaneElement({
+      zoomPlane: 'center',
+      section: 'page-center',
+      width: '1600',
+      height: '900',
+      position: '0, 0, 0',
+      rotation: '0, 0, 0',
+    });
+    const leftAligned = createZoomPlaneElement({
+      zoomPlane: 'left-aligned',
+      section: 'page-left-aligned',
+      width: '900',
+      height: '600',
+      tileFromTop: 'center',
+      tileAngle: '30',
+      tileAlign: 'left',
+    });
+    const rightAligned = createZoomPlaneElement({
+      zoomPlane: 'right-aligned',
+      section: 'page-right-aligned',
+      width: '900',
+      height: '600',
+      tileFromTop: 'center',
+      tileAngle: '30',
+      tileAlign: 'right',
+    });
+
+    const configs = parseAllZoomPlanes(createContainer([center, leftAligned, rightAligned]), { scale });
+    const centerConfig = getPlane(configs, 'center');
+    const rightAxis = localAxis(centerConfig, 'right');
+
+    expectSameProjectionOnAxis(
+      edgeCenter(getPlane(configs, 'left-aligned'), 'left', scale),
+      edgeCenter(centerConfig, 'left', scale),
+      rightAxis
+    );
+    expectSameProjectionOnAxis(
+      edgeCenter(getPlane(configs, 'right-aligned'), 'right', scale),
+      edgeCenter(centerConfig, 'right', scale),
+      rightAxis
+    );
+  });
+
+  it('combines ergonomic alignment, align offset, gap, and manual tile offset', () => {
+    const scale = 0.5;
+    const center = createZoomPlaneElement({
+      zoomPlane: 'center',
+      section: 'page-center',
+      width: '1600',
+      height: '900',
+      position: '0, 0, 0',
+      rotation: '0, 0, 0',
+    });
+    const tiled = createZoomPlaneElement({
+      zoomPlane: 'tiled',
+      section: 'page-tiled',
+      width: '1200',
+      height: '600',
+      tileFromRight: 'center',
+      tileAngle: '30',
+      tileGap: '40',
+      tileAlign: 'top',
+      tileAlignOffset: '-10',
+      tileOffset: '5, 2',
+    });
+
+    const configs = parseAllZoomPlanes(createContainer([center, tiled]), { scale });
+    const centerConfig = getPlane(configs, 'center');
+    const tiledConfig = getPlane(configs, 'tiled');
+    const alignY = ((centerConfig.height - tiledConfig.height) * scale) / 2;
+    const expectedHinge = edgeCenter(centerConfig, 'right', scale)
+      .add(referenceLocalOffset(centerConfig, 45, alignY - 8));
+
+    expectVectorClose(edgeCenter(tiledConfig, 'left', scale), expectedHinge);
+  });
+
+  it('applies tile rotation offset relative to the reference orientation', () => {
+    const scale = 0.5;
+    const reference = createZoomPlaneElement({
+      zoomPlane: 'reference',
+      section: 'page-reference',
+      width: '1000',
+      height: '500',
+      position: '10, 20, 30',
+      rotation: '10, 45, 5',
+    });
+    const tiled = createZoomPlaneElement({
+      zoomPlane: 'tiled',
+      section: 'page-tiled',
+      width: '800',
+      height: '500',
+      tileFromRight: 'reference',
+      tileAngle: '35',
+      tileRotationOffset: '0, 2, -1',
+    });
+
+    const configs = parseAllZoomPlanes(createContainer([reference, tiled]), { scale });
+    const referenceConfig = getPlane(configs, 'reference');
+    const tiledConfig = getPlane(configs, 'tiled');
+    const referenceQuaternion = quaternionFromConfig(referenceConfig);
+    const offsetQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(0, 2 * Math.PI / 180, -Math.PI / 180, 'XYZ')
+    );
+    const foldQuaternion = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      -35 * Math.PI / 180
+    );
+    const expectedQuaternion = referenceQuaternion.clone()
+      .multiply(offsetQuaternion)
+      .multiply(foldQuaternion);
+
+    expectQuaternionClose(quaternionFromConfig(tiledConfig), expectedQuaternion);
+    expectVectorClose(
+      edgeCenter(tiledConfig, 'left', scale),
+      edgeCenter(referenceConfig, 'right', scale)
+    );
+  });
+
+  it('combines tile offset and rotation offset while keeping the offset hinge anchored', () => {
+    const scale = 0.5;
+    const reference = createZoomPlaneElement({
+      zoomPlane: 'reference',
+      section: 'page-reference',
+      width: '1000',
+      height: '500',
+      position: '10, 20, 30',
+      rotation: '10, 45, 5',
+    });
+    const tiled = createZoomPlaneElement({
+      zoomPlane: 'tiled',
+      section: 'page-tiled',
+      width: '800',
+      height: '500',
+      tileFromTop: 'reference',
+      tileAngle: '20',
+      tileOffset: '-15, 35',
+      tileRotationOffset: '1, 0, 3',
+    });
+
+    const configs = parseAllZoomPlanes(createContainer([reference, tiled]), { scale });
+    const referenceConfig = getPlane(configs, 'reference');
+    const tiledConfig = getPlane(configs, 'tiled');
+    const expectedHinge = edgeCenter(referenceConfig, 'top', scale)
+      .add(referenceLocalOffset(referenceConfig, -15, 35));
+
+    expectVectorClose(edgeCenter(tiledConfig, 'bottom', scale), expectedHinge);
+  });
+
   it('supports chained tiled references and references declared later in the DOM', () => {
     const scale = 0.5;
     const second = createZoomPlaneElement({
@@ -297,6 +625,15 @@ describe('zoom plane parser', () => {
     ['missing reference', { tileFromRight: 'missing', tileAngle: '30' }, /not found/],
     ['self reference', { tileFromRight: 'invalid', tileAngle: '30' }, /itself/],
     ['invalid angle', { tileFromRight: 'center', tileAngle: '30deg' }, /Invalid number/],
+    ['invalid offset length', { tileFromRight: 'center', tileAngle: '30', tileOffset: '1, 2, 3' }, /Expected 2/],
+    ['invalid offset number', { tileFromRight: 'center', tileAngle: '30', tileOffset: '1px, 2' }, /Invalid number/],
+    ['invalid rotation offset length', { tileFromRight: 'center', tileAngle: '30', tileRotationOffset: '1, 2' }, /Expected 3/],
+    ['invalid rotation offset number', { tileFromRight: 'center', tileAngle: '30', tileRotationOffset: '1, nope, 3' }, /Invalid number/],
+    ['invalid gap', { tileFromRight: 'center', tileAngle: '30', tileGap: '1px' }, /invalid tileGap/],
+    ['invalid align offset', { tileFromRight: 'center', tileAngle: '30', tileAlignOffset: 'nope' }, /invalid tileAlignOffset/],
+    ['invalid align value', { tileFromRight: 'center', tileAngle: '30', tileAlign: 'middle' }, /invalid tileAlign/],
+    ['invalid horizontal align for side tile', { tileFromRight: 'center', tileAngle: '30', tileAlign: 'left' }, /invalid for right tiling/],
+    ['invalid vertical align for top tile', { tileFromTop: 'center', tileAngle: '30', tileAlign: 'top' }, /invalid for top tiling/],
     ['multiple tile sides', { tileFromRight: 'center', tileFromLeft: 'center', tileAngle: '30' }, /exactly one/],
     ['mixed explicit and tiled', { position: '0, 0, 0', rotation: '0, 0, 0', tileFromRight: 'center', tileAngle: '30' }, /cannot mix/],
   ])('rejects invalid tiled layout: %s', (_caseName, invalidValues, errorPattern) => {
