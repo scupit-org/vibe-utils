@@ -181,7 +181,7 @@ export class ZoomPlaneNavigator {
 
     const startCameraState = this.cameraController.getCurrentState();
     const targetCameraState = this.cameraController.calculatePerpendicularState(
-      planeConfig, this.sceneGraph.getScale()
+      planeConfig, this.sceneGraph.getScale(), this.currentAspect()
     );
 
     const planeRect = this.precomputePlaneRect(planeConfig, targetCameraState, startCameraState);
@@ -261,7 +261,7 @@ export class ZoomPlaneNavigator {
     }
 
     const targetCameraState = this.cameraController.calculatePerpendicularState(
-      planeConfig, this.sceneGraph.getScale()
+      planeConfig, this.sceneGraph.getScale(), this.currentAspect()
     );
     this.cameraController.setToState(targetCameraState);
     this.sceneGraph.setPlaneOpacity(planeId, 0);
@@ -296,7 +296,7 @@ export class ZoomPlaneNavigator {
     this.clipController.resetScroll();
 
     const perpendicularState = this.cameraController.calculatePerpendicularState(
-      planeConfig, this.sceneGraph.getScale()
+      planeConfig, this.sceneGraph.getScale(), this.currentAspect()
     );
     this.cameraController.setToState(perpendicularState);
 
@@ -459,6 +459,10 @@ export class ZoomPlaneNavigator {
     }
   }
 
+  private currentAspect(): number {
+    return window.innerWidth / window.innerHeight;
+  }
+
   private handleResize(): void {
     const width = window.innerWidth;
     const height = window.innerHeight;
@@ -474,6 +478,14 @@ export class ZoomPlaneNavigator {
       );
       this.cameraController.setOverviewState(this.overviewState);
       this.cameraController.setToState(this.overviewState);
+    } else if (this._state === 'section' && this._activePlaneId) {
+      const planeConfig = this.sceneGraph.getPlaneConfig(this._activePlaneId);
+      if (planeConfig) {
+        const perpState = this.cameraController.calculatePerpendicularState(
+          planeConfig, this.sceneGraph.getScale(), width / height
+        );
+        this.cameraController.setToState(perpState);
+      }
     }
   }
 

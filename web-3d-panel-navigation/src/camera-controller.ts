@@ -32,18 +32,29 @@ export class CameraController {
 
   /**
    * Calculate the camera state needed to view a zoom plane perpendicularly,
-   * with the plane centered on screen and filling the target percentage of the viewport.
+   * with the plane centered on screen and filling the target percentage of the
+   * viewport on whichever axis is the binding constraint.
+   *
+   * The distance is derived from both the plane's height and width so the
+   * panel always fits inside a `fillPercentage`-of-viewport box regardless of
+   * viewport aspect ratio. Mirrors the dual-axis math used by
+   * `calculateOverviewCameraDistance` in overview-camera.ts.
    */
   calculatePerpendicularState(
     plane: ZoomPlaneConfig,
-    scale: number
+    scale: number,
+    viewportAspect: number
   ): CameraState {
+    const actualWidth = plane.width * scale;
     const actualHeight = plane.height * scale;
     const targetFov = this.config.detailFov;
     const fovRadians = (targetFov * Math.PI) / 180;
+    const halfFovTan = Math.tan(fovRadians / 2);
+    const fill = this.config.fillPercentage;
 
-    // distance = (height/2) / (tan(fov/2) * fillPercentage)
-    const distance = (actualHeight / 2) / (Math.tan(fovRadians / 2) * this.config.fillPercentage);
+    const distanceForHeight = (actualHeight / 2) / (halfFovTan * fill);
+    const distanceForWidth = (actualWidth / 2) / (halfFovTan * fill * viewportAspect);
+    const distance = Math.max(distanceForHeight, distanceForWidth);
 
     const euler = new THREE.Euler(plane.rotation[0], plane.rotation[1], plane.rotation[2]);
 

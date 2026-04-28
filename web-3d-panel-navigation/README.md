@@ -3,6 +3,15 @@
 > **NOTE: This is vibe coded software!** I made this for personal
 > use in my website; Use at your own discretion!
 
+> **Heads up on browser device emulation:** The zoom-in framing can look
+> wrong (panel positioned/sized oddly, especially in a simulated phone)
+> inside a browser's responsive design / device toolbar mode — most
+> noticeably in Firefox's responsive preview. The same build behaves
+> correctly on real phone hardware. This appears to be a quirk in how
+> the responsive preview reports viewport dimensions, not a bug in the
+> framing math. If you're debugging zoom behavior, verify on a real
+> device before chasing it as a code issue.
+
 Standalone package for the fifth-attempt fullscreen pane navigation system. It preserves the current viewport-owned model: CSS3D planes defined by HTML data attributes, adaptive camera transitions, and clip-path based content reveal.
 
 ## Install

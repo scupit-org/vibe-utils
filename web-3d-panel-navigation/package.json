@@ -1,6 +1,6 @@
 {
   "name": "@scupit/web-3d-panel-navigation",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Fullscreen viewport-owned 3D panel navigation with Three.js CSS3D and clip-path content reveals, plus an optional WebGL skybox layer.",
   "type": "module",
   "license": "MIT",
