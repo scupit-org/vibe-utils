@@ -105,6 +105,8 @@ export class ZoomPlaneNavigator {
       this.urlSync = new HashUrlSync(this, this.sceneGraph.getPlaneConfigs());
       this.urlSync.reconcileInitial();
     }
+
+    this.sceneGraph.schedulePostLoadRasterRefresh();
   }
 
   get state(): NavigationState {

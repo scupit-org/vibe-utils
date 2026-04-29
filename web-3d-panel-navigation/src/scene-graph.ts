@@ -23,6 +23,8 @@ export class SceneGraph {
   private zoomPlanes = new Map<string, CSS3DObjectRef>();
   private planeConfigs: ZoomPlaneConfig[] = [];
   private config: NavigationConfig;
+  private rasterRefreshFrameIds: number[] = [];
+  private destroyed = false;
 
   constructor(
     container: HTMLElement,
@@ -90,6 +92,20 @@ export class SceneGraph {
   }
 
   /**
+   * Firefox/WebRender can keep stale CSS3D raster/hit-test bounds after normal
+   * reloads at non-100% Windows display scaling. A one-frame transparent
+   * outline forces transformed panel bounds to rebuild without changing final
+   * visuals.
+   */
+  schedulePostLoadRasterRefresh(): void {
+    this.queueAnimationFrame(() => {
+      this.queueAnimationFrame(() => {
+        this.forceRasterRefresh();
+      });
+    });
+  }
+
+  /**
    * Update camera aspect ratio and renderer size.
    */
   setSize(width: number, height: number): void {
@@ -136,10 +152,45 @@ export class SceneGraph {
     }
   }
 
+  private forceRasterRefresh(): void {
+    if (this.destroyed) {
+      return;
+    }
+
+    const previousOutlines = Array.from(this.zoomPlanes.values(), ({ element }) => ({
+      element,
+      outline: element.style.outline,
+    }));
+
+    for (const { element } of previousOutlines) {
+      element.style.outline = '1px solid transparent';
+    }
+
+    this.queueAnimationFrame(() => {
+      for (const { element, outline } of previousOutlines) {
+        element.style.outline = outline;
+      }
+    });
+  }
+
+  private queueAnimationFrame(callback: FrameRequestCallback): void {
+    const id = window.requestAnimationFrame((time) => {
+      this.rasterRefreshFrameIds = this.rasterRefreshFrameIds.filter(frameId => frameId !== id);
+      callback(time);
+    });
+    this.rasterRefreshFrameIds.push(id);
+  }
+
   /**
    * Clean up resources.
    */
   destroy(): void {
+    this.destroyed = true;
+    for (const frameId of this.rasterRefreshFrameIds) {
+      window.cancelAnimationFrame(frameId);
+    }
+    this.rasterRefreshFrameIds = [];
+
     if (this.renderer.domElement.parentNode) {
       this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
     }
