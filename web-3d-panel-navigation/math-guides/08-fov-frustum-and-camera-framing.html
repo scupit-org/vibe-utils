@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>08 — FOV, Frustum, and Camera Framing</title>
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(','\\)'], ['$', '$']],
+      displayMath: [['$$','$$'], ['\\[','\\]']]
+    }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 880px;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.55;
+    color: #1f2330;
+    background: #fafafb;
+  }
+  h1 { border-bottom: 2px solid #2c3e50; padding-bottom: 0.4rem; }
+  h2 { color: #2c3e50; margin-top: 2rem; border-bottom: 1px solid #d5d8e0; padding-bottom: 0.2rem; }
+  h3 { color: #34495e; margin-top: 1.4rem; }
+  pre {
+    background: #1e1e2a;
+    color: #e6e6f0;
+    padding: 0.85rem 1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 0.88rem;
+  }
+  code { font-family: "JetBrains Mono", "Fira Code", Consolas, monospace; }
+  p code, li code {
+    background: #ecedf2;
+    color: #b03050;
+    padding: 0.05rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  .callout {
+    background: #fff8e0;
+    border-left: 4px solid #e0a800;
+    padding: 0.7rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .definition {
+    background: #eef5ff;
+    border-left: 4px solid #3b78c9;
+    padding: 0.7rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .widget {
+    background: #fff;
+    border: 1px solid #d5d8e0;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1.25rem 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.45rem 1.2rem;
+    margin: 0.6rem 0;
+    font-size: 0.88rem;
+  }
+  .controls label { display: flex; flex-direction: column; gap: 0.15rem; }
+  .controls input[type="range"] { width: 100%; }
+  .readouts {
+    background: #f3f4f8;
+    border-radius: 6px;
+    padding: 0.6rem 0.9rem;
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 0.86rem;
+    line-height: 1.55;
+    margin-top: 0.6rem;
+  }
+  .readouts .binding {
+    display: inline-block;
+    background: #2c3e50;
+    color: #fff;
+    padding: 0.05rem 0.45rem;
+    border-radius: 3px;
+    margin-left: 0.3rem;
+  }
+  canvas {
+    width: 100%;
+    height: auto;
+    background: #0f1424;
+    border-radius: 6px;
+    display: block;
+  }
+  details {
+    background: #f5f6fa;
+    border-radius: 6px;
+    padding: 0.4rem 0.9rem;
+    margin: 1rem 0;
+  }
+  details summary { cursor: pointer; font-weight: 600; padding: 0.4rem 0; }
+  table { border-collapse: collapse; margin: 0.6rem 0; }
+  th, td { border: 1px solid #d5d8e0; padding: 0.4rem 0.7rem; text-align: left; }
+  th { background: #ecedf2; }
+  ol li, ul li { margin: 0.25rem 0; }
+  .axis-h { color: #4ec1ff; }
+  .axis-w { color: #ffd24e; }
+</style>
+</head>
+<body>
+
+<h1>Guide 08 — FOV, Frustum, and Camera Framing</h1>
+
+<p><em>Eighth in the math curriculum for <code>web-3d-panel-navigation</code>. Prerequisites: guide 02 (trig: degrees / radians, $\tan$, similar triangles), guide 06 (frames: applying Euler rotations to get a plane's normal), and a glance at guide 07 (the same $\tan(\theta/2)$ that built the projection matrix is about to reappear here as a <em>framing</em> tool).</em></p>
+
+<h2>1. Why this matters</h2>
+
+<p>Two core operations in this library both reduce to the same question: <strong>how far should the camera sit from a target so that the target fits the viewport?</strong></p>
+
+<ul>
+  <li><strong>Zooming into a single panel.</strong> The detail (perpendicular) state is computed in <code>src/camera-controller.ts</code>, lines 43–86. The user clicks a panel; the camera flies to a position normal to that panel, at exactly the distance that makes the panel fill <code>fillPercentage</code> of the viewport on whichever axis is the binding constraint.</li>
+  <li><strong>Framing the whole scene.</strong> The overview state is computed in <code>src/overview-camera.ts</code>, lines 58–156. Either we frame onto a focal plane (<em>Focal Element Mode</em>) and pull back enough to keep every other plane in shot, or we center on the geometric mean of all planes (<em>Balanced Scene Mode</em>) and pull back enough to fit the bounding box plus padding.</li>
+</ul>
+
+<p>Both call sites end up writing the same three lines:</p>
+
+<pre><code>const distanceForHeight = (paddedHeight / 2) / halfFovTan;
+const distanceForWidth  = (paddedWidth  / 2) / (halfFovTan * aspectRatio);
+const requiredDistance  = Math.max(distanceForHeight, distanceForWidth);</code></pre>
+
+<p>This guide derives that pattern from a right triangle, then walks through the project's framing code line by line.</p>
+
+<h2>2. Building intuition</h2>
+
+<p>Picture standing at the apex of a pyramid that has been laid on its side, point toward you. The four walls of the pyramid expand outward as they get further from your eye. That is the <strong>viewing frustum</strong>: the region of 3D space the camera can actually see.</p>
+
+<div class="definition">
+<strong>Frustum.</strong> A truncated pyramid. The apex is the camera. The cone widens as you move along the optical axis; everything inside it lands somewhere on screen, everything outside is clipped.
+</div>
+
+<p>The <strong>field of view</strong> $\theta$ is the full opening angle of that pyramid, measured top-edge-to-bottom-edge through the apex. (Three.js's <code>PerspectiveCamera.fov</code> is the vertical FOV in degrees, which is the convention this project uses.)</p>
+
+<p>Now the key geometric observation: at any distance $d$ in front of the camera, the frustum cuts out a rectangle. The <strong>height</strong> of that rectangle is some function $h(d)$. By similar triangles — double the distance, double the height — that function is <em>linear</em>:</p>
+
+<p>$$h(d) = (\text{some constant depending on }\theta) \cdot d.$$</p>
+
+<p>That constant is what we are about to derive. Once we have it, the framing problem becomes algebra: given a target height $h_t$ that we want to fill, solve for $d$.</p>
+
+<canvas id="introCanvas" width="820" height="320" aria-label="Side-view sketch of a viewing frustum"></canvas>
+<script>
+(function() {
+  const c = document.getElementById('introCanvas');
+  const ctx = c.getContext('2d');
+  function draw() {
+    const W = c.width, H = c.height;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#0f1424'; ctx.fillRect(0,0,W,H);
+    // axis
+    ctx.strokeStyle = '#34384a'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, H/2); ctx.lineTo(W-30, H/2); ctx.stroke();
+    // camera
+    const camX = 90, camY = H/2;
+    ctx.fillStyle = '#ffd24e';
+    ctx.beginPath();
+    ctx.moveTo(camX-20, camY-22); ctx.lineTo(camX+18, camY); ctx.lineTo(camX-20, camY+22); ctx.closePath();
+    ctx.fill();
+    // frustum lines (FOV ~ 50 deg => half ~ 25)
+    const halfFov = 25 * Math.PI/180;
+    const len = W - 110 - camX;
+    const topY = camY - len * Math.tan(halfFov);
+    const botY = camY + len * Math.tan(halfFov);
+    ctx.strokeStyle = '#4ec1ff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(camX, camY); ctx.lineTo(camX+len, topY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(camX, camY); ctx.lineTo(camX+len, botY); ctx.stroke();
+    // image plane at d
+    const d = len * 0.65;
+    const planeTop = camY - d * Math.tan(halfFov);
+    const planeBot = camY + d * Math.tan(halfFov);
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(camX+d, planeTop); ctx.lineTo(camX+d, planeBot); ctx.stroke();
+    // labels
+    ctx.fillStyle = '#e6e6f0'; ctx.font = '13px monospace';
+    ctx.fillText('camera', camX-25, camY+45);
+    ctx.fillText('optical axis (-z)', W-180, camY-8);
+    ctx.fillText('h(d)', camX+d+10, camY+5);
+    ctx.fillText('d', camX + d/2 - 5, camY + 16);
+    // FOV arc
+    ctx.strokeStyle = '#ffd24e';
+    ctx.beginPath();
+    ctx.arc(camX, camY, 36, -halfFov, halfFov);
+    ctx.stroke();
+    ctx.fillStyle = '#ffd24e';
+    ctx.fillText('θ', camX+44, camY+5);
+  }
+  draw();
+})();
+</script>
+
+<h2>3. The math</h2>
+
+<h3>3.1 Frustum half-height: $h/2 = d \tan(\theta/2)$</h3>
+
+<p>Drop the optical axis horizontally. Place the camera at the apex. Walk a distance $d$ along the axis to where the image plane sits. The top edge of the frustum, at that distance, is some height $h/2$ above the axis.</p>
+
+<p>By symmetry the FOV is split evenly above and below the axis, so the angle between the axis and the top edge is $\theta/2$. We now have a right triangle: opposite side is $h/2$, adjacent side is $d$. The trig from guide 02:</p>
+
+<p>$$\tan\!\left(\frac{\theta}{2}\right) = \frac{h/2}{d} \quad\Longrightarrow\quad \frac{h}{2} = d\,\tan\!\left(\frac{\theta}{2}\right) \quad\Longrightarrow\quad h = 2\,d\,\tan\!\left(\frac{\theta}{2}\right).$$</p>
+
+<p>This is exactly the formula <code>src/projection.ts</code> uses to ask "given the camera is here, how tall is the visible slab at the panel's distance":</p>
+
+<pre><code>// projection.ts:175-177
+const fovRadians = (camera.fov * Math.PI) / 180;
+const viewportHeightAtPlane = 2 * distance * Math.tan(fovRadians / 2);
+const viewportWidthAtPlane = viewportHeightAtPlane * (viewportWidth / viewportHeight);</code></pre>
+
+<div class="callout">
+<strong>Forward-reference to guide 07.</strong> The same factor $\tan(\theta/2)$ also appears inside the perspective <em>projection matrix</em>, where it scales NDC coordinates. Here we are not projecting — we are using the formula in reverse, as a framing tool, to choose where the camera should sit. Same right triangle, opposite direction.
+</div>
+
+<h3>3.2 Inverting for camera distance</h3>
+
+<p>Framing is the inverse problem. We know the target height $h_t$ we want filled and the FOV; solve for $d$:</p>
+
+<p>$$d \;=\; \frac{h_t / 2}{\tan(\theta/2)}.$$</p>
+
+<p>Bigger plane $\Rightarrow$ further away. Wider FOV $\Rightarrow$ closer (because $\tan(\theta/2)$ grows).</p>
+
+<h3>3.3 Aspect ratio and dual-axis fitting</h3>
+
+<p>So far we only constrained the vertical axis. But monitors are not square. Define</p>
+
+<p>$$\text{aspect} = \frac{\text{viewport width}}{\text{viewport height}}.$$</p>
+
+<p>At distance $d$, the visible <em>width</em> is</p>
+
+<p>$$w(d) \;=\; h(d)\cdot \text{aspect} \;=\; 2\,d\,\tan(\theta/2)\cdot \text{aspect}.$$</p>
+
+<p>To frame a target rectangle of $W_t \times H_t$, both axes must clear:</p>
+
+<p>$$h(d) \ge H_t \;\;\text{and}\;\; w(d) \ge W_t.$$</p>
+
+<p>Solve each independently:</p>
+
+<p>$$d_h \;=\; \frac{H_t/2}{\tan(\theta/2)}, \qquad d_w \;=\; \frac{W_t/2}{\tan(\theta/2)\cdot \text{aspect}}.$$</p>
+
+<p>The <strong>binding constraint</strong> is whichever distance is larger:</p>
+
+<p>$$d \;=\; \max(d_h,\, d_w).$$</p>
+
+<p>Why <em>max</em>, not <em>min</em>? Because we have to satisfy <em>both</em> inequalities. The smaller distance would only satisfy the easier one. The bigger distance is the one that gets <em>both</em> of the plane's edges inside the frustum.</p>
+
+<h3>3.4 Fill percentage as denominator scaling</h3>
+
+<p>"Fill 80% of the viewport on the binding axis" means: the plane should occupy 80% of the visible slab at distance $d$, not 100%. Look at the height equation again:</p>
+
+<p>$$h(d) \;=\; 2 d \tan(\theta/2).$$</p>
+
+<p>If the plane's height $H_t$ should be only $f$ of the visible height, then the visible height at the chosen $d$ must equal $H_t / f$:</p>
+
+<p>$$\frac{H_t}{f} \;=\; 2 d\,\tan(\theta/2) \quad\Longrightarrow\quad d \;=\; \frac{H_t/2}{\tan(\theta/2)\cdot f}.$$</p>
+
+<p>So the fill factor lands in the <strong>denominator</strong>. That can feel backwards at first — surely a bigger fraction means we are zooming <em>in</em>, so $d$ should grow? No: a bigger fraction (closer to 1) means the panel fills more of the screen, which means we are <em>closer</em>, which means $d$ is <em>smaller</em>. And that is what dividing by a bigger $f$ does.</p>
+
+<p>Numerically, with $f = 0.8$ vs $f = 0.5$, the same plane needs $d / 0.8 = 1.25\,d_0$ vs $d / 0.5 = 2\,d_0$. Lower fill $\Rightarrow$ farther camera $\Rightarrow$ panel looks smaller in the viewport.</p>
+
+<h3>3.5 Padding as fractional expansion</h3>
+
+<p>The overview camera does not use <code>fillPercentage</code>. Instead, it expands the framing box by a fraction $p$ before solving:</p>
+
+<p>$$W' = W\,(1 + p), \qquad H' = H\,(1 + p).$$</p>
+
+<p>Default $p = 0.15$, i.e. 15% extra room on each axis. This shows up in <code>DEFAULT_CONFIG.overviewPadding</code> in <code>src/types.ts</code>. The two formulations are interchangeable:</p>
+
+<p>$$\text{fill}\ f \;\Leftrightarrow\; \text{padding}\ p = \frac{1}{f} - 1.$$</p>
+
+<p>So $f = 0.8 \Leftrightarrow p \approx 0.25$ (the detail framing wants a tighter feel than the overview's softer 15%).</p>
+
+<h3>3.6 Depth back-offset</h3>
+
+<p>The overview frustum is a 3D pyramid expanding along $-z$ from the camera. If some panels sit <em>behind</em> the focal plane (further from the camera), they are deeper in $z$ than the focal plane's center. The framing distance we just computed assumes the target lives in a single plane at distance $d$. To keep deeper planes in shot, the camera must back up by their additional depth.</p>
+
+<p>The library computes this as the maximum $z$ of the bounding box <em>relative</em> to the focal plane:</p>
+
+<pre><code>// overview-camera.ts:89-94
+const maxDepthBehindCenter = Math.max(
+  0,
+  boundingBox.maxZ - centerPlane.position[2]
+);
+requiredDistance += maxDepthBehindCenter;</code></pre>
+
+<p>The <code>Math.max(0, ...)</code> guards against the case where every other plane is in front of the focal plane (negative depth difference); in that case there is nothing to back up for. Otherwise, the back-offset is added directly to <code>requiredDistance</code>.</p>
+
+<div class="callout">
+<strong>Coordinate convention.</strong> Three.js cameras look down the $-z$ axis of their local frame. "In front of the camera" is therefore $-z$ in camera space; "deeper into the scene" along the camera's optical axis is what we are measuring. The world-space <code>boundingBox.maxZ</code> is the back wall of the AABB (covered properly in guide 09).
+</div>
+
+<h2>4. In this codebase</h2>
+
+<h3>4.1 Perpendicular detail state — <code>camera-controller.ts:51-57</code></h3>
+
+<pre><code>// camera-controller.ts:51-57
+const fovRadians = (targetFov * Math.PI) / 180;
+const halfFovTan = Math.tan(fovRadians / 2);
+const fill = this.config.fillPercentage;
+
+const distanceForHeight = (actualHeight / 2) / (halfFovTan * fill);
+const distanceForWidth = (actualWidth / 2) / (halfFovTan * fill * viewportAspect);
+const distance = Math.max(distanceForHeight, distanceForWidth);</code></pre>
+
+<p>Map line by line to section 3:</p>
+<ul>
+  <li><code>halfFovTan</code> is $\tan(\theta/2)$ — section 3.1.</li>
+  <li><code>distanceForHeight</code> is $d_h$ with the fill factor in the denominator — sections 3.2 and 3.4.</li>
+  <li><code>distanceForWidth</code> is $d_w$, also dividing by <code>viewportAspect</code> — section 3.3.</li>
+  <li><code>Math.max</code> picks the binding axis — section 3.3.</li>
+</ul>
+
+<h3>4.2 Focal-element overview — <code>overview-camera.ts:81-86</code></h3>
+
+<pre><code>// overview-camera.ts:81-86
+const paddedWidth = boxWidth * (1 + padding);
+const paddedHeight = boxHeight * (1 + padding);
+
+const distanceForHeight = (paddedHeight / 2) / halfFovTan;
+const distanceForWidth = (paddedWidth / 2) / (halfFovTan * aspectRatio);
+
+let requiredDistance = Math.max(distanceForHeight, distanceForWidth);</code></pre>
+
+<p>Same shape as 4.1, but the framing target is the <em>aggregate bounding box</em> (computed in <code>calculateAllPlanesBoundingBox</code> — guide 09), and the slack is multiplicative padding (3.5) instead of fill (3.4).</p>
+
+<h3>4.3 Depth back-offset — <code>overview-camera.ts:89-94</code></h3>
+
+<pre><code>// overview-camera.ts:89-94
+const maxDepthBehindCenter = Math.max(
+  0,
+  boundingBox.maxZ - centerPlane.position[2]
+);
+requiredDistance += maxDepthBehindCenter;</code></pre>
+
+<p>Section 3.6. After solving the in-plane framing, push the camera back by the deepest panel's offset behind the focal plane.</p>
+
+<h3>4.4 Balanced-scene overview — <code>overview-camera.ts:147-153</code></h3>
+
+<pre><code>// overview-camera.ts:147-153
+const paddedWidth = boxWidth * (1 + padding);
+const paddedHeight = boxHeight * (1 + padding);
+
+const distanceForHeight = (paddedHeight / 2) / halfFovTan;
+const distanceForWidth = (paddedWidth / 2) / (halfFovTan * aspectRatio);
+
+const requiredDistance = Math.max(distanceForHeight, distanceForWidth);</code></pre>
+
+<p>The third occurrence. Notice the project does not abstract this into a single helper; the duplication is intentional because the three call sites differ slightly (fill vs padding; with vs without depth back-offset). The math kernel — three lines — is identical.</p>
+
+<h3>4.5 The forward direction — <code>projection.ts:175-177</code></h3>
+
+<pre><code>// projection.ts:175-177
+const fovRadians = (camera.fov * Math.PI) / 180;
+const viewportHeightAtPlane = 2 * distance * Math.tan(fovRadians / 2);
+const viewportWidthAtPlane = viewportHeightAtPlane * (viewportWidth / viewportHeight);</code></pre>
+
+<p>This is the unsolved form, $h = 2d\tan(\theta/2)$. <code>getCenteredPlaneRect</code> uses it to compute "what fraction of the viewport does this panel currently occupy?", which is the inverse question we have been solving in 4.1–4.4.</p>
+
+<h2>5. Interactive playground</h2>
+
+<p>Slide the inputs. The left canvas is a top-down side view of the camera, frustum, and target plane. The right side shows the simulated viewport. Watch <em>which axis is binding</em> as you change the viewport aspect.</p>
+
+<div class="widget">
+  <canvas id="frustumCanvas" width="820" height="440" aria-label="Interactive frustum framing widget"></canvas>
+  <div class="controls">
+    <label>FOV: <span id="fovLabel">50</span>°
+      <input id="fovIn" type="range" min="20" max="90" step="1" value="50">
+    </label>
+    <label>Plane width: <span id="pwLabel">1600</span>
+      <input id="pwIn" type="range" min="100" max="4000" step="50" value="1600">
+    </label>
+    <label>Plane height: <span id="phLabel">900</span>
+      <input id="phIn" type="range" min="100" max="4000" step="50" value="900">
+    </label>
+    <label>Viewport aspect: <span id="arLabel">1.78</span>
+      <input id="arIn" type="range" min="0.5" max="3.0" step="0.01" value="1.78">
+    </label>
+    <label>Fill percentage: <span id="fLabel">0.80</span>
+      <input id="fIn" type="range" min="0.3" max="1.0" step="0.01" value="0.8">
+    </label>
+    <label>Padding (additive): <span id="pLabel">0.00</span>
+      <input id="pIn" type="range" min="0" max="0.5" step="0.01" value="0">
+    </label>
+  </div>
+  <div class="readouts" id="readouts"></div>
+</div>
+
+<script>
+(function() {
+  const c = document.getElementById('frustumCanvas');
+  const ctx = c.getContext('2d');
+  const ids = ['fov','pw','ph','ar','f','p'];
+  const inputs = Object.fromEntries(ids.map(k => [k, document.getElementById(k+'In')]));
+  const labels = Object.fromEntries(ids.map(k => [k, document.getElementById(k+'Label')]));
+  const readouts = document.getElementById('readouts');
+
+  function compute() {
+    const fovDeg = +inputs.fov.value;
+    const W_t = +inputs.pw.value;
+    const H_t = +inputs.ph.value;
+    const aspect = +inputs.ar.value;
+    const fill = +inputs.f.value;
+    const pad = +inputs.p.value;
+
+    const fovRad = fovDeg * Math.PI / 180;
+    const halfFovTan = Math.tan(fovRad / 2);
+
+    const Hp = H_t * (1 + pad);
+    const Wp = W_t * (1 + pad);
+
+    const dH = (Hp / 2) / (halfFovTan * fill);
+    const dW = (Wp / 2) / (halfFovTan * fill * aspect);
+    const d = Math.max(dH, dW);
+    const binding = (dH >= dW) ? 'height' : 'width';
+
+    return { fovDeg, W_t, H_t, aspect, fill, pad, halfFovTan, Hp, Wp, dH, dW, d, binding };
+  }
+
+  function draw() {
+    const s = compute();
+    labels.fov.textContent = s.fovDeg;
+    labels.pw.textContent = s.W_t;
+    labels.ph.textContent = s.H_t;
+    labels.ar.textContent = s.aspect.toFixed(2);
+    labels.f.textContent = s.fill.toFixed(2);
+    labels.p.textContent = s.pad.toFixed(2);
+
+    const W = c.width, H = c.height;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#0f1424'; ctx.fillRect(0,0,W,H);
+
+    // Layout: left half side-view, right half viewport-view
+    const splitX = W * 0.62;
+    ctx.strokeStyle = '#272d44';
+    ctx.beginPath(); ctx.moveTo(splitX, 0); ctx.lineTo(splitX, H); ctx.stroke();
+
+    // ---- Side view (left) ----
+    const padL = 12, padR = 12;
+    const viewW = splitX - padL - padR;
+    const camX = padL + 30, camY = H/2;
+
+    // World-units-per-pixel: scale so the frustum fits viewW
+    // We need to draw camera at left and the plane at distance d.
+    // visible height at distance d on the binding axis equals max(Hp, Wp/aspect)/fill (which is plane / fill).
+    const visHAtD = 2 * s.d * s.halfFovTan;       // visible height in world units at the chosen d
+    const drawableLen = viewW - 30;                // pixels available going right from camera
+    const drawableH = H - 60;                      // pixels available vertically
+    // pick px-per-world to fit both d and visHAtD:
+    const pxPerWorld = Math.min(drawableLen / s.d, drawableH / visHAtD);
+
+    // axis
+    ctx.strokeStyle = '#34384a';
+    ctx.beginPath(); ctx.moveTo(camX, camY); ctx.lineTo(camX + drawableLen, camY); ctx.stroke();
+
+    // camera
+    ctx.fillStyle = '#ffd24e';
+    ctx.beginPath();
+    ctx.moveTo(camX-18, camY-18); ctx.lineTo(camX+14, camY); ctx.lineTo(camX-18, camY+18); ctx.closePath();
+    ctx.fill();
+
+    // frustum lines (showing the height-axis frustum)
+    const halfFov = s.fovDeg/2 * Math.PI/180;
+    const frustumPxLen = drawableLen;
+    const frustumTopY = camY - frustumPxLen * Math.tan(halfFov);
+    const frustumBotY = camY + frustumPxLen * Math.tan(halfFov);
+    ctx.strokeStyle = '#4ec1ff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(camX, camY); ctx.lineTo(camX + frustumPxLen, frustumTopY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(camX, camY); ctx.lineTo(camX + frustumPxLen, frustumBotY); ctx.stroke();
+
+    // plane at distance d
+    const planeXpx = camX + s.d * pxPerWorld;
+    // We show whichever axis is binding as the height of the rectangle in the side view.
+    const shownHalfHeightWorld = (s.binding === 'height') ? s.Hp/2 : (s.Wp/(2 * s.aspect));
+    const planeHpx = shownHalfHeightWorld * pxPerWorld;
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(planeXpx, camY - planeHpx); ctx.lineTo(planeXpx, camY + planeHpx); ctx.stroke();
+
+    // distance bracket
+    ctx.strokeStyle = '#7f88a8'; ctx.lineWidth = 1; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(camX, camY+45); ctx.lineTo(planeXpx, camY+45); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#a3acce'; ctx.font = '12px monospace';
+    ctx.fillText('d = ' + s.d.toFixed(0), (camX + planeXpx)/2 - 30, camY+62);
+
+    // FOV arc and label
+    ctx.strokeStyle = '#ffd24e';
+    ctx.beginPath(); ctx.arc(camX, camY, 30, -halfFov, halfFov); ctx.stroke();
+    ctx.fillStyle = '#ffd24e'; ctx.fillText('θ='+s.fovDeg+'°', camX+38, camY-22);
+
+    // labels for the plane
+    ctx.fillStyle = '#e6e6f0';
+    ctx.fillText('plane (' + s.binding + '-binding)', planeXpx - 80, camY - planeHpx - 8);
+
+    // ---- Viewport view (right) ----
+    const vx = splitX + 16, vy = 24;
+    const vw = W - splitX - 32, vh = H - 48;
+
+    // simulated viewport rectangle, sized to aspect, fit into (vw,vh)
+    let vpW, vpH;
+    if (vw / vh > s.aspect) {
+      vpH = vh; vpW = vh * s.aspect;
+    } else {
+      vpW = vw; vpH = vw / s.aspect;
+    }
+    const vpX = vx + (vw - vpW)/2;
+    const vpY = vy + (vh - vpH)/2;
+    ctx.strokeStyle = '#7f88a8'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(vpX, vpY, vpW, vpH);
+    ctx.fillStyle = '#7f88a8'; ctx.font = '12px monospace';
+    ctx.fillText('viewport (' + s.aspect.toFixed(2) + ':1)', vpX, vpY - 6);
+
+    // draw the panel as it would appear in this viewport at distance d.
+    // Visible width/height in world units at distance d:
+    const visH = 2 * s.d * s.halfFovTan;
+    const visW = visH * s.aspect;
+    // Plane appears with width fraction = W_t/visW, height fraction = H_t/visH
+    const wf = s.W_t / visW;
+    const hf = s.H_t / visH;
+    const panelW = wf * vpW;
+    const panelH = hf * vpH;
+    const panelX = vpX + (vpW - panelW)/2;
+    const panelY = vpY + (vpH - panelH)/2;
+
+    ctx.fillStyle = 'rgba(78, 193, 255, 0.20)';
+    ctx.fillRect(panelX, panelY, panelW, panelH);
+    ctx.strokeStyle = '#4ec1ff'; ctx.lineWidth = 2;
+    ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+    ctx.fillStyle = '#e6e6f0';
+    ctx.fillText('panel as seen', panelX, panelY - 4);
+
+    // ---- Readouts ----
+    readouts.innerHTML =
+      'd_h = ' + s.dH.toFixed(2) + '<br>' +
+      'd_w = ' + s.dW.toFixed(2) + '<br>' +
+      'd   = max(d_h, d_w) = ' + s.d.toFixed(2) + '<br>' +
+      'binding axis: <span class="binding">' + s.binding + '</span><br>' +
+      'visible at d: ' + (2*s.d*s.halfFovTan).toFixed(1) +
+      ' tall × ' + ((2*s.d*s.halfFovTan)*s.aspect).toFixed(1) + ' wide';
+  }
+
+  ids.forEach(k => inputs[k].addEventListener('input', draw));
+  draw();
+})();
+</script>
+
+<h2>6. Worked examples</h2>
+
+<p>All examples use the project defaults from <code>DEFAULT_CONFIG</code> in <code>src/types.ts</code>: <code>detailFov = 50°</code>, <code>fillPercentage = 0.8</code>, <code>overviewPadding = 0.15</code>. Compute $\tan(25°) \approx 0.4663$.</p>
+
+<h3>Example 1 — Detail zoom on a 1600 × 900 panel, 1920 × 1080 viewport</h3>
+
+<p>Aspect $= 1920/1080 = 1.7778$. Plane already at <code>scale</code>=1 for this example.</p>
+
+<p>$$d_h \;=\; \frac{900/2}{\tan(25°)\cdot 0.8} \;=\; \frac{450}{0.4663\cdot 0.8} \;=\; \frac{450}{0.3730} \;\approx\; 1206.4.$$</p>
+
+<p>$$d_w \;=\; \frac{1600/2}{\tan(25°)\cdot 0.8\cdot 1.7778} \;=\; \frac{800}{0.6630} \;\approx\; 1206.6.$$</p>
+
+<p>$$d \;=\; \max(1206.4,\, 1206.6) \;\approx\; 1206.6.$$</p>
+
+<p>The width is binding — barely. That makes sense: 1600/900 = 1.778 is essentially the same as the viewport's 1920/1080 = 1.778, so the plane just exactly matches the viewport's aspect; both axes hit the fill boundary almost simultaneously. Try the playground with <code>plane width=1600, plane height=900, aspect=1.78, fill=0.8</code> — both readouts collapse onto the same value.</p>
+
+<h3>Example 2 — Tall panel in a wide viewport</h3>
+
+<p>Same FOV, fill, viewport aspect 1.78. Plane is now 600 × 1400 (portrait).</p>
+
+<p>$$d_h \;=\; \frac{700}{0.3730} \;\approx\; 1876.7. \qquad d_w \;=\; \frac{300}{0.6630} \;\approx\; 452.5.$$</p>
+
+<p>$$d = \max(1876.7,\, 452.5) = 1876.7,\;\; \text{binding = height}.$$</p>
+
+<p>The height drives everything; the width has tons of slack. The panel will appear vertically centered with huge horizontal margins, just as you would expect for a portrait poster on a widescreen monitor.</p>
+
+<h3>Example 3 — Overview with depth back-offset</h3>
+
+<p>Three planes whose bounding box is $W = 4000$, $H = 2000$, with a focal plane at $z = 0$ and the deepest plane at $z = -300$. Viewport aspect 1.78, padding 0.15.</p>
+
+<p>$W' = 4000\cdot 1.15 = 4600$. $H' = 2000\cdot 1.15 = 2300$.</p>
+
+<p>$$d_h = \frac{1150}{0.4663} \approx 2466.4. \qquad d_w = \frac{2300}{0.4663\cdot 1.7778} \approx 2774.3.$$</p>
+
+<p>$d_{\text{frame}} = \max(\ldots) \approx 2774.3$. Width binding.</p>
+
+<p>Now the depth term. <code>boundingBox.maxZ</code> is the back wall of the AABB. If the focal plane sits at $z = 0$ and the deepest plane is at $z = -300$, then in <em>this project's convention</em> what sits "behind the focal plane" along the camera's view axis is whichever side the camera is not on — but the literal code computes <code>boundingBox.maxZ - centerPlane.position[2]</code>. If that difference is positive (the bounding box's positive-$z$ wall is past the center plane), back-offset is added. If everything is on the camera side, the <code>Math.max(0, ...)</code> clamps it to zero.</p>
+
+<p>So if <code>maxZ</code> $= 200$ (some plane sits at $z = 200$, between camera and focal plane in this project's typical layout) the offset is $200$, and final $d = 2774.3 + 200 = 2974.3$. Otherwise no offset.</p>
+
+<h2>7. Exercises</h2>
+
+<ol>
+  <li><strong>(routine)</strong> A panel is 800 × 600. FOV is 60°, fill is 0.8, viewport aspect is 1.5. Compute $d_h$, $d_w$, $d$, and the binding axis.</li>
+  <li><strong>(routine)</strong> Same panel and viewport, FOV is now 30°. Without computing, predict whether $d$ goes up or down. Then compute it and check.</li>
+  <li><strong>(routine)</strong> Inverse: at FOV 50°, distance $d = 1500$, what is the visible height at that distance? What about visible width if aspect = 2.0?</li>
+  <li><strong>(conceptual)</strong> The dual-axis code uses <code>Math.max(distanceForHeight, distanceForWidth)</code>. What would happen if it used <code>Math.min</code> instead? Describe what the user would see.</li>
+  <li><strong>(conceptual)</strong> The fill factor is in the denominator: <code>(actualHeight / 2) / (halfFovTan * fill)</code>. Show algebraically that this is equivalent to first dividing the visible height target by <code>fill</code>, then framing tightly.</li>
+  <li><strong>(project-applied)</strong> If a developer changes <code>DEFAULT_CONFIG.fillPercentage</code> from 0.8 to 0.5, what happens to the camera distance for a fixed panel? Does the panel look bigger or smaller? Compute the ratio.</li>
+  <li><strong>(project-applied)</strong> A user has set up a portrait panel (600 × 1400) and is testing on a phone in landscape (aspect 1.78) and in portrait (aspect 0.56). Compute $d$ in both cases. Which axis binds in each? Is there a viewport orientation where the same panel uses the smaller distance?</li>
+</ol>
+
+<h3>Extension challenges</h3>
+
+<ol start="8">
+  <li><strong>(extension)</strong> Derive the equivalence <code>fill</code>$f \Leftrightarrow$ <code>padding</code>$p = 1/f - 1$ and verify both formulations produce the same $d$ for a 1600 × 900 panel at FOV 50°, aspect 1.78, $f = 0.8$.</li>
+  <li><strong>(extension)</strong> The current overview code computes one bounding box for all planes, even when planes are rotated. Why might this overestimate the required distance for tilted planes? Sketch a 2D example and propose what guide 09 will need to fix this.</li>
+</ol>
+
+<h2>8. Where to next</h2>
+
+<p>You now know how to convert "I want this thing on screen" into a camera distance. The next three guides each take this further:</p>
+
+<ul>
+  <li><strong>Guide 09 — Bounding boxes and screen-rect projection.</strong> Where does <code>boundingBox.maxZ</code> come from? How does <code>getCenteredPlaneRect</code> turn a 3D plane back into pixel insets for the clip-path? AABB aggregation across rotated planes is the missing piece behind exercise 9.</li>
+  <li><strong>Guide 10 — Slerp.</strong> The framed camera state from this guide is just a destination. How do we interpolate <em>orientation</em> smoothly from the overview to it? Quaternion slerp.</li>
+  <li><strong>Guide 12 — Adaptive transitions.</strong> The framing distance from this guide is the destination of every Early-Look and Orbit transition. The transition logic chooses how to blend toward it.</li>
+</ul>
+
+<h2>9. Appendix: solutions</h2>
+
+<details>
+<summary>Solutions to exercises 1–9</summary>
+
+<p><strong>1.</strong> $\tan(30°) \approx 0.5774$. $d_h = (300)/(0.5774\cdot 0.8) \approx 649.6$. $d_w = (400)/(0.5774\cdot 0.8\cdot 1.5) \approx 577.4$. $d = 649.6$, height binds. Plane is taller than the 4:3-ish frustum at that distance, so height drives.</p>
+
+<p><strong>2.</strong> Smaller FOV $\Rightarrow$ smaller $\tan(\theta/2)$ $\Rightarrow$ bigger $d$ (camera further). $\tan(15°) \approx 0.2679$. $d_h = 300/(0.2679\cdot 0.8) \approx 1399.8$. $d_w = 400/(0.2679\cdot 0.8\cdot 1.5) \approx 1244.3$. Distance roughly doubles. Same binding axis.</p>
+
+<p><strong>3.</strong> $h(d) = 2\cdot 1500\cdot \tan(25°) \approx 1399$. $w(d) \approx 1399 \cdot 2.0 \approx 2798$.</p>
+
+<p><strong>4.</strong> <code>min</code> would pick whichever axis is <em>easier</em> to satisfy. The other (harder) axis would still overrun the frustum. Visually: one axis of the panel is cropped — the user sees a panel that exits the top/bottom or left/right of the screen. <code>max</code> guarantees both axes fit.</p>
+
+<p><strong>5.</strong> Start from the visible-height equation $h(d) = 2 d\tan(\theta/2)$. We want the panel of height $H_t$ to occupy fraction $f$ of $h(d)$, i.e. $h(d) = H_t/f$. Solve: $d = (H_t/f)/(2\tan(\theta/2)) = (H_t/2)/(\tan(\theta/2)\cdot f)$. Identical to the project's expression, with $f$ in the denominator. The "first divide $H_t$ by $f$ then frame tightly" reading and the "scale the denominator" reading are the same algebra.</p>
+
+<p><strong>6.</strong> $d \propto 1/f$. Going from $f = 0.8$ to $f = 0.5$ multiplies the distance by $0.8/0.5 = 1.6$. The panel looks <em>smaller</em> on screen because the camera is further away while the plane stays the same size.</p>
+
+<p><strong>7.</strong> Plane 600 × 1400, FOV 50°, fill 0.8. Landscape (aspect 1.78): $d_h = 700/(0.4663\cdot 0.8) \approx 1876.7$. $d_w = 300/(0.4663\cdot 0.8\cdot 1.78) \approx 451.6$. $d = 1876.7$, height binds. Portrait (aspect 0.56): $d_h$ unchanged $\approx 1876.7$. $d_w = 300/(0.4663\cdot 0.8\cdot 0.56) \approx 1435.6$. $d = 1876.7$, height still binds — but barely. There is no orientation in this case that gets you closer than $d_h$ since the plane's height is the dominant axis. To shrink $d$ you'd need to either shrink the plane or widen the FOV.</p>
+
+<p><strong>8.</strong> Detail framing uses $d = (H_t/2)/(\tan(\theta/2)\cdot f)$. Padding framing uses $d = (H_t(1+p)/2)/\tan(\theta/2)$. Setting these equal and solving: $1/f = 1+p \Rightarrow p = 1/f - 1$. For $f=0.8$, $p = 0.25$. With $H_t=900$, $\theta=50°$, aspect=1.78: detail gives $d_h = 450/(0.4663\cdot 0.8) \approx 1206.4$; padding-form gives $d_h = (900\cdot 1.25/2)/0.4663 = 562.5/0.4663 \approx 1206.4$. Equal.</p>
+
+<p><strong>9.</strong> The world-space AABB of a rotated plane includes the plane's <em>tilted footprint</em> projected onto the world axes. A 1000 × 1000 panel rotated 45° about $y$ has a world-space x-extent of $\sqrt{2}\cdot 1000 \approx 1414$, even though no point of the panel is actually 1414 wide along the camera's screen-x axis when viewed perpendicular to it. The current code frames the AABB onto the world's xy-plane, which can demand $d$ values that are larger than necessary. Guide 09's fix is to project each plane's <em>corners</em> into the camera's view-frame and AABB those, rather than AABBing in world space.</p>
+
+</details>
+
+</body>
+</html>

@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Guide 13 — Shader Math: Gradients and Falloff</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(','\\)'], ['$', '$']], displayMath: [['$$','$$'], ['\\[','\\]']] }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<style>
+  :root {
+    --bg: #0f0f12;
+    --panel: #16161b;
+    --ink: #e7e7ea;
+    --muted: #9b9ba2;
+    --accent: #d8a86c;
+    --accent2: #6cb1d8;
+    --rule: #2a2a32;
+    --code-bg: #1c1c22;
+  }
+  html, body { background: var(--bg); color: var(--ink); }
+  body {
+    font-family: ui-serif, Georgia, "Times New Roman", serif;
+    line-height: 1.55;
+    max-width: 880px;
+    margin: 2rem auto;
+    padding: 0 1.2rem 4rem;
+    font-size: 17px;
+  }
+  h1, h2, h3 { font-family: ui-sans-serif, system-ui, sans-serif; line-height: 1.25; }
+  h1 { font-size: 1.9rem; border-bottom: 2px solid var(--rule); padding-bottom: 0.5rem; }
+  h2 { font-size: 1.4rem; margin-top: 2.4rem; color: var(--accent); }
+  h3 { font-size: 1.1rem; margin-top: 1.6rem; color: var(--accent2); }
+  p { margin: 0.7rem 0; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  pre {
+    background: var(--code-bg);
+    padding: 0.9rem 1rem;
+    border-left: 3px solid var(--accent);
+    overflow-x: auto;
+    font-size: 14px;
+    line-height: 1.45;
+    border-radius: 4px;
+  }
+  code {
+    background: var(--code-bg);
+    padding: 0.05rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.92em;
+  }
+  pre code { background: transparent; padding: 0; }
+  .note {
+    border-left: 3px solid var(--accent2);
+    background: #14202a;
+    padding: 0.6rem 0.9rem;
+    margin: 1rem 0;
+    font-size: 0.97em;
+  }
+  details {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 0.6rem 1rem;
+    margin: 1rem 0;
+  }
+  summary { cursor: pointer; font-family: ui-sans-serif, system-ui, sans-serif; font-weight: 600; color: var(--accent); }
+  .playground {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 1.2rem 0;
+  }
+  .playground h3 { margin-top: 0.4rem; }
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem 1.2rem;
+    margin: 0.6rem 0 1rem;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+  }
+  .controls label { display: flex; align-items: center; gap: 0.5rem; }
+  .controls input[type="range"] { flex: 1; }
+  .controls input[type="color"] { width: 38px; height: 28px; border: none; padding: 0; background: transparent; }
+  .readout {
+    background: var(--code-bg);
+    padding: 0.5rem 0.7rem;
+    border-radius: 4px;
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+    margin-top: 0.6rem;
+    white-space: pre;
+  }
+  .canvases {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  canvas {
+    background: #000;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    image-rendering: pixelated;
+  }
+  .sub-panel {
+    flex: 1;
+    min-width: 240px;
+  }
+  .sub-panel h4 {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    margin: 0 0 0.4rem;
+    color: var(--accent2);
+  }
+  ul, ol { padding-left: 1.4rem; }
+  li { margin: 0.3rem 0; }
+  .small { font-size: 0.9em; color: var(--muted); }
+  hr { border: none; border-top: 1px solid var(--rule); margin: 2rem 0; }
+  .fig-caption { color: var(--muted); font-size: 0.9em; margin-top: 0.3rem; }
+</style>
+</head>
+<body>
+
+<h1>Guide 13 &mdash; Shader Math: Gradients and Falloff</h1>
+<p class="small">Curriculum for <code>web-3d-panel-navigation</code>. Prerequisites: Guide 01 (vectors, dot product), Guide 03 (lerp, smoothstep).</p>
+
+<h2>1. Why this matters</h2>
+
+<p>So far the curriculum has been about geometry: where panels go, how they tile, how vectors point. This guide shifts to <em>shading</em> &mdash; the GLSL code that decides what color each pixel ends up. Two pieces of project shader code drive everything in this guide:</p>
+
+<ul>
+  <li><strong>The skybox gradient.</strong> In <code>src/skybox/gradient-mesh.ts</code> there's a 12-line GLSL fragment shader that paints a smooth three-color gradient across the inside of a cube the camera sits in. That gradient is the soft, painted-looking sky behind your panels.</li>
+  <li><strong>The starfield's per-star falloff.</strong> In <code>src/skybox/starfield-skybox.ts</code> (lines 56&ndash;60), each star is a square point sprite that's softened into a circle by a single <code>smoothstep</code> call. That one line is the difference between &ldquo;pixelated dots&rdquo; and &ldquo;little glowing stars.&rdquo;</li>
+</ul>
+
+<p>The starfield also <em>contains</em> the gradient mesh as its background, so the same gradient math reappears there. We cover both shaders in one guide because they share the same vocabulary: a tiny bit of GLSL syntax, the dot product (Guide 01), and lerp / smoothstep (Guide 03).</p>
+
+<p>By the end you'll be able to read those shaders the way you'd read a JS function: not as magic, but as a short list of arithmetic steps you've already studied.</p>
+
+<h2>2. GLSL primer (just enough)</h2>
+
+<p>GLSL is a C-flavored language that runs on the GPU. Three.js compiles a <code>ShaderMaterial</code>'s strings into a <em>vertex shader</em> and a <em>fragment shader</em>, then runs them in parallel for every vertex and every covered pixel.</p>
+
+<h3>The two stages</h3>
+
+<ul>
+  <li><strong>Vertex shader.</strong> Runs once per vertex of your geometry. Its job is to set <code>gl_Position</code> &mdash; the 4-component clip-space position. It can also write <em>varyings</em>, which the GPU interpolates across the triangle and hands to the fragment shader.</li>
+  <li><strong>Fragment shader.</strong> Runs once per pixel covered by a triangle. Its job is to set <code>gl_FragColor</code> &mdash; an RGBA color. It reads the interpolated varyings and any uniforms.</li>
+</ul>
+
+<h3>Three kinds of input</h3>
+
+<ul>
+  <li><strong>Uniform</strong> &mdash; a value set per draw call from JavaScript (a color, a time, a direction). Constant across every vertex and every fragment of that draw.</li>
+  <li><strong>Attribute</strong> &mdash; per-vertex data (position, a custom <code>aBrightness</code>, etc.). Only the vertex shader sees attributes directly.</li>
+  <li><strong>Varying</strong> &mdash; declared in both shaders. The vertex shader writes it; the GPU linearly interpolates it across the triangle; the fragment shader reads the interpolated value.</li>
+</ul>
+
+<h3>Types and built-ins you'll see</h3>
+
+<p>The skybox shaders use only a handful:</p>
+<ul>
+  <li><code>vec3</code> &mdash; a 3-component float vector. Holds positions, directions, RGB colors. Component access: <code>v.x</code>, <code>v.y</code>, <code>v.z</code>, or <code>v.r</code>, <code>v.g</code>, <code>v.b</code>.</li>
+  <li><code>vec4</code> &mdash; 4 components. Used for clip-space position and RGBA color.</li>
+  <li><code>vec2</code> &mdash; 2 components. <code>gl_PointCoord</code> is one (the per-fragment UV inside a point sprite, ranging from <code>(0,0)</code> top-left to <code>(1,1)</code> bottom-right).</li>
+  <li><code>dot(a, b)</code> &mdash; same dot product as Guide 01. Returns a scalar.</li>
+  <li><code>length(v)</code> &mdash; Euclidean magnitude $\lVert\mathbf{v}\rVert$.</li>
+  <li><code>normalize(v)</code> &mdash; <code>v / length(v)</code>.</li>
+  <li><code>mix(a, b, t)</code> &mdash; linear interpolation, defined as $\mathbf{a}(1 - t) + \mathbf{b}\,t$. This is GLSL's name for <em>lerp</em>; it's exactly the function from Guide 03, just usually applied to <code>vec3</code> colors. It works component-wise.</li>
+  <li><code>smoothstep(edge0, edge1, x)</code> &mdash; the cubic Hermite ramp from Guide 03. Returns 0 below <code>edge0</code>, 1 above <code>edge1</code>, and a smooth $C^1$ S-curve in between.</li>
+</ul>
+
+<h3>A tiny solid-color example</h3>
+
+<p>Before reading the project shaders, here's the smallest possible vertex/fragment pair, just for orientation:</p>
+
+<pre><code>// Vertex shader
+void main() {
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+
+// Fragment shader
+precision mediump float;
+void main() {
+  gl_FragColor = vec4(1.0, 0.5, 0.2, 1.0); // solid orange
+}
+</code></pre>
+
+<p>Three.js automatically declares <code>position</code> (an attribute), <code>projectionMatrix</code>, and <code>modelViewMatrix</code> (uniforms) for you. That's why the project shaders use them without declaration.</p>
+
+<h2>3. The math</h2>
+
+<h3>3.1 Directional gradient via dot product</h3>
+
+<p>Imagine you're inside a cube, looking around. Each fragment on the cube's inner wall has a 3D direction $\mathbf{d}$ &mdash; the unit vector from the cube's center to that fragment's world position. We want the color to depend smoothly on which way the fragment is facing, so that one side of the sky is color A, the opposite side is color C, and the middle is color B.</p>
+
+<p>Pick a <strong>gradient axis</strong> $\hat{\mathbf{u}}$ &mdash; for instance, &ldquo;up.&rdquo; The natural way to ask &ldquo;how aligned is fragment direction $\hat{\mathbf{d}}$ with axis $\hat{\mathbf{u}}$?&rdquo; is the dot product:</p>
+
+\[ \hat{\mathbf{d}} \cdot \hat{\mathbf{u}} = \cos\theta \in [-1, 1] \]
+
+<p>where $\theta$ is the angle between them (Guide 01). This value is $+1$ when the fragment is at the top, $-1$ at the bottom, and $0$ on the equator.</p>
+
+<p>We need a parameter in $[0, 1]$ to feed into a color mix. The cheapest fix is the <strong>affine remap</strong>:</p>
+
+\[ t = \tfrac{1}{2}(\hat{\mathbf{d}} \cdot \hat{\mathbf{u}}) + \tfrac{1}{2} \]
+
+<p>Plug in the endpoints to confirm: $-1 \mapsto 0$, $+1 \mapsto 1$, $0 \mapsto 0.5$. The remapping is linear, so equal angular steps near the equator cover roughly equal $t$-intervals near 0.5, which is exactly what you want for a sky gradient: the brightest band sits at the top, the darkest at the bottom, with a smooth horizon in the middle.</p>
+
+<p>In GLSL this is one line:</p>
+
+<pre><code>float t = dot(normalize(vDirection), normalize(uDirection)) * 0.5 + 0.5;
+</code></pre>
+
+<div class="note">
+<strong>Why <code>normalize</code> twice?</strong> The dot product equals $\cos\theta$ <em>only</em> when both vectors are unit-length (Guide 01). The varying <code>vDirection</code> comes from interpolated cube-vertex positions, which are nowhere near unit length on the cube faces; <code>uDirection</code> is whatever the user passed in (default <code>(1.0, 0.6, 0.4)</code>, length $\approx 1.23$). Both must be normalized.
+</div>
+
+<h3>3.2 Three-stop piecewise color mix</h3>
+
+<p>A single lerp $\operatorname{mix}(\mathbf{c}_A, \mathbf{c}_B, t)$ gives a two-color gradient. For three colors, the project splits the $[0, 1]$ range in half:</p>
+
+\[
+\mathbf{c}(t) = \begin{cases}
+  \operatorname{mix}(\mathbf{c}_A, \mathbf{c}_B, 2t)            & 0 \le t < \tfrac{1}{2} \\[2pt]
+  \operatorname{mix}(\mathbf{c}_B, \mathbf{c}_C, 2(t - \tfrac{1}{2})) & \tfrac{1}{2} \le t \le 1
+\end{cases}
+\]
+
+<p>The factor of 2 stretches each half-range back to $[0, 1]$ so that each <code>mix</code> sees a full lerp parameter.</p>
+
+<p><strong>Continuity check at $t = 1/2$.</strong> The left branch evaluates to $\operatorname{mix}(\mathbf{c}_A, \mathbf{c}_B, 1) = \mathbf{c}_B$. The right branch evaluates to $\operatorname{mix}(\mathbf{c}_B, \mathbf{c}_C, 0) = \mathbf{c}_B$. They agree, so $\mathbf{c}(t)$ is <strong>$C^0$ continuous</strong> &mdash; no visible seam.</p>
+
+<p><strong>Slope check.</strong> Differentiate component-wise:</p>
+
+\[
+\frac{d\mathbf{c}}{dt} = \begin{cases}
+  2(\mathbf{c}_B - \mathbf{c}_A) & t < \tfrac{1}{2} \\[2pt]
+  2(\mathbf{c}_C - \mathbf{c}_B) & t > \tfrac{1}{2}
+\end{cases}
+\]
+
+<p>These are not equal in general, so the function is <strong>not $C^1$</strong>: there's a kink at the midpoint. In a still image of a sky gradient that kink is invisible to the eye because the colors are close. If you cranked the colors apart (e.g. red &rarr; black &rarr; blue) you'd start to see the seam as a faint horizontal banding.</p>
+
+<h3>3.3 GLSL <code>mix</code> = lerp</h3>
+
+<p>Just to nail it down:</p>
+
+\[ \operatorname{mix}(\mathbf{a}, \mathbf{b}, t) = \mathbf{a}(1 - t) + \mathbf{b}\,t \]
+
+<p>This is the same lerp from Guide 03, applied component-wise to <code>vec3</code> colors. <code>mix(red, blue, 0.0) = red</code>; <code>mix(red, blue, 1.0) = blue</code>; <code>mix(red, blue, 0.5) = (red + blue) / 2</code>. It also works on scalars and on <code>vec2</code>, <code>vec4</code>.</p>
+
+<h3>3.4 Radial smoothstep falloff</h3>
+
+<p>A <em>point sprite</em> in WebGL is a square: when you draw a <code>THREE.Points</code> object, each vertex becomes a small axis-aligned quad of size <code>gl_PointSize</code> pixels. The fragment shader runs over that whole square. To make a star <em>look round and soft</em> instead of square and sharp, the project applies a radial falloff.</p>
+
+<p>The fragment's UV inside the sprite is <code>gl_PointCoord</code>, ranging from $(0,0)$ at the top-left corner to $(1,1)$ at the bottom-right. Centering it gives a coordinate measured from the sprite's middle:</p>
+
+\[ \mathbf{p} = \mathtt{gl\_PointCoord} - (0.5,\, 0.5) \in [-0.5, 0.5]^2 \]
+
+<p>Its length is the radial distance from the center:</p>
+
+\[ d = \lVert\mathbf{p}\rVert \in [0,\, \sqrt{0.5}] \approx [0,\, 0.707] \]
+
+<p>The corners are at $d \approx 0.707$, the edge-midpoints at $d = 0.5$, the center at $d = 0$.</p>
+
+<p>The project's falloff line is:</p>
+
+<pre><code>float falloff = smoothstep(0.5, 0.1, dist);
+</code></pre>
+
+<p>Two things are happening here. First, the smoothstep ramp from Guide 03:</p>
+
+\[
+\operatorname{smoothstep}(e_0, e_1, x) = \begin{cases}
+  0 & x \le e_0 \\
+  3s^2 - 2s^3,\;\; s = \tfrac{x - e_0}{e_1 - e_0} & e_0 < x < e_1 \\
+  1 & x \ge e_1
+\end{cases}
+\]
+
+<p>Second, the project passes the edges in <em>reversed</em> order: <code>edge0 = 0.5</code>, <code>edge1 = 0.1</code>. GLSL doesn't object &mdash; the formula still works as written &mdash; but the practical effect is to flip the ramp. With $e_0 = 0.5$ and $e_1 = 0.1$:</p>
+
+<ul>
+  <li>For $d \ge 0.5$ (near and beyond the sprite's edge): <code>falloff = 0</code>.</li>
+  <li>For $d \le 0.1$ (the bright core): <code>falloff = 1</code>.</li>
+  <li>For $0.1 < d < 0.5$: a smooth $1 \to 0$ rolloff.</li>
+</ul>
+
+<p>So the result is &ldquo;1 near the center, 0 at the edge, smooth transition between.&rdquo; This is the <em>outer-to-inner</em> convention: read the call as &ldquo;the outer edge is 0.5 (where the star ends), the inner edge is 0.1 (where the bright core begins).&rdquo;</p>
+
+<div class="note">
+You could equivalently write <code>1.0 - smoothstep(0.1, 0.5, dist)</code>. The reversed-edge form is shorter and produces identical pixels.
+</div>
+
+<h3>3.5 Putting it together: the starfield fragment</h3>
+
+<p>The full per-star color, assembled from the pieces above, is:</p>
+
+\[ \mathbf{c}_\text{out} = \mathbf{c}_\text{tinted} \cdot \mathrm{intensity}, \qquad \mathrm{intensity} = b \cdot \tau(t) \cdot f(d) \]
+
+<p>where</p>
+
+<ul>
+  <li>$\mathbf{c}_\text{tinted} = \operatorname{mix}(\mathbf{c}_\text{warm}, \mathbf{c}_\text{cool}, \mathtt{vTint})$ &mdash; the per-star color, lerped between two palette endpoints by a per-vertex tint attribute.</li>
+  <li>$b = \mathtt{vBrightness}$ &mdash; per-vertex brightness in $[0.5, 1.0]$.</li>
+  <li>$\tau(t)$ &mdash; the twinkle factor (Guide 14 will derive this from <code>sin</code>).</li>
+  <li>$f(d)$ &mdash; the radial smoothstep falloff from above.</li>
+</ul>
+
+<p>The output also writes <code>intensity</code> to the alpha channel so that the additive blending mode can softly fade each star into the background. We'll defer twinkle and additive blending to Guide 14; for this guide, treat $\tau(t)$ as a constant 1.</p>
+
+<h2>4. In this codebase</h2>
+
+<p>Now read the project shaders with the math in hand. From <code>src/skybox/gradient-mesh.ts</code>:</p>
+
+<pre><code>export const GRADIENT_VERTEX_SHADER = /* glsl */ `
+  varying vec3 vDirection;
+  void main() {
+    vDirection = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;</code></pre>
+
+<p>Per-vertex breakdown:</p>
+<ol>
+  <li>Three.js gives us the cube's vertex <code>position</code> (one of the 8 corners scaled by the <code>BoxGeometry(2, 2, 2)</code> &mdash; so each component is $\pm 1$).</li>
+  <li>We assign that raw position to the varying <code>vDirection</code>. The GPU will linearly interpolate it across each triangle, giving every fragment its own <code>vDirection</code> &mdash; effectively, the world-space ray from the cube's center to that fragment.</li>
+  <li>We compute the standard clip-space position so the GPU knows where to draw.</li>
+</ol>
+
+<p>The fragment shader is where the math from &sect;3.1&ndash;3.3 lives:</p>
+
+<pre><code>export const GRADIENT_FRAGMENT_SHADER = /* glsl */ `
+  precision mediump float;
+  uniform vec3 uColorA;
+  uniform vec3 uColorB;
+  uniform vec3 uColorC;
+  uniform vec3 uDirection;
+  varying vec3 vDirection;
+
+  void main() {
+    float t = dot(normalize(vDirection), normalize(uDirection)) * 0.5 + 0.5;
+    vec3 color = t < 0.5
+      ? mix(uColorA, uColorB, t * 2.0)
+      : mix(uColorB, uColorC, (t - 0.5) * 2.0);
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;</code></pre>
+
+<p>Line by line:</p>
+<ul>
+  <li><code>float t = dot(normalize(vDirection), normalize(uDirection)) * 0.5 + 0.5;</code> &mdash; the affine-remapped cosine from &sect;3.1.</li>
+  <li>The ternary is the piecewise mix from &sect;3.2: lerp $A \to B$ on the bottom half, $B \to C$ on the top half.</li>
+  <li><code>vec4(color, 1.0)</code> packs the RGB with full alpha. The cube is drawn with <code>side: THREE.BackSide</code> (see <code>gradient-mesh.ts:76</code>) so we paint the inside walls.</li>
+</ul>
+
+<p>The colors come from CSS variables, briefly. <code>src/skybox/css-color.ts</code> reads them via <code>getComputedStyle</code> and falls back to hard-coded defaults if the variable is unset:</p>
+
+<pre><code>export function readCssColor(name: string, fallback: string): THREE.Color {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return new THREE.Color(raw || fallback);
+}</code></pre>
+
+<p>The fallbacks for the gradient (from <code>gradient-mesh.ts:22</code>) are <code>"#2a1a10"</code>, <code>"#3d2414"</code>, <code>"#5c3420"</code> &mdash; the warm desert browns you see if no CSS variables are defined. We'll use these in the worked examples.</p>
+
+<p>From <code>src/skybox/starfield-skybox.ts</code>, lines 53&ndash;61 are the heart of the falloff math:</p>
+
+<pre><code>void main() {
+  vec2 centered = gl_PointCoord - vec2(0.5);
+  float dist = length(centered);
+  float falloff = smoothstep(0.5, 0.1, dist);
+  float twinkle = 0.7 + 0.3 * sin(uTime * uTwinkleFreq + vPhase);
+  float intensity = vBrightness * twinkle * falloff;
+  vec3 color = mix(uColorWarm, uColorCool, vTint);
+  gl_FragColor = vec4(color * intensity, intensity);
+}</code></pre>
+
+<p>The falloff is exactly the construction from &sect;3.4. The <code>color = mix(uColorWarm, uColorCool, vTint)</code> uses GLSL's <code>mix</code> on a <code>vec3</code> &mdash; a per-component lerp between two color endpoints, just like &sect;3.3.</p>
+
+<h2>5. Interactive playground</h2>
+
+<p>Drag the sliders to set the gradient direction $\hat{\mathbf{u}}$ in spherical coordinates and pick three colors. The big sphere is rasterized in JS using the same dot-product-and-piecewise-mix formula as the GLSL shader. Move the cursor over the sphere to see the parameter $t$ and the resulting color at that pixel.</p>
+
+<div class="playground">
+  <h3>Gradient sphere</h3>
+  <div class="controls">
+    <label>$\phi$ (azimuth) <input type="range" id="phi" min="0" max="360" step="1" value="40"></label>
+    <label>$\theta$ (polar) <input type="range" id="theta" min="0" max="180" step="1" value="60"></label>
+    <label>Color A <input type="color" id="colA" value="#2a1a10"></label>
+    <label>Color B <input type="color" id="colB" value="#3d2414"></label>
+    <label>Color C <input type="color" id="colC" value="#5c3420"></label>
+  </div>
+  <div class="canvases">
+    <canvas id="sphere" width="600" height="600" style="cursor: crosshair;"></canvas>
+    <div class="sub-panel" style="min-width: 220px;">
+      <div class="readout" id="readout">Hover the sphere&hellip;</div>
+      <p class="small fig-caption">Each pixel inside the disk is treated as the unit vector $(x, y, \sqrt{1 - x^2 - y^2})$. The dot product with $\hat{\mathbf{u}}$, remapped to $[0,1]$, drives the three-stop mix.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top: 1.6rem;">Falloff curve and a single star</h3>
+  <div class="controls">
+    <label>inner edge <input type="range" id="inner" min="0" max="0.7" step="0.01" value="0.1"></label>
+    <label>outer edge <input type="range" id="outer" min="0.05" max="0.71" step="0.01" value="0.5"></label>
+  </div>
+  <div class="canvases">
+    <div class="sub-panel">
+      <h4>$f(d) = \operatorname{smoothstep}(\text{outer}, \text{inner}, d)$</h4>
+      <canvas id="curve" width="320" height="220"></canvas>
+    </div>
+    <div class="sub-panel" style="flex: 0 0 240px;">
+      <h4>Rendered point sprite</h4>
+      <canvas id="star" width="220" height="220"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ---------- helpers ----------
+  function hexToRgb(hex) {
+    var h = hex.replace("#", "");
+    return [
+      parseInt(h.substring(0, 2), 16) / 255,
+      parseInt(h.substring(2, 4), 16) / 255,
+      parseInt(h.substring(4, 6), 16) / 255
+    ];
+  }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function mix3(a, b, t) {
+    return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+  }
+  function smoothstep(e0, e1, x) {
+    // GLSL semantics: works even when e0 > e1 (the project relies on this).
+    var t = (x - e0) / (e1 - e0);
+    if (t < 0) t = 0;
+    if (t > 1) t = 1;
+    return t * t * (3 - 2 * t);
+  }
+  function gradientColor(d, u, ca, cb, cc) {
+    // d and u are unit 3-vectors.
+    var dot = d[0]*u[0] + d[1]*u[1] + d[2]*u[2];
+    var t = dot * 0.5 + 0.5;
+    if (t < 0.5) return { rgb: mix3(ca, cb, t * 2), t: t, dot: dot };
+    return { rgb: mix3(cb, cc, (t - 0.5) * 2), t: t, dot: dot };
+  }
+  function sphericalToCartesian(phiDeg, thetaDeg) {
+    var phi = phiDeg * Math.PI / 180;
+    var theta = thetaDeg * Math.PI / 180;
+    return [
+      Math.sin(theta) * Math.cos(phi),
+      Math.cos(theta),
+      Math.sin(theta) * Math.sin(phi)
+    ];
+  }
+
+  // ---------- sphere rasterizer ----------
+  var sphereCanvas = document.getElementById("sphere");
+  var sctx = sphereCanvas.getContext("2d");
+  var W = sphereCanvas.width, H = sphereCanvas.height;
+  var sphereImg = sctx.createImageData(W, H);
+  var SPHERE_R = Math.min(W, H) * 0.46;
+  var CX = W / 2, CY = H / 2;
+
+  function renderSphere() {
+    var phi = parseFloat(document.getElementById("phi").value);
+    var theta = parseFloat(document.getElementById("theta").value);
+    var u = sphericalToCartesian(phi, theta);
+    var ca = hexToRgb(document.getElementById("colA").value);
+    var cb = hexToRgb(document.getElementById("colB").value);
+    var cc = hexToRgb(document.getElementById("colC").value);
+    var data = sphereImg.data;
+    for (var y = 0; y < H; y++) {
+      for (var x = 0; x < W; x++) {
+        var nx = (x - CX) / SPHERE_R;
+        var ny = -(y - CY) / SPHERE_R; // flip so +y is up on screen
+        var r2 = nx * nx + ny * ny;
+        var i = (y * W + x) * 4;
+        if (r2 > 1) {
+          data[i + 0] = 18;
+          data[i + 1] = 18;
+          data[i + 2] = 22;
+          data[i + 3] = 255;
+        } else {
+          var nz = Math.sqrt(1 - r2);
+          var d = [nx, ny, nz]; // already unit, no normalize needed
+          var c = gradientColor(d, u, ca, cb, cc);
+          data[i + 0] = Math.round(clamp01(c.rgb[0]) * 255);
+          data[i + 1] = Math.round(clamp01(c.rgb[1]) * 255);
+          data[i + 2] = Math.round(clamp01(c.rgb[2]) * 255);
+          data[i + 3] = 255;
+        }
+      }
+    }
+    sctx.putImageData(sphereImg, 0, 0);
+  }
+
+  // ---------- hover readout ----------
+  var readout = document.getElementById("readout");
+  function setReadout(text) { readout.textContent = text; }
+  setReadout("Hover the sphere…");
+  sphereCanvas.addEventListener("mousemove", function (e) {
+    var rect = sphereCanvas.getBoundingClientRect();
+    var x = (e.clientX - rect.left) * (W / rect.width);
+    var y = (e.clientY - rect.top) * (H / rect.height);
+    var nx = (x - CX) / SPHERE_R;
+    var ny = -(y - CY) / SPHERE_R;
+    var r2 = nx * nx + ny * ny;
+    if (r2 > 1) { setReadout("(outside sphere)"); return; }
+    var nz = Math.sqrt(1 - r2);
+    var phi = parseFloat(document.getElementById("phi").value);
+    var theta = parseFloat(document.getElementById("theta").value);
+    var u = sphericalToCartesian(phi, theta);
+    var ca = hexToRgb(document.getElementById("colA").value);
+    var cb = hexToRgb(document.getElementById("colB").value);
+    var cc = hexToRgb(document.getElementById("colC").value);
+    var c = gradientColor([nx, ny, nz], u, ca, cb, cc);
+    var R = Math.round(clamp01(c.rgb[0]) * 255);
+    var G = Math.round(clamp01(c.rgb[1]) * 255);
+    var B = Math.round(clamp01(c.rgb[2]) * 255);
+    setReadout(
+      "d  = (" + nx.toFixed(2) + ", " + ny.toFixed(2) + ", " + nz.toFixed(2) + ")\n" +
+      "u  = (" + u[0].toFixed(2) + ", " + u[1].toFixed(2) + ", " + u[2].toFixed(2) + ")\n" +
+      "dot = " + c.dot.toFixed(3) + "\n" +
+      "t   = " + c.t.toFixed(3) + "\n" +
+      "rgb = (" + R + ", " + G + ", " + B + ")"
+    );
+  });
+  sphereCanvas.addEventListener("mouseleave", function () { setReadout("Hover the sphere…"); });
+
+  // ---------- falloff curve ----------
+  var curveCanvas = document.getElementById("curve");
+  var cctx = curveCanvas.getContext("2d");
+  function renderCurve() {
+    var inner = parseFloat(document.getElementById("inner").value);
+    var outer = parseFloat(document.getElementById("outer").value);
+    var w = curveCanvas.width, h = curveCanvas.height;
+    cctx.fillStyle = "#1c1c22";
+    cctx.fillRect(0, 0, w, h);
+    // axes
+    cctx.strokeStyle = "#444";
+    cctx.lineWidth = 1;
+    cctx.beginPath();
+    cctx.moveTo(30, 10); cctx.lineTo(30, h - 25);
+    cctx.lineTo(w - 10, h - 25);
+    cctx.stroke();
+    cctx.fillStyle = "#9b9ba2";
+    cctx.font = "11px ui-monospace, monospace";
+    cctx.fillText("d=0", 30, h - 10);
+    cctx.fillText("d=1", w - 30, h - 10);
+    cctx.fillText("0", 12, h - 22);
+    cctx.fillText("1", 12, 18);
+    // edges
+    function dToX(d) { return 30 + d * (w - 40); }
+    function fToY(f) { return (h - 25) - f * (h - 40); }
+    cctx.strokeStyle = "rgba(216,168,108,0.4)";
+    cctx.beginPath();
+    cctx.moveTo(dToX(inner), 10); cctx.lineTo(dToX(inner), h - 25);
+    cctx.moveTo(dToX(outer), 10); cctx.lineTo(dToX(outer), h - 25);
+    cctx.stroke();
+    // curve
+    cctx.strokeStyle = "#d8a86c";
+    cctx.lineWidth = 2;
+    cctx.beginPath();
+    var first = true;
+    for (var i = 0; i <= 200; i++) {
+      var d = i / 200;
+      var f = smoothstep(outer, inner, d);
+      var X = dToX(d), Y = fToY(f);
+      if (first) { cctx.moveTo(X, Y); first = false; } else { cctx.lineTo(X, Y); }
+    }
+    cctx.stroke();
+  }
+
+  // ---------- single star sprite ----------
+  var starCanvas = document.getElementById("star");
+  var stx = starCanvas.getContext("2d");
+  var SW = starCanvas.width, SH = starCanvas.height;
+  var starImg = stx.createImageData(SW, SH);
+  function renderStar() {
+    var inner = parseFloat(document.getElementById("inner").value);
+    var outer = parseFloat(document.getElementById("outer").value);
+    // Star color: a warm-ish star at full brightness, like the project's defaults.
+    var color = [1.0, 0.9, 0.78];
+    var data = starImg.data;
+    for (var y = 0; y < SH; y++) {
+      for (var x = 0; x < SW; x++) {
+        // Map [0, SW] to gl_PointCoord [0, 1].
+        var u = x / (SW - 1);
+        var v = y / (SH - 1);
+        var cx = u - 0.5, cy = v - 0.5;
+        var d = Math.sqrt(cx * cx + cy * cy);
+        var f = smoothstep(outer, inner, d);
+        var i = (y * SW + x) * 4;
+        // Background a faint dark sky color so the falloff is visible.
+        var bg = [0.05, 0.04, 0.08];
+        var R = bg[0] + color[0] * f;
+        var G = bg[1] + color[1] * f;
+        var B = bg[2] + color[2] * f;
+        data[i + 0] = Math.round(clamp01(R) * 255);
+        data[i + 1] = Math.round(clamp01(G) * 255);
+        data[i + 2] = Math.round(clamp01(B) * 255);
+        data[i + 3] = 255;
+      }
+    }
+    stx.putImageData(starImg, 0, 0);
+  }
+
+  // ---------- wiring ----------
+  function refreshAll() { renderSphere(); renderCurve(); renderStar(); }
+  function refreshFalloff() { renderCurve(); renderStar(); }
+  ["phi", "theta", "colA", "colB", "colC"].forEach(function (id) {
+    document.getElementById(id).addEventListener("input", renderSphere);
+  });
+  ["inner", "outer"].forEach(function (id) {
+    document.getElementById(id).addEventListener("input", refreshFalloff);
+  });
+  refreshAll();
+})();
+</script>
+
+<h2>6. Worked examples</h2>
+
+<h3>Example 1 &mdash; gradient at the &ldquo;top&rdquo; with $\hat{\mathbf{u}}$ pointing straight up</h3>
+
+<p>Use the project fallback colors:</p>
+<ul>
+  <li>$\mathbf{c}_A = \mathtt{\#2a1a10} = (42, 26, 16) / 255 \approx (0.165,\, 0.102,\, 0.063)$</li>
+  <li>$\mathbf{c}_B = \mathtt{\#3d2414} = (61, 36, 20) / 255 \approx (0.239,\, 0.141,\, 0.078)$</li>
+  <li>$\mathbf{c}_C = \mathtt{\#5c3420} = (92, 52, 32) / 255 \approx (0.361,\, 0.204,\, 0.125)$</li>
+</ul>
+
+<p>Take $\hat{\mathbf{d}} = \hat{\mathbf{u}} = (0, 1, 0)$. Then</p>
+
+\[ \hat{\mathbf{d}} \cdot \hat{\mathbf{u}} = 1, \qquad t = 1 \cdot 0.5 + 0.5 = 1.0 \]
+
+<p>Since $t \ge 0.5$ we use the right branch with parameter $2(t - 0.5) = 1.0$:</p>
+
+\[ \mathbf{c} = \operatorname{mix}(\mathbf{c}_B, \mathbf{c}_C, 1.0) = \mathbf{c}_C \approx (0.361,\, 0.204,\, 0.125) \]
+
+<p>So the topmost pixel is exactly color C, $\mathtt{\#5c3420}$.</p>
+
+<h3>Example 2 &mdash; same axis, fragment on the equator</h3>
+
+<p>Same colors and gradient axis $\hat{\mathbf{u}} = (0, 1, 0)$. Now $\hat{\mathbf{d}} = (1, 0, 0)$:</p>
+
+\[ \hat{\mathbf{d}} \cdot \hat{\mathbf{u}} = 0, \qquad t = 0 \cdot 0.5 + 0.5 = 0.5 \]
+
+<p>This is the seam between the two branches. Either branch gives the same answer (by &sect;3.2's continuity check):</p>
+
+\[ \mathbf{c} = \operatorname{mix}(\mathbf{c}_A, \mathbf{c}_B, 1.0) = \mathbf{c}_B \approx (0.239,\, 0.141,\, 0.078) \]
+
+<p>Equivalently $\operatorname{mix}(\mathbf{c}_B, \mathbf{c}_C, 0.0) = \mathbf{c}_B$. The horizon is exactly color B.</p>
+
+<h3>Example 3 &mdash; falloff at three radii</h3>
+
+<p>With <code>smoothstep(0.5, 0.1, dist)</code>, evaluate at $d = 0.1$, $d = 0.3$, $d = 0.5$.</p>
+
+<p>Recall: <code>smoothstep(e0, e1, x) = 0</code> if $x \le e_0$ when $e_0 > e_1$ is interpreted via the same formula; you get 0 when $(x - e_0)/(e_1 - e_0) \le 0$ and 1 when that ratio is $\ge 1$. Let's compute $s = (x - e_0)/(e_1 - e_0) = (d - 0.5)/(0.1 - 0.5) = (0.5 - d)/0.4$.</p>
+
+<ul>
+  <li>$d = 0.1$: $s = 0.4 / 0.4 = 1.0 \Rightarrow f = 1$. The bright core.</li>
+  <li>$d = 0.3$: $s = 0.2 / 0.4 = 0.5 \Rightarrow f = 3(0.25) - 2(0.125) = 0.75 - 0.25 = 0.5$. Half intensity.</li>
+  <li>$d = 0.5$: $s = 0.0 \Rightarrow f = 0$. The sprite edge.</li>
+</ul>
+
+<p>So a pixel halfway between the core and the edge has exactly half the brightness of the core &mdash; a useful sanity check.</p>
+
+<h2>7. Exercises</h2>
+
+<ol>
+  <li><strong>Routine.</strong> With the project fallback colors and gradient direction $\hat{\mathbf{u}} = (1, 0, 0)$, compute the gradient color at $\hat{\mathbf{d}} = (1, 0, 0)$ and at $\hat{\mathbf{d}} = (-1, 0, 0)$. Express each as a normalized RGB triple.</li>
+  <li><strong>Routine.</strong> The default project gradient direction is <code>(1.0, 0.6, 0.4)</code> (see <code>gradient-mesh.ts:23</code>). Normalize it. Then compute the gradient parameter $t$ at $\hat{\mathbf{d}} = (0, 1, 0)$ (the top of the cube).</li>
+  <li><strong>Routine.</strong> For <code>smoothstep(0.5, 0.1, dist)</code>, find the distance $d$ at which the falloff reaches exactly $0.25$.</li>
+  <li><strong>Conceptual.</strong> Why does the project use $0.5 \cdot \mathbf{d}\cdot\mathbf{u} + 0.5$ rather than $\lvert \mathbf{d}\cdot\mathbf{u} \rvert$? Sketch (in words) how the gradient's <em>color order</em> would change if you replaced the affine remap with the absolute value. Hint: think about what happens at $\hat{\mathbf{d}} = -\hat{\mathbf{u}}$.</li>
+  <li><strong>Conceptual.</strong> The fragment shader normalizes <code>vDirection</code> per fragment. <code>vDirection</code> comes from the cube's vertex positions interpolated across the face. If we instead pre-normalized at vertices and let the GPU interpolate the unit vectors (skipping the per-fragment <code>normalize</code>), would the result be exactly the same? Briefly: why or why not?</li>
+  <li><strong>Project-applied (extension).</strong> Suppose the project replaced the three-stop piecewise mix with a single $C^1$ Hermite curve through $\mathbf{c}_A$ at $t = 0$, $\mathbf{c}_B$ at $t = 0.5$, $\mathbf{c}_C$ at $t = 1$ (one continuous cubic per channel, no kink at $t = 0.5$). Describe the visual difference you'd expect when colors A, B, C are far apart, and when they are close (like the project's defaults). Which scenario benefits more?</li>
+  <li><strong>Project-applied (extension).</strong> The starfield uses <code>smoothstep(0.5, 0.1, dist)</code>. If you tightened it to <code>smoothstep(0.45, 0.35, dist)</code>, what happens to the perceived size of stars? What about <code>smoothstep(0.5, 0.5, dist)</code> (zero-width transition)? Sketch the curves mentally; you can verify in the playground.</li>
+</ol>
+
+<h2>8. Where to next</h2>
+
+<ul>
+  <li><strong>Guide 14 &mdash; twinkles and time.</strong> The starfield's <code>0.7 + 0.3 * sin(uTime * uTwinkleFreq + vPhase)</code> term, plus the additive blending mode (why the alpha equals the intensity).</li>
+  <li><strong>Guide 15 &mdash; uniform sphere sampling.</strong> The <code>samplePointOnUnitSphere</code> function in <code>starfield-skybox.ts:64-71</code> (the $z = 2u - 1$ trick).</li>
+  <li><strong>Guide 16 &mdash; equirectangular mapping.</strong> The panorama skybox variant; how a 2D image becomes a sky.</li>
+</ul>
+
+<h2>9. Appendix: Solutions</h2>
+
+<details>
+<summary>Exercise 1</summary>
+<p>With $\hat{\mathbf{u}} = (1, 0, 0)$:</p>
+<ul>
+  <li>$\hat{\mathbf{d}} = (1, 0, 0)$: dot $= 1$, $t = 1$. Right branch, $\operatorname{mix}(\mathbf{c}_B, \mathbf{c}_C, 1) = \mathbf{c}_C \approx (0.361,\, 0.204,\, 0.125)$.</li>
+  <li>$\hat{\mathbf{d}} = (-1, 0, 0)$: dot $= -1$, $t = 0$. Left branch, $\operatorname{mix}(\mathbf{c}_A, \mathbf{c}_B, 0) = \mathbf{c}_A \approx (0.165,\, 0.102,\, 0.063)$.</li>
+</ul>
+</details>
+
+<details>
+<summary>Exercise 2</summary>
+<p>$\mathbf{u} = (1.0, 0.6, 0.4)$. Magnitude $\lVert\mathbf{u}\rVert = \sqrt{1 + 0.36 + 0.16} = \sqrt{1.52} \approx 1.2329$. So</p>
+\[ \hat{\mathbf{u}} \approx (0.811,\, 0.487,\, 0.324) \]
+<p>At $\hat{\mathbf{d}} = (0, 1, 0)$, the dot is $0.487$, so $t \approx 0.487 \cdot 0.5 + 0.5 = 0.7435$.</p>
+<p>(That's in the upper branch; you'd then mix $\mathbf{c}_B \to \mathbf{c}_C$ with parameter $2(0.7435 - 0.5) = 0.487$, yielding a point about 49% of the way from B to C.)</p>
+</details>
+
+<details>
+<summary>Exercise 3</summary>
+<p>We need $f(d) = 0.25$, where $f = s^2(3 - 2s)$ and $s = (0.5 - d)/0.4$.</p>
+<p>Solve $s^2(3 - 2s) = 0.25$, i.e. $2s^3 - 3s^2 + 0.25 = 0$. By inspection or the substitution $s \to 1 - s'$ (smoothstep is symmetric about $s = 0.5$), the solution in $(0, 1)$ closer to $0$ is $s \approx 0.3139$. Then</p>
+\[ d = 0.5 - 0.4 \cdot s \approx 0.5 - 0.4 \cdot 0.3139 \approx 0.374 \]
+<p>(There's a second solution near $s \approx 1 - 0.3139 = 0.686$, i.e. $d \approx 0.226$, where the curve is already past its inflection. Both are mathematically valid roots; for the smoothstep ramp the relevant one is the first.)</p>
+</details>
+
+<details>
+<summary>Exercise 4</summary>
+<p>The remap $0.5 \cdot \mathbf{d}\cdot\mathbf{u} + 0.5$ is monotonic in the dot product: $-1 \mapsto 0$ and $+1 \mapsto 1$ are <em>distinct</em> ends. So $\hat{\mathbf{u}}$ and $-\hat{\mathbf{u}}$ map to opposite colors ($\mathbf{c}_A$ vs $\mathbf{c}_C$).</p>
+<p>$\lvert \mathbf{d}\cdot\mathbf{u} \rvert$ is symmetric: $-1$ and $+1$ both map to $1$, and $0$ maps to $0$. So the gradient axis would be <em>doubled</em> &mdash; both poles would be color C, the equator would be color A, and B would sit at the dot product $\pm 0.5$. You'd lose the &ldquo;sky vs ground&rdquo; asymmetry that the affine remap is designed to give.</p>
+</details>
+
+<details>
+<summary>Exercise 5</summary>
+<p>Not exactly the same. Linearly interpolating the components of two unit vectors does <em>not</em> in general yield a unit vector at the interior point: $\operatorname{mix}(\hat{\mathbf{a}}, \hat{\mathbf{b}}, 0.5)$ has length $\le 1$ (with equality only when $\hat{\mathbf{a}} = \hat{\mathbf{b}}$). So skipping the per-fragment <code>normalize</code> would shorten the interpolated direction, biasing the dot product (and therefore $t$) toward 0.5 in the middle of each face. The visible effect is a slight over-contraction of the gradient's middle band. The project's per-fragment <code>normalize</code> is the cheapest cure.</p>
+</details>
+
+<details>
+<summary>Exercise 6</summary>
+<p>A $C^1$ cubic kills the slope discontinuity at $t = 0.5$. When colors A, B, C are far apart (e.g. red, black, blue), the kink in the piecewise mix shows up as a faint horizontal seam at the equator; the cubic erases it, giving a more painterly transition. When colors are close (the project's earthy <code>#2a1a10 / #3d2414 / #5c3420</code>), the slope jump is so small relative to display gamut and dithering that it's invisible &mdash; the cubic gives essentially no perceptual win and costs an extra few multiplies per fragment. Far-apart colors benefit; close colors don't.</p>
+</details>
+
+<details>
+<summary>Exercise 7</summary>
+<p><code>smoothstep(0.45, 0.35, dist)</code>: zero-falloff zone widens (0 outside $d = 0.45$, 1 inside $d = 0.35$, transition only across a $0.10$-wide band). Stars look <em>smaller and harder-edged</em> &mdash; less halo, more dot.</p>
+<p><code>smoothstep(0.5, 0.5, dist)</code>: the transition width is zero. GLSL's smoothstep with $e_0 = e_1$ is degenerate; in practice (and per spec, with division by zero) you'd get a step function &mdash; 0 for $d > 0.5$, 1 for $d < 0.5$. You'd see hard-edged disks: round but no smooth halo. Aesthetically: stars stop twinkling-feeling and start looking like printed dots.</p>
+</details>
+
+<hr />
+<p class="small">Guide 13 of the <code>web-3d-panel-navigation</code> math curriculum. Next: Guide 14 &mdash; sinusoidal twinkle and additive blending.</p>
+
+</body>
+</html>

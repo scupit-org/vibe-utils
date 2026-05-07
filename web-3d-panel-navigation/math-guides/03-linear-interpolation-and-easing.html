@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Guide 03 — Linear Interpolation and Easing</title>
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(', '\\)'], ['$', '$']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']]
+    },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<style>
+  :root {
+    --fg: #1b1f24;
+    --muted: #5b6671;
+    --accent: #2c5cff;
+    --accent2: #c0392b;
+    --accent3: #16a085;
+    --accent4: #8e44ad;
+    --bg: #fbfbfd;
+    --panel: #ffffff;
+    --rule: #e6e8ec;
+    --code-bg: #f4f6fa;
+  }
+  html, body { background: var(--bg); color: var(--fg); }
+  body {
+    font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    line-height: 1.55;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 36px 24px 96px;
+  }
+  h1 { font-size: 2.0rem; margin-bottom: 0.2em; letter-spacing: -0.01em; }
+  h2 {
+    font-size: 1.4rem;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 4px;
+    margin-top: 2.4em;
+  }
+  h3 { font-size: 1.1rem; margin-top: 1.6em; }
+  p, li { font-size: 1.02rem; }
+  .meta { color: var(--muted); font-size: 0.92rem; margin-bottom: 1.8em; }
+  pre, code {
+    font-family: "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 0.92rem;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 12px 14px;
+    overflow-x: auto;
+  }
+  code .k { color: #b0006c; }
+  code .s { color: #1d6e0c; }
+  code .n { color: #b86c00; }
+  code .c { color: var(--muted); font-style: italic; }
+  code .f { color: #2c5cff; }
+  code .t { color: #6f42c1; }
+  blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 1em 0;
+    padding: 0.4em 1em;
+    background: #f1f4ff;
+    color: #1b3061;
+    border-radius: 0 6px 6px 0;
+  }
+  .figure {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 1.6em 0;
+  }
+  .figure h4 { margin: 0 0 8px 0; font-size: 0.95rem; color: var(--muted); font-weight: normal; }
+  .controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 12px; }
+  .controls label { font-size: 0.92rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  input[type=range] { width: 240px; }
+  input[type=number] { width: 80px; padding: 3px 5px; }
+  .readouts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    gap: 6px 18px;
+    margin-top: 12px;
+    font-family: "JetBrains Mono", Menlo, monospace;
+    font-size: 0.9rem;
+  }
+  .readouts .swatch {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.88rem; color: var(--muted); margin-top: 8px; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .legend .dot { width: 10px; height: 10px; border-radius: 50%; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1em 0;
+    font-size: 0.95rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+  th { background: #f4f6fa; }
+  details {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 8px 14px;
+    margin: 1em 0;
+  }
+  details[open] summary { margin-bottom: 0.8em; }
+  summary { cursor: pointer; font-weight: bold; }
+  ol.exercises > li { margin-bottom: 0.7em; }
+  .small { font-size: 0.88rem; color: var(--muted); }
+  canvas { display: block; max-width: 100%; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px; }
+  .row > .figure { flex: 1 1 280px; }
+</style>
+</head>
+<body>
+
+<h1>Guide 03 — Linear Interpolation and Easing</h1>
+<p class="meta">Curriculum for <code>web-3d-panel-navigation</code>. Prerequisites: Guide 01 (vectors) and Guide 02 (trig).</p>
+
+<h2>1. Why this matters</h2>
+
+<p>
+Almost every visible animation in this package — the camera arc when you click a panel, the
+clip-path that opens to reveal a section, the panel that fades to nothing as the page
+materialises — is a value gradually changing from a "before" number to an "after" number.
+The mathematical operation that defines what "gradually" means is
+<strong>linear interpolation</strong> (lerp), and the curve that bends the time axis so the
+motion looks alive instead of mechanical is an <strong>easing function</strong>. The library exposes
+two ease curves and one phase utility in
+<code>src/easing.ts</code> (lines 8–19 and 34–38), a <code>smoothstep</code> private to
+<code>src/camera-transitions.ts</code> (lines 20–24), and a vector-style lerp on screen
+rectangles in <code>src/projection.ts</code> (<code>lerpScreenRect</code>, lines 215–226). The orchestrator at
+<code>src/zoom-navigation.ts</code> (lines 200–218 and 331–349) chains all three together to drive
+two overlapping animation phases (camera + clip) on a single shared progress timeline. Once
+this guide clicks, those files become a 30-second read.
+</p>
+
+<h2>2. Building intuition</h2>
+
+<h3>2.1 The number line and the parameter \(t\)</h3>
+
+<p>
+Picture a number line with two endpoints, \(a\) and \(b\). Think of \(a\) as "where we are now"
+and \(b\) as "where we want to be". Pick any point between them. How would you describe its
+position with a single number?
+</p>
+
+<p>
+The cleanest answer is a fraction: <em>how far along the way from \(a\) to \(b\) am I?</em> Call
+that fraction \(t\). When \(t = 0\) we are sitting exactly on \(a\). When \(t = 1\) we have
+arrived at \(b\). When \(t = 0.5\) we are halfway. \(t\) is unitless — a pure progress dial,
+ranging over \([0, 1]\).
+</p>
+
+<p>
+The position itself is then
+$$ p(t) = a + (b - a)\, t. $$
+Read it as <em>start at \(a\), then move \(t\) of the distance toward \(b\)</em>. The factor
+\((b - a)\) is the displacement; \(t\) selects how much of it to apply. That is lerp in one line.
+</p>
+
+<h3>2.2 Promoting it to vectors</h3>
+
+<p>
+A 3D position is just a triple of numbers. There is nothing special about doing the same recipe
+to each component independently:
+$$ \mathbf{p}(t) = \mathbf{a} + (\mathbf{b} - \mathbf{a})\, t
+   = \big(a_x + (b_x - a_x) t,\; a_y + (b_y - a_y) t,\; a_z + (b_z - a_z) t\big). $$
+Three.js exposes this exact operation as
+<code>new THREE.Vector3().lerpVectors(from, to, t)</code>. Geometrically, the result traces the
+straight line segment from \(\mathbf{a}\) to \(\mathbf{b}\). Lerp on vectors is the
+"straight-shot" path between two points — the boring, default route.
+</p>
+
+<h3>2.3 Why straight-shot motion looks bad in real animations</h3>
+
+<p>
+Linear motion in time is what a robot does. Real objects accelerate from rest and decelerate to
+rest. So even though the <em>path</em> is a straight line in 3D, the <em>schedule</em> along that
+path should not be linear — we want a slow start, fast middle, slow end. The trick is to
+distort the parameter \(t\) before feeding it into lerp:
+$$ \mathbf{p}(t) = \mathrm{lerp}\big(\mathbf{a},\, \mathbf{b},\, f(t)\big). $$
+The function \(f\) is the <em>ease curve</em>. As long as \(f(0) = 0\) and \(f(1) = 1\), the start
+and end positions are unchanged — only the in-between speed changes. This is the secret of all
+the camera transitions in this codebase.
+</p>
+
+<h2>3. The math</h2>
+
+<h3>3.1 Scalar lerp and an algebraic identity</h3>
+
+<p>
+We defined \(\mathrm{lerp}(a, b, t) = a + (b - a)\, t\). There is an equivalent form that some
+codebases prefer:
+$$ \mathrm{lerp}(a, b, t) = (1 - t)\, a + t\, b. $$
+These are the same function. To prove it, expand the right-hand side:
+$$ (1 - t) a + t b = a - t a + t b = a + t(b - a). $$
+That is the "weighted blend" reading: the result is a convex combination of \(a\) and \(b\)
+with weights \((1 - t)\) and \(t\) that always sum to 1. The weighted-blend form is what gives
+geometric meaning to interpolation on vectors that lie on curves (e.g. quaternions, where the
+naive form would not preserve unit length — see Guide 10).
+</p>
+
+<h3>3.2 Clamp</h3>
+
+<p>
+Animation parameters tend to stray outside \([0, 1]\) for boring reasons: floating-point drift,
+phase boundaries that round in the wrong direction, callers that pass a global progress value
+to a sub-phase that is not yet active. The standard fix is the clamp:
+$$ \mathrm{clamp}(x, \ell, h) = \max\!\big(\ell,\; \min(h, x)\big). $$
+Read it as: "if \(x\) is below the floor, return the floor; if above the ceiling, return the
+ceiling; otherwise pass through." Three.js gives us <code>THREE.MathUtils.clamp</code>; the
+codebase calls it explicitly inside <code>smoothstep</code> at line 22 of
+<code>camera-transitions.ts</code>:
+</p>
+<pre><code>const t = THREE.MathUtils.<span class="f">clamp</span>((x - edge0) / (edge1 - edge0), <span class="n">0</span>, <span class="n">1</span>);</code></pre>
+
+<h3>3.3 Remap, derived</h3>
+
+<p>
+Suppose you have a global timeline \(t \in [0, 1]\) and a sub-phase that runs from
+\(s\) to \(e\) within it (with \(0 \le s &lt; e \le 1\)). You want a <em>local</em> progress that is
+0 when the global progress hits \(s\) and 1 when it hits \(e\). Linear scaling does it:
+$$ \tau(t) = \frac{t - s}{e - s}. $$
+Verify the endpoints: at \(t = s\) the numerator is zero, so \(\tau = 0\). At \(t = e\) numerator
+equals denominator, so \(\tau = 1\). Outside the interval \(\tau\) flies off to \(\pm\infty\),
+which is meaningless for a phase — so we clamp:
+$$ \mathrm{remap}(t, s, e) = \mathrm{clamp}\!\Big(\tfrac{t - s}{e - s},\, 0,\, 1\Big). $$
+
+The implementation in <code>src/easing.ts</code> (lines 34–38) inlines the clamp via two
+short-circuit branches:
+</p>
+<pre><code><span class="k">export function</span> <span class="f">remap</span>(t: <span class="t">number</span>, start: <span class="t">number</span>, end: <span class="t">number</span>): <span class="t">number</span> {
+  <span class="k">if</span> (t &lt;= start) <span class="k">return</span> <span class="n">0</span>;
+  <span class="k">if</span> (t &gt;= end) <span class="k">return</span> <span class="n">1</span>;
+  <span class="k">return</span> (t - start) / (end - start);
+}</code></pre>
+<p>
+That early-exit style is faster than computing then clamping, and it sidesteps the
+divide-by-zero edge case if a caller ever passes <code>start === end</code> (the second
+<code>if</code> catches it before division).
+</p>
+
+<h3>3.4 The cubic ease-out</h3>
+
+<p>
+We want a curve \(f\) on \([0, 1]\) with \(f(0) = 0\), \(f(1) = 1\), that starts fast and
+decelerates. The simplest closed form is to take "1 minus a cube of the distance to the
+finish":
+$$ \mathrm{easeOutCubic}(t) = 1 - (1 - t)^3. $$
+Check the boundaries. At \(t = 0\): \(1 - 1^3 = 0\). At \(t = 1\): \(1 - 0^3 = 1\).
+
+Now look at the slope. Let \(u = 1 - t\), so \(f = 1 - u^3\) and
+\(f'(t) = -3u^2 \cdot \frac{du}{dt} = 3(1 - t)^2.\)
+At \(t = 0\) the slope is \(3\) — three times faster than linear. At \(t = 1\) it is \(0\): the
+motion stops smoothly. That is exactly the "quick start, soft landing" feel.
+</p>
+
+<h3>3.5 The cubic ease-in-out, piecewise</h3>
+
+<p>
+We want a curve that is symmetric: slow start, fast middle, slow end. The codebase implements
+the standard piecewise cubic from <code>src/easing.ts</code> lines 8–12:
+</p>
+<pre><code><span class="k">export function</span> <span class="f">easeInOutCubic</span>(t: <span class="t">number</span>): <span class="t">number</span> {
+  <span class="k">return</span> t &lt; <span class="n">0.5</span>
+    ? <span class="n">4</span> * t * t * t
+    : <span class="n">1</span> - <span class="t">Math</span>.pow(<span class="n">-2</span> * t + <span class="n">2</span>, <span class="n">3</span>) / <span class="n">2</span>;
+}</code></pre>
+
+<p>
+Where do those magic numbers come from? Build the function up. On the first half \([0, 0.5]\)
+we want an ease-in cubic that goes from 0 to 0.5. The basic ease-in cubic on \([0, 1]\) is
+\(g(t) = t^3\). We compress its domain to \([0, 0.5]\) by feeding it \(2t\) instead of \(t\),
+and then squash its range back into \([0, 0.5]\) by halving:
+$$ f_1(t) = \tfrac{1}{2}\, (2t)^3 = 4 t^3 \quad \text{for } t \in [0, 0.5]. $$
+On the second half \([0.5, 1]\) we want the mirror image: an ease-out cubic that goes from 0.5
+to 1. The mirror of \(t^3\) across the midpoint is the substitution \(t \mapsto 1 - t\), giving
+\(1 - (1 - t)^3\), then we compress and shift to fit \([0.5, 1]\). Applying the same
+\((2t - 1)\) reparameterisation, halving, and offsetting gives
+$$ f_2(t) = 1 - \tfrac{1}{2}\,(-2t + 2)^3 \quad \text{for } t \in [0.5, 1]. $$
+That is precisely what the code computes. Continuity check at the seam \(t = 0.5\):
+\(f_1(0.5) = 4 \cdot 0.125 = 0.5\), and
+\(f_2(0.5) = 1 - \tfrac{1}{2} \cdot 1^3 = 0.5\). They agree, so the function is
+\(C^0\).
+</p>
+
+<p>
+Smoothness check. \(f_1'(t) = 12 t^2\), so \(f_1'(0.5) = 12 \cdot 0.25 = 3\).
+For \(f_2\), differentiate via the chain rule on \(u = -2t + 2\):
+\(f_2'(t) = -\tfrac{1}{2} \cdot 3 u^2 \cdot (-2) = 3 u^2 = 3(-2t + 2)^2\). At \(t = 0.5\):
+\(3 \cdot 1^2 = 3\). The slopes match, so the function is also \(C^1\) — the velocity has no
+visible kink at the midpoint.
+</p>
+
+<h3>3.6 Smoothstep, derived from first principles</h3>
+
+<p>
+The smoothstep used at <code>camera-transitions.ts</code> lines 20–24 is a different cubic:
+$$ \mathrm{smoothstep}(t) = t^2 (3 - 2t) = 3 t^2 - 2 t^3. $$
+We can derive it as the unique cubic polynomial \(p(t) = a + b t + c t^2 + d t^3\)
+satisfying four constraints:
+$$ p(0) = 0, \quad p(1) = 1, \quad p'(0) = 0, \quad p'(1) = 0. $$
+The first gives \(a = 0\). The third (\(p'(t) = b + 2 c t + 3 d t^2\)) gives \(b = 0\), so the
+polynomial reduces to \(p(t) = c t^2 + d t^3\). The second is \(c + d = 1\). The fourth is
+\(2 c + 3 d = 0\), i.e. \(c = -\tfrac{3}{2} d\). Substituting:
+\(-\tfrac{3}{2} d + d = 1 \Rightarrow -\tfrac{1}{2} d = 1 \Rightarrow d = -2\) and
+\(c = 3\). So \(p(t) = 3 t^2 - 2 t^3 = t^2(3 - 2t)\). That is a real derivation, not a hand-wave.
+The two horizontal-slope endpoints make smoothstep ideal for blending between two regimes
+where any velocity discontinuity at the boundary would be visible.
+</p>
+
+<p>
+The full <code>smoothstep(edge0, edge1, x)</code> in the codebase composes this with a
+remap-then-clamp so the curve only bites between the two edges:
+</p>
+<pre><code><span class="k">function</span> <span class="f">smoothstep</span>(edge0: <span class="t">number</span>, edge1: <span class="t">number</span>, x: <span class="t">number</span>): <span class="t">number</span> {
+  <span class="k">const</span> t = <span class="t">THREE</span>.<span class="t">MathUtils</span>.clamp((x - edge0) / (edge1 - edge0), <span class="n">0</span>, <span class="n">1</span>);
+  <span class="k">return</span> t * t * (<span class="n">3</span> - <span class="n">2</span> * t);
+}</code></pre>
+
+<h3>3.7 Smoothstep vs ease-in-out: not the same curve</h3>
+
+<p>
+Both are S-shaped, both are zero-slope at the ends, both are symmetric about \((0.5, 0.5)\).
+They are not equal. Compare numerically:
+</p>
+
+<table>
+<thead><tr><th>\(t\)</th><th>\(\mathrm{easeInOutCubic}(t)\)</th><th>\(\mathrm{smoothstep}(t)\)</th><th>difference</th></tr></thead>
+<tbody>
+<tr><td>0.25</td><td>\(4(0.25)^3 = 0.0625\)</td><td>\(0.0625 \cdot 2.5 = 0.15625\)</td><td>0.09375</td></tr>
+<tr><td>0.50</td><td>\(0.5\)</td><td>\(0.25 \cdot 2 = 0.5\)</td><td>0</td></tr>
+<tr><td>0.75</td><td>\(1 - \tfrac{1}{2}(0.5)^3 = 0.9375\)</td><td>\(0.5625 \cdot 1.5 = 0.84375\)</td><td>0.09375</td></tr>
+</tbody>
+</table>
+
+<p>
+At \(t = 0.5\) they agree exactly. Off the midpoint they diverge by up to about \(0.094\) — about
+a 9% positional difference. <code>easeInOutCubic</code> is steeper through the middle (slope \(3\)
+at the seam) than smoothstep (slope \(1.5\)). So the codebase uses <code>easeInOutCubic</code>
+for camera motion, where a snappier feel through the middle is good, and
+<code>smoothstep</code> for a gentler clip reveal and for the regime-blending threshold around
+30°–35° (line 79).
+</p>
+
+<h2>4. In this codebase</h2>
+
+<h3>4.1 Vector lerp and FOV lerp side-by-side</h3>
+
+<p>From <code>src/camera-transitions.ts</code> lines 9–18:</p>
+<pre><code><span class="k">function</span> <span class="f">lerpUpAndFov</span>(
+  from: <span class="t">CameraState</span>,
+  to: <span class="t">CameraState</span>,
+  t: <span class="t">number</span>
+): { up: <span class="t">THREE.Vector3</span>; fov: <span class="t">number</span> } {
+  <span class="k">const</span> up = <span class="k">new</span> <span class="t">THREE.Vector3</span>().lerpVectors(from.up, to.up, t).normalize();
+  <span class="k">const</span> fov = from.fov + (to.fov - from.fov) * t;
+  <span class="k">return</span> { up, fov };
+}</code></pre>
+
+<p>
+Two operations, one parameter. The vector lerp is the componentwise version of section 2.2,
+followed by a normalisation that pulls the result back onto the unit sphere (lerp of two unit
+vectors does <em>not</em> stay unit-length — see Guide 10 for the proper fix, slerp). The FOV
+lerp is the literal scalar form
+\(\mathrm{fov}(t) = \mathrm{fov}_{\text{from}} + (\mathrm{fov}_{\text{to}} - \mathrm{fov}_{\text{from}})\, t\).
+</p>
+
+<h3>4.2 Lerp on a screen rectangle</h3>
+
+<p>From <code>src/projection.ts</code> lines 215–226:</p>
+<pre><code><span class="k">export function</span> <span class="f">lerpScreenRect</span>(
+  from: <span class="t">ScreenRect</span>,
+  to: <span class="t">ScreenRect</span>,
+  t: <span class="t">number</span>
+): <span class="t">ScreenRect</span> {
+  <span class="k">return</span> {
+    top: from.top + (to.top - from.top) * t,
+    right: from.right + (to.right - from.right) * t,
+    bottom: from.bottom + (to.bottom - from.bottom) * t,
+    left: from.left + (to.left - from.left) * t
+  };
+}</code></pre>
+
+<p>
+A <code>ScreenRect</code> here is just a 4-tuple of pixel insets. So this is a 4-component lerp,
+identical in spirit to a vector lerp — the only reason it is not literally
+<code>Vector4</code>-flavoured is that the field names are domain-meaningful. Each component is
+the scalar form \(a + (b - a)\, t\). When this gets called during a zoom, the rectangle
+"breathes" smoothly from the panel's tight bounding rect to the full viewport.
+</p>
+
+<h3>4.3 Easing applied on top of a lerp</h3>
+
+<p>From <code>src/camera-transitions.ts</code> lines 101–109 (the Early-Look branch):</p>
+<pre><code><span class="k">const</span> posT = <span class="f">easeInOutCubic</span>(rawT);
+
+<span class="c">// Target uses a faster curve — arrives at ~70% of the animation</span>
+<span class="k">const</span> targetRaw = <span class="t">Math</span>.min(rawT / <span class="n">0.7</span>, <span class="n">1.0</span>);
+<span class="k">const</span> targetT = <span class="f">easeOutCubic</span>(targetRaw);
+
+<span class="k">const</span> position = <span class="k">new</span> <span class="t">THREE.Vector3</span>().lerpVectors(from.position, to.position, posT);
+<span class="k">const</span> target = <span class="k">new</span> <span class="t">THREE.Vector3</span>().lerpVectors(from.target, to.target, targetT);
+<span class="k">const</span> { up, fov } = <span class="f">lerpUpAndFov</span>(from, to, posT);</code></pre>
+
+<p>
+Two parallel motions on one shared timeline, but on <em>different schedules</em>:
+</p>
+<ul>
+<li>Position uses <code>easeInOutCubic(rawT)</code> — symmetric S-curve over the full duration.</li>
+<li>Target (the look-at point) uses a remap-then-easeOutCubic that finishes at \(\mathrm{rawT} = 0.7\). The expression <code>Math.min(rawT / 0.7, 1.0)</code> is exactly \(\mathrm{remap}(\mathrm{rawT}, 0, 0.7)\) without the lower clamp (since <code>rawT</code> is already non-negative).</li>
+</ul>
+<p>
+So the camera <em>looks</em> at the destination 30% of the way before it actually arrives there.
+That is purely an easing trick and is what creates the cinematic "lead with your eyes" feel.
+</p>
+
+<h3>4.4 Easing applied to the orbit branch</h3>
+
+<p>From <code>src/camera-transitions.ts</code> lines 124–130:</p>
+<pre><code><span class="k">const</span> t = <span class="f">easeInOutCubic</span>(rawT);
+
+<span class="c">// Linearly interpolate the look-at target</span>
+<span class="k">const</span> target = <span class="k">new</span> <span class="t">THREE.Vector3</span>().lerpVectors(from.target, to.target, t);
+
+<span class="c">// For position: slerp around the midpoint of the two targets</span>
+<span class="k">const</span> midTarget = <span class="k">new</span> <span class="t">THREE.Vector3</span>().lerpVectors(from.target, to.target, <span class="n">0.5</span>);
+<span class="k">const</span> fromOffset = <span class="k">new</span> <span class="t">THREE.Vector3</span>().subVectors(from.position, midTarget);
+<span class="k">const</span> toOffset = <span class="k">new</span> <span class="t">THREE.Vector3</span>().subVectors(to.position, midTarget);</code></pre>
+
+<p>
+Same eased \(t\), used for both target lerp and (further down, on the offset vectors) for the
+<em>direction</em> slerp. The target gets a linear lerp on the eased \(t\); the position vector
+gets a slerp (Guide 10) on the same eased \(t\). The point: the easing sits one layer above
+the actual interpolation primitive and is reusable across both lerp and slerp.
+</p>
+
+<h3>4.5 Phase composition with remap (the conductor)</h3>
+
+<p>From <code>src/zoom-navigation.ts</code> lines 200–218 — the orchestrator that drives a single
+global progress through two overlapping phases:</p>
+<pre><code><span class="k">const</span> { promise, cancel } = <span class="k">this</span>.timeline.runSequence(totalDuration, (progress) =&gt; {
+  <span class="k">const</span> rawCameraT = <span class="f">remap</span>(progress, <span class="n">0</span>, cameraEnd);
+  <span class="k">this</span>.cameraController.setToState(
+    <span class="f">calculateTransitionState</span>(startCameraState, targetCameraState, rawCameraT)
+  );
+
+  <span class="k">if</span> (progress &gt;= clipStart) {
+    <span class="k">const</span> clipRaw = <span class="f">remap</span>(progress, clipStart, <span class="n">1.0</span>);
+    <span class="k">const</span> clipT = clipRaw * clipRaw * (<span class="n">3</span> - <span class="n">2</span> * clipRaw);
+    <span class="k">const</span> currentRect = <span class="f">lerpScreenRect</span>(planeRect, targetRect, clipT);
+    <span class="k">this</span>.clipController.setClipRect(currentRect);
+    <span class="k">this</span>.clipController.setOpacity(clipT);
+  }
+
+  <span class="k">if</span> (progress &gt;= clipStart) {
+    <span class="k">const</span> fadeT = <span class="f">remap</span>(progress, clipStart, planeFadeEnd);
+    <span class="k">this</span>.sceneGraph.setPlaneOpacity(planeId, <span class="n">1</span> - fadeT);
+  }
+});</code></pre>
+
+<p>
+This block is the whole point of having <code>remap</code> in the package. There is one global
+<code>progress</code> in \([0, 1]\) but three things happening on three different sub-intervals:
+</p>
+<ul>
+  <li>Camera reorientation runs over \([0,\,\mathrm{cameraEnd}]\). <code>remap(progress, 0, cameraEnd)</code> stretches that sub-window back out to \([0, 1]\) so the camera transition can be written without knowing it lives inside a larger timeline.</li>
+  <li>Clip-path reveal runs over \([\mathrm{clipStart}, 1]\). The remap'd value is then run through smoothstep <em>inline</em> — note <code>clipRaw * clipRaw * (3 - 2 * clipRaw)</code> on line 208, which is exactly \(t^2(3 - 2t)\) without the function call.</li>
+  <li>Plane fade-out runs over \([\mathrm{clipStart},\,\mathrm{planeFadeEnd}]\), again via <code>remap</code>.</li>
+</ul>
+<p>
+The mirror image lives at <code>src/zoom-navigation.ts</code> lines 331–349, the zoom-out flow,
+which uses the same building blocks in the opposite order.
+</p>
+
+<h2>5. Interactive playground</h2>
+
+<div class="figure">
+  <h4>The four curves on \([0, 1]\), with a moving probe at the slider's \(t\).</h4>
+  <canvas id="curves" width="640" height="420"></canvas>
+  <div class="legend">
+    <span><span class="dot" style="background:#1b1f24"></span> linear</span>
+    <span><span class="dot" style="background:#c0392b"></span> easeOutCubic</span>
+    <span><span class="dot" style="background:#2c5cff"></span> easeInOutCubic</span>
+    <span><span class="dot" style="background:#16a085"></span> smoothstep(edge0, edge1, t)</span>
+  </div>
+  <div class="controls">
+    <label>\(t\)
+      <input type="range" id="t" min="0" max="1" step="0.001" value="0.4" />
+      <span id="tval">0.400</span>
+    </label>
+    <label>edge0
+      <input type="number" id="e0" min="0" max="1" step="0.01" value="0.0" />
+    </label>
+    <label>edge1
+      <input type="number" id="e1" min="0" max="1" step="0.01" value="1.0" />
+    </label>
+  </div>
+  <div class="readouts" id="readouts"></div>
+  <p class="small">
+    The dashed bar at the bottom is a 1D position line: each coloured tick shows where a unit
+    interval would be after the corresponding ease maps the current \(t\). When all four ticks
+    sit on top of each other, the four curves agree at this \(t\) (try \(t = 0\), \(t = 0.5\),
+    \(t = 1\)). Slide <code>edge0</code> and <code>edge1</code> to see the smoothstep curve get
+    re-anchored — values of \(t\) below <code>edge0</code> are clamped to 0, above <code>edge1</code>
+    to 1.
+  </p>
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('curves');
+  const ctx = canvas.getContext('2d');
+  const tInput = document.getElementById('t');
+  const tVal = document.getElementById('tval');
+  const e0In = document.getElementById('e0');
+  const e1In = document.getElementById('e1');
+  const readouts = document.getElementById('readouts');
+
+  const W = canvas.width, H = canvas.height;
+  const margin = { l: 56, r: 24, t: 24, b: 90 };
+  const plotW = W - margin.l - margin.r;
+  const plotH = H - margin.t - margin.b;
+
+  function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+  function easeInOutCubic(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+  function smoothstep(edge0, edge1, x) {
+    const t = clamp((x - edge0) / (edge1 - edge0 || 1e-9), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  const curves = [
+    { name: 'linear',         color: '#1b1f24', f: t => t },
+    { name: 'easeOutCubic',   color: '#c0392b', f: t => easeOutCubic(t) },
+    { name: 'easeInOutCubic', color: '#2c5cff', f: t => easeInOutCubic(t) },
+    { name: 'smoothstep',     color: '#16a085', f: t => 0 }, // patched below
+  ];
+
+  function plotX(t) { return margin.l + t * plotW; }
+  function plotY(v) { return margin.t + (1 - v) * plotH; }
+
+  function drawAxes() {
+    ctx.strokeStyle = '#d8dde6';
+    ctx.lineWidth = 1;
+    ctx.font = '11px monospace';
+    ctx.fillStyle = '#5b6671';
+    // grid
+    for (let i = 0; i <= 10; i++) {
+      const x = margin.l + (i / 10) * plotW;
+      ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, margin.t + plotH); ctx.stroke();
+      const y = margin.t + (i / 10) * plotH;
+      ctx.beginPath(); ctx.moveTo(margin.l, y); ctx.lineTo(margin.l + plotW, y); ctx.stroke();
+    }
+    // axes
+    ctx.strokeStyle = '#1b1f24';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(margin.l, margin.t);
+    ctx.lineTo(margin.l, margin.t + plotH);
+    ctx.lineTo(margin.l + plotW, margin.t + plotH);
+    ctx.stroke();
+    // labels
+    ctx.fillText('0', margin.l - 12, margin.t + plotH + 14);
+    ctx.fillText('1', margin.l + plotW - 4, margin.t + plotH + 14);
+    ctx.fillText('t', margin.l + plotW / 2, margin.t + plotH + 16);
+    ctx.fillText('1', margin.l - 14, margin.t + 4);
+    ctx.fillText('0', margin.l - 14, margin.t + plotH);
+    ctx.fillText('f(t)', margin.l - 36, margin.t + plotH / 2);
+  }
+
+  function drawCurve(curve) {
+    ctx.strokeStyle = curve.color;
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    const N = 240;
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      const v = clamp(curve.f(t), -0.05, 1.05);
+      const px = plotX(t);
+      const py = plotY(v);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+
+  function drawProbe(curve, t) {
+    const v = curve.f(t);
+    const px = plotX(t);
+    const py = plotY(clamp(v, 0, 1));
+    ctx.fillStyle = curve.color;
+    ctx.beginPath(); ctx.arc(px, py, 4.5, 0, Math.PI * 2); ctx.fill();
+    // drop a dotted vertical to the t axis once
+  }
+
+  function drawSliderLines(t) {
+    // single dotted vertical at current t
+    ctx.strokeStyle = '#9aa3ad';
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(plotX(t), margin.t);
+    ctx.lineTo(plotX(t), margin.t + plotH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function drawPositionLine(t) {
+    const y = H - 36;
+    ctx.strokeStyle = '#1b1f24';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(margin.l, y);
+    ctx.lineTo(margin.l + plotW, y);
+    ctx.stroke();
+    ctx.fillStyle = '#5b6671';
+    ctx.font = '11px monospace';
+    ctx.fillText('eased output', margin.l, y - 6);
+    ctx.fillText('0', margin.l - 12, y + 4);
+    ctx.fillText('1', margin.l + plotW + 4, y + 4);
+    for (const c of curves) {
+      const v = clamp(c.f(t), 0, 1);
+      const x = margin.l + v * plotW;
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y - 6);
+      ctx.lineTo(x, y + 6);
+      ctx.stroke();
+    }
+  }
+
+  function render() {
+    const t = parseFloat(tInput.value);
+    const e0 = clamp(parseFloat(e0In.value), 0, 1);
+    const e1 = clamp(parseFloat(e1In.value), 0, 1);
+    // patch smoothstep curve
+    curves[3].f = (x) => smoothstep(e0, e1, x);
+
+    ctx.clearRect(0, 0, W, H);
+    // panel background
+    ctx.fillStyle = '#fbfbfd';
+    ctx.fillRect(0, 0, W, H);
+
+    drawAxes();
+    drawSliderLines(t);
+    for (const c of curves) drawCurve(c);
+    for (const c of curves) drawProbe(c, t);
+    drawPositionLine(t);
+
+    // diagonal y = t reference, very faint
+    ctx.strokeStyle = 'rgba(27,31,36,0.15)';
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath();
+    ctx.moveTo(plotX(0), plotY(0));
+    ctx.lineTo(plotX(1), plotY(1));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // numeric readouts
+    tVal.textContent = t.toFixed(3);
+    let html = '';
+    for (const c of curves) {
+      const v = c.f(t);
+      html += `<div><span class="swatch" style="background:${c.color}"></span>${c.name.padEnd(15, ' ')}: ${v.toFixed(4)}</div>`;
+    }
+    readouts.innerHTML = html;
+  }
+
+  tInput.addEventListener('input', render);
+  e0In.addEventListener('input', render);
+  e1In.addEventListener('input', render);
+  render();
+})();
+</script>
+
+<h2>6. Worked examples</h2>
+
+<h3>Example 6.1 — Camera position halfway through a zoom-in</h3>
+
+<p>
+Suppose the overview camera position is \(\mathbf{a} = (0, 0, 50)\) and the perpendicular state
+for a clicked panel is \(\mathbf{b} = (12, 4, 18)\). The orchestrator at line 200 of
+<code>zoom-navigation.ts</code> sends a global <code>progress</code> in \([0, 1]\) into
+<code>remap(progress, 0, cameraEnd)</code>. Suppose <code>cameraEnd = 0.6</code> and
+<code>progress = 0.45</code>. Where is the camera?
+</p>
+<p>
+Step 1 — local progress:
+$$ \mathrm{rawCameraT} = \frac{0.45 - 0}{0.6 - 0} = 0.75. $$
+Step 2 — ease (Early-Look branch picks <code>easeInOutCubic</code> for position):
+$$ \mathrm{posT} = 1 - \tfrac{1}{2}(-2 \cdot 0.75 + 2)^3 = 1 - \tfrac{1}{2}(0.5)^3
+   = 1 - 0.0625 = 0.9375. $$
+Step 3 — vector lerp:
+$$ \mathbf{p} = \mathbf{a} + (\mathbf{b} - \mathbf{a}) \cdot 0.9375
+   = (0, 0, 50) + (12, 4, -32) \cdot 0.9375
+   = (11.25,\, 3.75,\, 20). $$
+At only 45% of the global timeline the camera is already 93.75% of the way to its target
+because <code>cameraEnd</code> compresses the camera phase into the first 60% and
+<code>easeInOutCubic</code> rushes the middle.
+</p>
+
+<h3>Example 6.2 — Clip rectangle a third of the way through the reveal</h3>
+
+<p>
+Pick numbers from the codebase pattern. The plane bounding rect is
+\(R_a = \{ \mathrm{top:}120,\, \mathrm{right:}200,\, \mathrm{bottom:}120,\, \mathrm{left:}200 \}\)
+(pixels) and the target rect is the full viewport,
+\(R_b = \{0, 0, 0, 0\}\). Suppose <code>clipStart = 0.5</code> and
+<code>progress = 0.7</code>. What clip rect does the controller receive?
+</p>
+<p>
+Step 1 — local progress via <code>remap</code>:
+$$ \mathrm{clipRaw} = \frac{0.7 - 0.5}{1 - 0.5} = 0.4. $$
+Step 2 — smoothstep (line 208 inlines \(t^2(3 - 2t)\)):
+$$ \mathrm{clipT} = 0.4^2 \cdot (3 - 2 \cdot 0.4) = 0.16 \cdot 2.2 = 0.352. $$
+Step 3 — componentwise lerp via <code>lerpScreenRect</code>:
+$$ \mathrm{top} = 120 + (0 - 120) \cdot 0.352 = 120 - 42.24 = 77.76. $$
+By symmetry the other three components compute the same way:
+\(\mathrm{right} = 200 - 70.4 = 129.6\), \(\mathrm{bottom} = 77.76\), \(\mathrm{left} = 129.6\).
+The reveal has eaten about 35% of the inset on each side.
+</p>
+
+<h3>Example 6.3 — Where does the regime blend lock in to "orbit"?</h3>
+
+<p>
+At line 79 of <code>camera-transitions.ts</code> the blend value is
+\(\mathrm{smoothstep}(30°,\, 35°,\, \theta)\) where \(\theta\) is the total reorientation
+(forward angle plus up angle, in radians). At what \(\theta\) does
+<code>blend = 0.5</code> exactly?
+</p>
+<p>
+Smoothstep crosses 0.5 at the midpoint of its remap interval. Inside
+<code>smoothstep</code>, the inner local \(t\) reaches 0.5 when
+\((\theta - 30°)/(35° - 30°) = 0.5\), i.e. \(\theta = 32.5°\). At that local \(t\) the cubic
+returns \(0.25 \cdot 2 = 0.5\). So the regime flips from "Early Look" to "Orbit"
+exactly at \(\theta = 32.5°\) of total reorientation. Note this is <em>not</em> halfway
+between 30° and 35° in any deep sense — it just happens that \(t^2(3 - 2t)\) is symmetric about
+\(t = 0.5\), so its midpoint output equals 0.5.
+</p>
+
+<h2>7. Exercises</h2>
+
+<ol class="exercises">
+  <li>
+    <strong>Endpoint check.</strong> Show by direct substitution that
+    <code>easeOutCubic(0) = 0</code> and <code>easeOutCubic(1) = 1</code>, and that its
+    derivative at \(t = 0\) equals 3 while its derivative at \(t = 1\) equals 0.
+  </li>
+  <li>
+    <strong>Equivalent forms.</strong> Starting from \((1 - t) a + t b\), derive
+    \(a + (b - a) t\) by purely algebraic manipulation. Then explain in one sentence why a
+    quaternion <em>slerp</em> cannot use the second form even though both forms are
+    algebraically equal for scalars.
+  </li>
+  <li>
+    <strong>Phase compression.</strong> The orchestrator computes
+    <code>cameraEnd = cameraDuration / totalDuration</code>. If
+    <code>cameraDuration = 800ms</code>, <code>clipDuration = 600ms</code> and
+    <code>overlapRatio = 0.4</code>, compute <code>totalDuration</code>,
+    <code>cameraEnd</code>, and <code>clipStart</code> using the formulas at lines 193–196 of
+    <code>zoom-navigation.ts</code>.
+  </li>
+  <li>
+    <strong>Clamp behaviour.</strong> A bug in a caller passes <code>progress = 1.05</code>
+    into <code>remap(progress, 0.5, 1.0)</code>. What does the function return, and which line
+    of <code>src/easing.ts</code> caught it?
+  </li>
+  <li>
+    <strong>Smoothstep at the seam.</strong> Without computing derivatives, prove that
+    \(p(t) = 3t^2 - 2t^3\) satisfies \(p'(0) = p'(1) = 0\) by recognising it as the unique cubic
+    determined by the four conditions in section 3.6.
+  </li>
+  <li>
+    <strong>Numeric divergence.</strong> Compute \(|\mathrm{easeInOutCubic}(t) - \mathrm{smoothstep}(t)|\) at \(t = 0.1\) and
+    \(t = 0.9\). Use them to argue which curve gives a "snappier" middle.
+  </li>
+  <li>
+    <strong>Project-applied.</strong> Walk through what
+    <code>lerpScreenRect({top:60,right:80,bottom:60,left:80}, {top:0,right:0,bottom:0,left:0}, 0.25)</code>
+    returns. Then re-do it with the input <code>0.25</code> first run through
+    <code>easeOutCubic</code>. Which would feel snappier on screen and why?
+  </li>
+</ol>
+
+<h3>Extension challenges</h3>
+<ol class="exercises" start="8">
+  <li>
+    <strong>Build easeInCubic.</strong> By symmetry with section 3.4, propose a closed form for
+    a cubic ease-<em>in</em> on \([0, 1]\) that satisfies \(f(0) = 0\), \(f(1) = 1\),
+    \(f'(0) = 0\), \(f'(1) = 3\). Verify those four conditions algebraically. Then re-derive the
+    same formula by reflecting <code>easeOutCubic</code> across the line \(y = 1 - x\) and across
+    the line \(t = 1 - t\).
+  </li>
+  <li>
+    <strong>Custom phase splicing.</strong> Suppose you want the plane fade-out (lines 214–217 of
+    <code>zoom-navigation.ts</code>) to use <em>smoothstep</em> instead of remap-only. Rewrite
+    the three lines using the inlined
+    <code>clipRaw * clipRaw * (3 - 2 * clipRaw)</code> trick. Then argue (in one sentence) why
+    the codebase keeps the fade as raw remap rather than smoothstepped — hint: think about what
+    happens at the very start of the fade window.
+  </li>
+</ol>
+
+<h2>8. Where to next</h2>
+
+<p>
+Guide 04 derives rotation matrices and Euler angles — the missing ingredient for the
+<code>applyEuler</code> calls in <code>projection.ts</code>. Guide 06 builds local-to-world
+transforms on top of those, which is what makes the panels' tilted clickable rectangles align
+with the rendered geometry. Guide 10 returns to the lerp-vs-slerp distinction we hand-waved at
+in section 4.4 and gives quaternion slerp its own derivation. Smoothstep reappears in Guide 12
+when we revisit the regime blend in <code>camera-transitions.ts</code> at a deeper level (it
+turns out smoothstep's zero-derivative endpoints are exactly what lets a transition split
+seamlessly across two completely different motion strategies). The cubic ease curves come back
+in Guide 11, where they orchestrate the timing of the per-panel hinge fold animations in the
+tiled-panel layouts.
+</p>
+
+<h2>9. Appendix: Solutions</h2>
+
+<details>
+  <summary>Solution to 7.1 — Endpoint and slope check for easeOutCubic.</summary>
+  <p>
+    \(\mathrm{easeOutCubic}(0) = 1 - (1 - 0)^3 = 1 - 1 = 0\). \(\mathrm{easeOutCubic}(1) = 1 - 0^3 = 1\).
+    The derivative is \(f'(t) = 3(1 - t)^2\) (chain rule on \((1 - t)^3\)). At \(t = 0\), \(f'(0) = 3 \cdot 1 = 3\).
+    At \(t = 1\), \(f'(1) = 3 \cdot 0 = 0\). The motion launches at three times linear speed and
+    coasts to a perfect halt.
+  </p>
+</details>
+
+<details>
+  <summary>Solution to 7.2 — Equivalence of the two lerp forms.</summary>
+  <p>
+    \((1 - t) a + t b = a - t a + t b = a + t(b - a) = a + (b - a) t.\) Both forms compute the
+    same scalar. They are <em>not</em> interchangeable on quaternions (or any non-flat manifold)
+    because the first form blends weights that always sum to 1 — a convex combination is a
+    well-defined geometric operation on the right kinds of spaces. The second form involves
+    subtracting two unit quaternions and adding the result to a unit quaternion, which leaves
+    the unit sphere immediately. Slerp (Guide 10) restores the geometry.
+  </p>
+</details>
+
+<details>
+  <summary>Solution to 7.3 — Phase compression numbers.</summary>
+  <p>
+    From line 194: \(\mathrm{totalDuration} = 800 + 600 \cdot (1 - 0.4) = 800 + 360 = 1160\) ms.
+    Line 195: \(\mathrm{cameraEnd} = 800 / 1160 \approx 0.6897\).
+    Line 196: \(\mathrm{clipStart} = 0.6897 - (0.4 \cdot 600 / 1160) = 0.6897 - 0.2069 \approx 0.4828\).
+    So the clip phase opens at about 48% of the global timeline and the camera phase ends at
+    about 69%. The 20.7% overlap is exactly the <code>overlapRatio</code>-weighted clip share.
+  </p>
+</details>
+
+<details>
+  <summary>Solution to 7.4 — Out-of-range remap input.</summary>
+  <p>
+    With <code>progress = 1.05</code>, line 36 (<code>if (t &gt;= end) return 1;</code>) fires
+    immediately because \(1.05 \ge 1.0\). The function returns 1 without ever reaching the
+    division. That is the inlined upper-clamp branch; the lower branch (line 35) handles the
+    symmetric case. So <code>remap</code> is total and never produces a value outside \([0, 1]\)
+    even on bad input.
+  </p>
+</details>
+
+<details>
+  <summary>Solution to 7.5 — Endpoint slopes of smoothstep, without calculus.</summary>
+  <p>
+    Section 3.6 derived \(p(t) = t^2(3 - 2t)\) as the <em>unique</em> cubic satisfying
+    \(p(0) = 0\), \(p(1) = 1\), \(p'(0) = 0\), \(p'(1) = 0\). Two of those four constraints
+    are exactly the slope conditions we are asked to verify, so they are baked in by
+    construction — the function would not be the smoothstep cubic if they failed. We chose the
+    coefficients \(c = 3\), \(d = -2\) precisely <em>because</em> those slopes had to be zero.
+  </p>
+</details>
+
+<details>
+  <summary>Solution to 7.6 — Numeric divergence at t = 0.1 and 0.9.</summary>
+  <p>
+    \(\mathrm{easeInOutCubic}(0.1) = 4 \cdot 0.001 = 0.004\). \(\mathrm{smoothstep}(0.1) = 0.01 \cdot 2.8 = 0.028\).
+    Difference \(\approx 0.024\). At \(t = 0.9\): \(\mathrm{easeInOutCubic}(0.9) = 1 - \tfrac{1}{2}(0.2)^3 = 0.996\).
+    \(\mathrm{smoothstep}(0.9) = 0.81 \cdot 1.2 = 0.972\). Difference \(\approx 0.024\).
+    <code>easeInOutCubic</code> is closer to 0 longer near the start and closer to 1 longer near
+    the end — its middle is steeper (its midpoint slope is 3 versus smoothstep's 1.5), so it
+    feels snappier through the middle of the animation while still ending soft.
+  </p>
+</details>
+
+<details>
+  <summary>Solution to 7.7 — Linear vs eased rect lerp.</summary>
+  <p>
+    Linear at \(t = 0.25\): top \(= 60 + (0 - 60) \cdot 0.25 = 45\), and similarly
+    \(\{\mathrm{top:}45, \mathrm{right:}60, \mathrm{bottom:}45, \mathrm{left:}60\}\). With
+    <code>easeOutCubic(0.25) = 1 - 0.75^3 = 1 - 0.421875 = 0.578125\), the rect becomes
+    \(\{\mathrm{top:} 60 \cdot (1 - 0.578) = 25.31, \mathrm{right:} 33.75, \mathrm{bottom:} 25.31, \mathrm{left:} 33.75\}\).
+    The eased version reaches the destination much faster early on, so on screen the panel
+    "snaps open" instead of unrolling at constant speed — that is what easeOutCubic is for.
+  </p>
+</details>
+
+<details>
+  <summary>Solution to 7.8 — Build easeInCubic.</summary>
+  <p>
+    Conditions: \(f(0) = 0\), \(f(1) = 1\), \(f'(0) = 0\), \(f'(1) = 3\). The natural candidate
+    is \(f(t) = t^3\). Check: \(0^3 = 0\), \(1^3 = 1\), derivative \(3t^2\) gives \(0\) at the
+    start and \(3\) at the end. All four conditions hold. Reflecting <code>easeOutCubic</code>
+    via the standard "inverse easing" identity \(g(t) = 1 - f(1 - t)\) yields
+    \(g(t) = 1 - (1 - (1 - (1 - t))^3) \cdot (\ldots)\) — but more cleanly:
+    \(\mathrm{easeOutCubic}(t) = 1 - (1 - t)^3\), and the in/out reflection is
+    \(\mathrm{easeInCubic}(t) = 1 - \mathrm{easeOutCubic}(1 - t) = 1 - (1 - (1 - (1 - t))^3) = 1 - (1 - t^3) = t^3\). Same answer.
+  </p>
+</details>
+
+<details>
+  <summary>Solution to 7.9 — Smoothstepped fade.</summary>
+  <p>
+    The rewrite would read:
+  </p>
+  <pre><code><span class="k">const</span> fadeRaw = <span class="f">remap</span>(progress, clipStart, planeFadeEnd);
+<span class="k">const</span> fadeT = fadeRaw * fadeRaw * (<span class="n">3</span> - <span class="n">2</span> * fadeRaw);
+<span class="k">this</span>.sceneGraph.setPlaneOpacity(planeId, <span class="n">1</span> - fadeT);</code></pre>
+  <p>
+    Why the codebase prefers the linear remap: the fade window <code>[clipStart, planeFadeEnd]</code>
+    is intentionally short (about 8% of the timeline). At the very start of that window the clip
+    reveal has just begun — and a smoothstepped fade would barely move from opacity 1 for the
+    first half of those 8%, leaving the plane visibly "stuck" while the section content already
+    starts appearing through the clip. Linear remap starts moving immediately and finishes
+    quickly, which is the right behaviour for a tiny crossover window. Easing only pays off when
+    the duration is long enough for the slow-start to be felt as motion rather than as latency.
+  </p>
+</details>
+
+</body>
+</html>

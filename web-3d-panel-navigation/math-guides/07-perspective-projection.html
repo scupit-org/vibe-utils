@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Guide 07 - Perspective Projection</title>
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\\(','\\)'], ['$', '$']],
+    displayMath: [['$$','$$'], ['\\[','\\]']]
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161a22;
+    --ink: #e6e8ee;
+    --muted: #9aa3b2;
+    --accent: #69b1ff;
+    --accent-2: #ffb86b;
+    --warn: #ff7a7a;
+    --code-bg: #0b0d12;
+    --rule: #2a2f3a;
+  }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 32px 24px 72px;
+  }
+  h1 {
+    font-size: 2.0rem;
+    margin-bottom: 0.2em;
+    border-bottom: 2px solid var(--rule);
+    padding-bottom: 0.3em;
+  }
+  h2 {
+    margin-top: 2.0em;
+    font-size: 1.45rem;
+    color: var(--accent);
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 0.2em;
+  }
+  h3 {
+    margin-top: 1.5em;
+    font-size: 1.15rem;
+    color: var(--accent-2);
+  }
+  p, li {
+    color: var(--ink);
+  }
+  .muted { color: var(--muted); }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    font-size: 0.92rem;
+  }
+  code {
+    font-family: "Fira Mono", "Consolas", "Monaco", monospace;
+    color: #d8e2ff;
+  }
+  p code, li code {
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.92em;
+  }
+  .callout {
+    background: #18202c;
+    border-left: 3px solid var(--accent);
+    padding: 10px 14px;
+    margin: 14px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .warn {
+    background: #2a1a1a;
+    border-left: 3px solid var(--warn);
+    padding: 10px 14px;
+    margin: 14px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  details {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 8px 14px;
+    margin: 8px 0;
+  }
+  details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--accent-2);
+  }
+  .widget {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 18px 0;
+  }
+  .widget-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px 24px;
+    margin-top: 12px;
+    align-items: center;
+  }
+  .widget-controls label {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.85rem;
+    color: var(--muted);
+    min-width: 140px;
+  }
+  .widget-controls input[type="range"] {
+    width: 160px;
+  }
+  .readout {
+    font-family: "Fira Mono", "Consolas", "Monaco", monospace;
+    background: var(--code-bg);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--rule);
+    font-size: 0.9rem;
+    color: #d8e2ff;
+    margin-top: 10px;
+    display: inline-block;
+  }
+  canvas {
+    display: block;
+    background: #0a0c10;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    cursor: grab;
+  }
+  canvas:active { cursor: grabbing; }
+  table {
+    border-collapse: collapse;
+    margin: 12px 0;
+  }
+  td, th {
+    border: 1px solid var(--rule);
+    padding: 5px 10px;
+    text-align: left;
+  }
+  ul, ol { padding-left: 1.4em; }
+  hr {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 2em 0;
+  }
+  .file-ref {
+    color: var(--accent-2);
+    font-family: "Fira Mono", monospace;
+    font-size: 0.92em;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Guide 07 - Perspective Projection</h1>
+<p class="muted">Curriculum: web-3d-panel-navigation - Guide 7 of the math series.</p>
+
+<h2>1. Why this matters</h2>
+<p>
+Every CSS panel in this project is a real DOM element being shoved around in 3D, but at the end of the day it has to land at a particular pixel on your 2D screen. Two pieces of code do that mapping. The first is
+<span class="file-ref">src/projection.ts:59-75</span>, the function <code>projectToScreen</code>, which takes a world-space <code>THREE.Vector3</code> and returns a pixel coordinate. It is used (via <code>getPlaneScreenRect</code> at <span class="file-ref">src/projection.ts:126-152</span>) to compute the screen rectangle of every zoom panel for clip-path masking and for the navigation transitions. The second is the CSS3D renderer at
+<span class="file-ref">src/css3d-renderer.ts:88-209</span>, which builds the <code>matrix3d(...)</code> string that the browser uses to project the panel DOM elements. Both rely on the same underlying math: the <em>perspective projection</em>. This guide derives that math from a pinhole camera, all the way to the pixel coordinates and the curious sign-flips inside the CSS3D matrix output.
+</p>
+
+<div class="callout">
+<strong>Convention:</strong> Right-handed coordinates, <em>+y up</em>, camera looks down <em>-z</em>. This is the Three.js default and what this codebase uses everywhere.
+</div>
+
+<h2>2. Building intuition: the pinhole camera</h2>
+<p>
+Forget lenses for a moment. The simplest model of a camera is a sealed box with one pinprick on the front. Light from a point in the world travels in a straight line through the pinhole and lands on the back wall (the image plane). That is enough to derive everything that follows.
+</p>
+
+<canvas id="pinholeFigure" width="800" height="320" style="background:#0a0c10;"></canvas>
+<p class="muted" style="text-align:center; font-size:0.85rem;">A pinhole camera. Rays from the world point pass through the camera origin and land on the image plane in front of the camera.</p>
+
+<p>
+Two things to internalize:
+</p>
+<ol>
+  <li>Every world point projects along the ray that connects it to the camera origin. Two world points on the same ray land on the <em>same</em> pixel.</li>
+  <li>Things farther from the camera (more negative <em>z</em>) appear smaller. This is exactly the <em>similar triangles</em> relationship you remember from geometry.</li>
+</ol>
+
+<h2>3. The math</h2>
+
+<h3>3.1 Pinhole projection in 1D</h3>
+<p>
+Strip the world down to two dimensions: the camera sits at the origin and looks down the <em>-z</em> axis. We want to project the world point \((x, z)\) (with \(z &lt; 0\)) onto an image plane at <em>z = -f</em> in front of the camera, where <em>f</em> is the <em>focal length</em>.
+</p>
+
+<p>
+By similar triangles, the ratio of the image-plane offset to the focal length equals the ratio of the world offset to the world depth:
+</p>
+$$ \frac{x'}{f} = \frac{x}{-z} $$
+<p>so</p>
+$$ x' = \frac{x \cdot f}{-z}. $$
+
+<p>
+The minus sign on \(z\) is what keeps \(x'\) finite and positive when both <em>f</em> and \(-z\) are positive. If \(z \to 0\), \(x'\) blows up - the point is at the camera. If \(z &gt; 0\), the point is <em>behind</em> the camera and the formula still spits out an answer, just one that is geometrically nonsense.
+</p>
+
+<h3>3.2 Pinhole projection in 3D</h3>
+<p>
+Add the second axis and you get the same relation independently for <em>x</em> and <em>y</em>:
+</p>
+$$ x' = \frac{x \cdot f}{-z}, \quad y' = \frac{y \cdot f}{-z}. $$
+
+<p>
+This is called the <strong>perspective divide</strong>: every coordinate is divided by the depth. It is fundamentally <em>non-linear</em> - division is not a matrix multiplication, so we cannot do it with a single 3x3 matrix on \([x, y, z]^\top\). Some clever bookkeeping is required.
+</p>
+
+<h3>3.3 Homogeneous coordinates and the 4x4 trick</h3>
+<p>
+The fix: add a fourth coordinate <em>w</em> and represent every point as
+\([x, y, z, 1]^\top\).
+A 4x4 matrix can now place values into this <em>w</em> slot, and we agree that at the very end we divide by whatever <em>w</em> ended up as. The non-linear divide is still there, but now it is a single uniform step at the end of the pipeline.
+</p>
+
+<p>
+The canonical OpenGL-style perspective matrix has the form
+</p>
+$$
+P = \begin{bmatrix}
+\dfrac{1}{\text{aspect} \cdot \tan(\theta_y/2)} & 0 & 0 & 0 \\
+0 & \dfrac{1}{\tan(\theta_y/2)} & 0 & 0 \\
+0 & 0 & \dfrac{f+n}{n-f} & \dfrac{2 f n}{n-f} \\
+0 & 0 & -1 & 0
+\end{bmatrix}
+$$
+<p>
+where \(\theta_y\) is the vertical field-of-view, \(n\) and \(f\) are the near and far clip planes, and aspect is viewport width over height.
+</p>
+
+<p>
+You don't need to memorize each entry, but you should recognize the structure:
+</p>
+<ul>
+  <li><strong>Top-left 2x2</strong>: scales \(x\) and \(y\) by \(1/\tan(\theta_y/2)\), i.e. by the focal length implied by the FOV. Wider FOV (bigger \(\theta_y\)) gives a smaller scale, so things look smaller.</li>
+  <li><strong>Bottom-right 2x2</strong>: maps the depth range \([n, f]\) into the canonical \([-1, +1]\) range.</li>
+  <li><strong>Third column, fourth row</strong>: a \(-1\) in the \(w\) row of the \(z\) column. After multiplying, \(w_{\text{out}} = -z_{\text{in}}\). When we divide by \(w\), that <em>is</em> the perspective divide.</li>
+</ul>
+
+<p>
+After multiplying \(P \cdot [x, y, z, 1]^\top\) you get a vector \([x_c, y_c, z_c, w_c]^\top\), called <em>clip space</em>. Then divide by \(w_c\):
+</p>
+$$ [x_{\text{ndc}}, y_{\text{ndc}}, z_{\text{ndc}}] = \left[ \frac{x_c}{w_c}, \frac{y_c}{w_c}, \frac{z_c}{w_c} \right]. $$
+
+<h3>3.4 Normalized device coordinates</h3>
+<p>
+After the divide, every visible point lands inside the unit cube \([-1, +1]^3\). This is <strong>normalized device coordinate</strong> (NDC) space. The mapping is:
+</p>
+<ul>
+  <li>\(x_{\text{ndc}} = -1\) is the left edge of the viewport, \(+1\) is the right edge.</li>
+  <li>\(y_{\text{ndc}} = -1\) is the bottom, \(+1\) is the top. (<em>Note: +y still up here.</em>)</li>
+  <li>\(z_{\text{ndc}} = -1\) is the near plane, \(+1\) is the far plane.</li>
+</ul>
+
+<p>
+Three.js gives you this in one method call:
+</p>
+<pre><code>const v = new THREE.Vector3(x, y, z);
+v.project(camera);   // v is now in NDC, in place
+</code></pre>
+<p>
+That single line is what <code>projectToScreen</code> uses. Inside, <code>vector.project</code> multiplies by the camera's <code>matrixWorldInverse</code> (going from world to camera space) and then by <code>projectionMatrix</code> (going from camera space to clip space), and then divides by <em>w</em>.
+</p>
+
+<h3>3.5 Viewport mapping: NDC to screen pixels</h3>
+<p>
+NDC is normalized but pixel-blind. We still need to convert it to actual pixel coordinates with \((0, 0)\) at the top-left, \((W, H)\) at the bottom-right.
+</p>
+
+<p>
+For <em>x</em> the situation is straightforward: NDC <em>x</em> goes from \(-1\) at the left edge to \(+1\) at the right edge, and we want \(0\) at the left and \(W\) at the right. Map linearly:
+</p>
+$$ x_{\text{screen}} = \frac{x_{\text{ndc}} + 1}{2} \cdot W. $$
+<p>
+Check: \(x_{\text{ndc}} = -1\) gives \(0\). \(x_{\text{ndc}} = +1\) gives \(W\). Good.
+</p>
+
+<p>
+For <em>y</em>, NDC has \(+y\) going up, but screen pixels have \(+y\) going <em>down</em>. So the top edge of NDC (\(y = +1\)) should map to pixel <em>y</em> = 0, and the bottom of NDC (\(y = -1\)) should map to pixel <em>y</em> = <em>H</em>. Flip the sign:
+</p>
+$$ y_{\text{screen}} = \frac{1 - y_{\text{ndc}}}{2} \cdot H. $$
+<p>
+Check: \(y_{\text{ndc}} = +1\) gives \(0\). \(y_{\text{ndc}} = -1\) gives \(H\). Good.
+</p>
+
+<p>
+These two formulas are exactly the last two lines of <code>projectToScreen</code>:
+</p>
+<pre><code>const x = (projected.x + 1) / 2 * viewportWidth;
+const y = (1 - projected.y) / 2 * viewportHeight;
+</code></pre>
+
+<h3>3.6 The CSS3D twist: why some Y entries get negated</h3>
+<p>
+Three.js renders to a WebGL canvas where +y is up. CSS 3D transforms live in the DOM where +y points <em>down</em> the screen. The renderer in this project (<span class="file-ref">src/css3d-renderer.ts</span>) bridges the two worlds, and it has to flip Y in some places but not others.
+</p>
+
+<p>
+The camera matrix transforms <em>scene space</em> into <em>screen space</em>. Going from a y-up world into a y-down screen requires negating the Y row. Look at <code>getCameraCSSMatrix</code>:
+</p>
+<pre><code>// css3d-renderer.ts:158-179 (getCameraCSSMatrix)
+return 'matrix3d(' +
+  this.epsilon(elements[0]) + ',' +
+  this.epsilon(-elements[1]) + ',' +   // Y row, X col: negated
+  this.epsilon(elements[2]) + ',' +
+  this.epsilon(elements[3]) + ',' +
+  this.epsilon(elements[4]) + ',' +
+  this.epsilon(-elements[5]) + ',' +   // Y row, Y col: negated
+  this.epsilon(elements[6]) + ',' +
+  this.epsilon(elements[7]) + ',' +
+  this.epsilon(elements[8]) + ',' +
+  this.epsilon(-elements[9]) + ',' +   // Y row, Z col: negated
+  this.epsilon(elements[10]) + ',' +
+  this.epsilon(elements[11]) + ',' +
+  this.epsilon(elements[12]) + ',' +
+  this.epsilon(-elements[13]) + ',' +  // Y row, translation: negated
+  this.epsilon(elements[14]) + ',' +
+  this.epsilon(elements[15]) +
+')';
+</code></pre>
+<p>
+Recall that <code>elements</code> in Three.js is column-major. Indices 1, 5, 9, 13 are the second <em>row</em> across all four columns. That's the entire Y row of the matrix - the row that determines what the output Y coordinate becomes. Negating that row is the matrix-level equivalent of doing <code>y_screen = -y_world</code> at the end of every transform.
+</p>
+
+<p>
+The object matrix is different. It maps an object's <em>local</em> space into <em>scene</em> space - both of which are y-up. No flip is needed for that step. But then why do the entries in <code>getObjectCSSMatrix</code> still have minus signs?
+</p>
+
+<pre><code>// css3d-renderer.ts:185-208 (getObjectCSSMatrix)
+const matrix3d = 'matrix3d(' +
+  this.epsilon(elements[0]) + ',' +
+  this.epsilon(elements[1]) + ',' +
+  this.epsilon(elements[2]) + ',' +
+  this.epsilon(elements[3]) + ',' +
+  this.epsilon(-elements[4]) + ',' +   // Y column negated
+  this.epsilon(-elements[5]) + ',' +
+  this.epsilon(-elements[6]) + ',' +
+  this.epsilon(-elements[7]) + ',' +
+  this.epsilon(elements[8]) + ',' +
+  ...
+</code></pre>
+
+<p>
+Read the indices carefully. In the camera matrix the negated entries were 1, 5, 9, 13 - the <em>Y row</em>. In the object matrix the negated entries are 4, 5, 6, 7 - the <em>Y column</em>. Those are different things in a column-major layout.
+</p>
+
+<p>
+Negating the Y <em>column</em> means: when an incoming local-y is positive, contribute its negative to the output. In effect, the local frame's +y axis is reinterpreted as -y in the parent frame. That undoes the same y-flip that the camera matrix performs, so when the two get composed by the browser the panel content sits the right way up. The asymmetry exists because the camera matrix establishes the viewport's y-down convention <em>once</em>, and every object beneath has to compensate for it on the way in.
+</p>
+
+<div class="callout">
+<strong>Plain-English summary:</strong> the camera matrix flips the Y row to satisfy CSS's y-down screen, and each object matrix flips the Y column to keep its local +y pointing the same direction it did in the Three.js scene. Two different fixes for two different mismatches.
+</div>
+
+<h2>4. In this codebase</h2>
+
+<h3>4.1 World to screen: <code>projectToScreen</code></h3>
+<p>
+Verbatim from <span class="file-ref">src/projection.ts:59-75</span>:
+</p>
+<pre><code>export function projectToScreen(
+  point: THREE.Vector3,
+  camera: THREE.Camera,
+  viewportWidth: number,
+  viewportHeight: number
+): { x: number; y: number } {
+  const projected = point.clone();
+  projected.project(camera);
+
+  // NDC x: -1 = left edge, +1 = right edge
+  // NDC y: -1 = bottom edge, +1 = top edge
+  // Screen: (0,0) = top-left, positive Y goes down
+  const x = (projected.x + 1) / 2 * viewportWidth;
+  const y = (1 - projected.y) / 2 * viewportHeight;
+
+  return { x, y };
+}
+</code></pre>
+<p>
+This is the entire mathematical pipeline of section 3 in seven lines:
+</p>
+<ol>
+  <li><code>projected.project(camera)</code> does world -&gt; camera-space -&gt; clip-space -&gt; perspective divide -&gt; NDC.</li>
+  <li>The next two lines are the viewport mapping with the Y-flip.</li>
+</ol>
+
+<h3>4.2 Aggregating four corners: <code>getPlaneScreenRect</code></h3>
+<p>
+From <span class="file-ref">src/projection.ts:126-152</span>:
+</p>
+<pre><code>export function getPlaneScreenRect(
+  config: ZoomPlaneConfig,
+  scale: number,
+  camera: THREE.Camera,
+  viewportWidth: number,
+  viewportHeight: number
+): ScreenRect {
+  const worldCorners = getPlaneWorldCorners(config, scale);
+  const screenCorners = worldCorners.map(corner =&gt;
+    projectToScreen(corner, camera, viewportWidth, viewportHeight)
+  );
+
+  const xs = screenCorners.map(c =&gt; c.x);
+  const ys = screenCorners.map(c =&gt; c.y);
+
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+
+  return {
+    top: Math.max(0, minY),
+    right: Math.max(0, viewportWidth - maxX),
+    bottom: Math.max(0, viewportHeight - maxY),
+    left: Math.max(0, minX)
+  };
+}
+</code></pre>
+<p>
+Each of the four world corners of a panel is sent through <code>projectToScreen</code>, then the bounding box of the four projected pixel coordinates is taken. Guide 09 will go deeper on this AABB step. For now just notice that the entire feat - turning a tilted, scaled, rotated 3D rectangle into a clean axis-aligned screen rectangle - rests on the projection formula derived in section 3.
+</p>
+
+<h3>4.3 The CSS3D matrices</h3>
+<p>
+The two matrix-builder methods we already saw are how the panel DOM elements get their <code>transform</code> set in the browser. The camera CSS matrix is applied to the parent container in <span class="file-ref">src/css3d-renderer.ts:109-115</span>:
+</p>
+<pre><code>const cameraCSSMatrix = this.getCameraCSSMatrix(camera.matrixWorldInverse);
+const style = `translateZ(${fov}px)${cameraCSSMatrix}translate(${this.widthHalf}px,${this.heightHalf}px)`;
+</code></pre>
+<p>
+The leading <code>translateZ(fov)</code> is what tells CSS the focal length (the same \(f\) from section 3.1). The trailing <code>translate(widthHalf, heightHalf)</code> shifts the origin from the top-left of the viewport to its center, where Three.js's clip space expects it.
+</p>
+
+<p>
+And from <span class="file-ref">src/css3d-renderer.ts:88-95</span>:
+</p>
+<pre><code>const fov = camera.projectionMatrix.elements[5] * this.heightHalf;
+</code></pre>
+<p>
+That magic number is exactly the entry \(1/\tan(\theta_y/2)\) from the perspective matrix, multiplied by half the viewport height. Geometrically it is the pixel distance from the camera to the image plane that makes objects render at the right size for the chosen FOV. Section 8 will spend more time on this.
+</p>
+
+<h2>5. Interactive playground</h2>
+<p>
+Drag the green dot in the left panel (top-down XZ view) to move a world point relative to the camera at the origin. The right panel shows where that point lands in NDC space (the unit square) and in pixel space (the viewport rectangle). Watch what happens when you drag the point past the camera (into <em>z &gt; 0</em>) - the math doesn't crash, but it produces a "ghost" projection that should not be drawn.
+</p>
+
+<div class="widget">
+  <canvas id="proj" width="900" height="420"></canvas>
+  <div class="widget-controls">
+    <label>FOV (deg): <input id="fov" type="range" min="20" max="90" value="50" step="1" /><span id="fovVal" class="muted">50</span></label>
+    <label>Viewport W: <input id="vw" type="range" min="320" max="1920" value="1280" step="10" /><span id="vwVal" class="muted">1280</span></label>
+    <label>Viewport H: <input id="vh" type="range" min="240" max="1080" value="720" step="10" /><span id="vhVal" class="muted">720</span></label>
+  </div>
+  <div class="readout" id="readout">x_ndc = ... y_ndc = ... x_screen = ... y_screen = ...</div>
+</div>
+
+<script>
+(function () {
+  // ---- Pinhole figure (decorative, top of guide) ----
+  (function drawPinhole() {
+    const c = document.getElementById('pinholeFigure');
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    const w = c.width, h = c.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // axis baseline
+    const baseY = h * 0.55;
+
+    // Camera origin at right
+    const camX = w * 0.7, camY = baseY;
+    // Image plane to the right of the camera (between cam and viewer)
+    const imgPlaneX = camX - 80;
+    // World point on the left
+    const worldX = w * 0.15, worldY = baseY - 80;
+
+    // Image plane
+    ctx.strokeStyle = '#69b1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(imgPlaneX, baseY - 80);
+    ctx.lineTo(imgPlaneX, baseY + 80);
+    ctx.stroke();
+
+    // Optical axis
+    ctx.strokeStyle = '#3a4150';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(60, baseY);
+    ctx.lineTo(camX + 30, baseY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // World point
+    ctx.fillStyle = '#7be882';
+    ctx.beginPath(); ctx.arc(worldX, worldY, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#e6e8ee';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('world point (x, z)', worldX - 50, worldY - 12);
+
+    // Ray from world point through camera origin
+    ctx.strokeStyle = '#ffb86b';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(worldX, worldY);
+    ctx.lineTo(camX, camY);
+    ctx.stroke();
+
+    // Continued behind camera
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = '#664';
+    const dx = camX - worldX, dy = camY - worldY;
+    ctx.beginPath();
+    ctx.moveTo(camX, camY);
+    ctx.lineTo(camX + dx * 0.25, camY + dy * 0.25);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Image plane intersection (similar triangles)
+    const t = (camX - imgPlaneX) / (camX - worldX);
+    const ipY = camY + (worldY - camY) * t;
+    ctx.fillStyle = '#ff7a7a';
+    ctx.beginPath(); ctx.arc(imgPlaneX, ipY, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#e6e8ee';
+    ctx.fillText("x' on image plane", imgPlaneX + 8, ipY - 6);
+
+    // Camera origin
+    ctx.fillStyle = '#e6e8ee';
+    ctx.beginPath(); ctx.arc(camX, camY, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillText('camera (pinhole)', camX - 30, camY + 22);
+
+    // f label
+    ctx.strokeStyle = '#9aa3b2';
+    ctx.beginPath();
+    ctx.moveTo(imgPlaneX, baseY + 60);
+    ctx.lineTo(camX, baseY + 60);
+    ctx.stroke();
+    ctx.fillStyle = '#9aa3b2';
+    ctx.fillText('f', (imgPlaneX + camX) / 2 - 4, baseY + 75);
+
+    // Image plane label
+    ctx.fillStyle = '#69b1ff';
+    ctx.fillText('image plane', imgPlaneX - 30, baseY - 90);
+  })();
+
+  // ---- Interactive playground ----
+  const canvas = document.getElementById('proj');
+  const ctx = canvas.getContext('2d');
+  const fovInput = document.getElementById('fov');
+  const vwInput = document.getElementById('vw');
+  const vhInput = document.getElementById('vh');
+  const fovVal = document.getElementById('fovVal');
+  const vwVal = document.getElementById('vwVal');
+  const vhVal = document.getElementById('vhVal');
+  const readout = document.getElementById('readout');
+
+  // World-space point (in scene units). Camera at origin looking down -z.
+  // x: left/right, z: depth (negative = in front of camera).
+  let worldX = 2.5;
+  let worldZ = -10;
+
+  // Layout: left panel = top-down XZ scene, right panel = NDC + pixel rect
+  const leftPanel = { x: 10, y: 10, w: 430, h: 400 };
+  const rightPanel = { x: 460, y: 10, w: 430, h: 400 };
+
+  // Convert XZ world to left-panel pixel coords.
+  // Camera glyph at the bottom-center of the left panel, looking up the panel (-z = upward in screen).
+  // World x range: -10 .. 10 mapped across the panel width.
+  // World z range: 0 (bottom) .. -20 (top).
+  function worldToLeftPx(x, z) {
+    const cx = leftPanel.x + leftPanel.w / 2;
+    const camPy = leftPanel.y + leftPanel.h - 30;
+    const xRange = 20; // -10..+10
+    const zRange = 22; // 0..-22
+    const px = cx + (x / (xRange / 2)) * (leftPanel.w / 2 - 20);
+    const py = camPy + (z / (zRange)) * (leftPanel.h - 60);
+    // z=0 -> py=camPy; z=-22 -> py=camPy - (leftPanel.h - 60)
+    return { x: px, y: py };
+  }
+  function leftPxToWorld(px, py) {
+    const cx = leftPanel.x + leftPanel.w / 2;
+    const camPy = leftPanel.y + leftPanel.h - 30;
+    const xRange = 20;
+    const zRange = 22;
+    const x = (px - cx) / (leftPanel.w / 2 - 20) * (xRange / 2);
+    const z = (py - camPy) / (leftPanel.h - 60) * zRange;
+    return { x, z };
+  }
+
+  function project(worldX, worldY, worldZ, fovDeg, vw, vh) {
+    // Camera at origin, looking down -z.
+    // Use a standard perspective: x_ndc = x * (1/tan(fov/2)) / (-z * aspect)
+    // Three.js uses VERTICAL fov.
+    const fovRad = fovDeg * Math.PI / 180;
+    const aspect = vw / vh;
+    const f = 1 / Math.tan(fovRad / 2);
+
+    // We'll do a simplified perspective for the widget: ignore near/far (just for x,y display).
+    // -z so a point in front of the camera (z<0) gives positive denominator.
+    const denom = -worldZ;
+    const xNdc = (worldX * f / aspect) / denom;
+    const yNdc = (worldY * f) / denom;
+
+    const xScreen = (xNdc + 1) / 2 * vw;
+    const yScreen = (1 - yNdc) / 2 * vh;
+    return { xNdc, yNdc, xScreen, yScreen, denom };
+  }
+
+  function draw() {
+    const fovDeg = +fovInput.value;
+    const vw = +vwInput.value;
+    const vh = +vhInput.value;
+    fovVal.textContent = fovDeg;
+    vwVal.textContent = vw;
+    vhVal.textContent = vh;
+
+    ctx.fillStyle = '#0a0c10';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // ----- Left panel: top-down scene view -----
+    // Panel border
+    ctx.strokeStyle = '#2a2f3a';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(leftPanel.x, leftPanel.y, leftPanel.w, leftPanel.h);
+
+    ctx.fillStyle = '#9aa3b2';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Top-down scene (XZ plane)', leftPanel.x + 10, leftPanel.y + 18);
+    ctx.fillText('camera at (0,0,0), looking up the page (-z)', leftPanel.x + 10, leftPanel.y + 34);
+
+    // Grid lines
+    ctx.strokeStyle = '#1c2230';
+    ctx.lineWidth = 1;
+    for (let gx = -10; gx <= 10; gx += 2) {
+      const a = worldToLeftPx(gx, 0);
+      const b = worldToLeftPx(gx, -22);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    for (let gz = 0; gz >= -22; gz -= 2) {
+      const a = worldToLeftPx(-10, gz);
+      const b = worldToLeftPx(10, gz);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+
+    // Camera glyph
+    const cam = worldToLeftPx(0, 0);
+    ctx.fillStyle = '#e6e8ee';
+    ctx.beginPath(); ctx.arc(cam.x, cam.y, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#9aa3b2';
+    ctx.fillText('cam', cam.x + 8, cam.y + 4);
+
+    // FOV cone (using horizontal fov derived from vertical fov + aspect)
+    const fovRad = fovDeg * Math.PI / 180;
+    const aspect = vw / vh;
+    const halfFovH = Math.atan(Math.tan(fovRad / 2) * aspect);
+    // The cone opens up the panel (toward -z, i.e. upward in the panel)
+    const coneLen = 22; // in world z units
+    const coneX = Math.tan(halfFovH) * coneLen;
+    const conePtL = worldToLeftPx(-coneX, -coneLen);
+    const conePtR = worldToLeftPx(coneX, -coneLen);
+    ctx.fillStyle = 'rgba(105, 177, 255, 0.10)';
+    ctx.beginPath();
+    ctx.moveTo(cam.x, cam.y);
+    ctx.lineTo(conePtL.x, conePtL.y);
+    ctx.lineTo(conePtR.x, conePtR.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#69b1ff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cam.x, cam.y); ctx.lineTo(conePtL.x, conePtL.y);
+    ctx.moveTo(cam.x, cam.y); ctx.lineTo(conePtR.x, conePtR.y);
+    ctx.stroke();
+
+    // Axes labels
+    ctx.fillStyle = '#9aa3b2';
+    ctx.fillText('+x ->', leftPanel.x + leftPanel.w - 40, cam.y + 4);
+    ctx.fillText('-x', leftPanel.x + 12, cam.y + 4);
+    ctx.fillText('-z (forward)', cam.x - 40, leftPanel.y + 50);
+
+    // World point
+    const wp = worldToLeftPx(worldX, worldZ);
+    const inFront = worldZ < 0;
+    ctx.fillStyle = inFront ? '#7be882' : '#ff7a7a';
+    ctx.beginPath(); ctx.arc(wp.x, wp.y, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#0a0c10';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#e6e8ee';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('point (drag me)', wp.x + 10, wp.y - 8);
+    ctx.fillText('(' + worldX.toFixed(2) + ', y=0, ' + worldZ.toFixed(2) + ')', wp.x + 10, wp.y + 14);
+
+    // Ray from camera through point
+    ctx.strokeStyle = inFront ? 'rgba(123, 232, 130, 0.55)' : 'rgba(255, 122, 122, 0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(cam.x, cam.y); ctx.lineTo(wp.x, wp.y); ctx.stroke();
+
+    // ----- Right panel: NDC + pixel viewport -----
+    ctx.strokeStyle = '#2a2f3a';
+    ctx.strokeRect(rightPanel.x, rightPanel.y, rightPanel.w, rightPanel.h);
+
+    ctx.fillStyle = '#9aa3b2';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Right: NDC unit square (top) + viewport pixels (bottom)', rightPanel.x + 10, rightPanel.y + 18);
+
+    // NDC square
+    const ndcSize = 150;
+    const ndcCx = rightPanel.x + rightPanel.w / 2;
+    const ndcCy = rightPanel.y + 110;
+    const ndcLeft = ndcCx - ndcSize / 2;
+    const ndcTop = ndcCy - ndcSize / 2;
+    ctx.fillStyle = '#0d121a';
+    ctx.fillRect(ndcLeft, ndcTop, ndcSize, ndcSize);
+    ctx.strokeStyle = '#69b1ff';
+    ctx.strokeRect(ndcLeft, ndcTop, ndcSize, ndcSize);
+    ctx.fillStyle = '#9aa3b2';
+    ctx.fillText('NDC [-1,+1]', ndcLeft, ndcTop - 6);
+    ctx.fillText('-1', ndcLeft - 18, ndcCy + 4);
+    ctx.fillText('+1', ndcLeft + ndcSize + 4, ndcCy + 4);
+    ctx.fillText('+1 (top)', ndcLeft + ndcSize / 2 - 18, ndcTop - 18);
+    ctx.fillText('-1', ndcLeft + ndcSize / 2 - 4, ndcTop + ndcSize + 14);
+    // Crosshair at NDC origin
+    ctx.strokeStyle = '#1c2230';
+    ctx.beginPath();
+    ctx.moveTo(ndcLeft, ndcCy); ctx.lineTo(ndcLeft + ndcSize, ndcCy);
+    ctx.moveTo(ndcCx, ndcTop); ctx.lineTo(ndcCx, ndcTop + ndcSize);
+    ctx.stroke();
+
+    // Compute projection. Use worldY = 0 in this widget (top-down view).
+    const proj = project(worldX, 0, worldZ, fovDeg, vw, vh);
+
+    // Plot in NDC square
+    let plotX = ndcCx + proj.xNdc * (ndcSize / 2);
+    let plotY = ndcCy - proj.yNdc * (ndcSize / 2);
+    const inNdc = proj.xNdc >= -1 && proj.xNdc <= 1 && proj.yNdc >= -1 && proj.yNdc <= 1 && inFront;
+
+    // Clamp draw position so we always see SOMETHING but show a warning when off-square
+    const clampedX = Math.max(ndcLeft - 10, Math.min(ndcLeft + ndcSize + 10, plotX));
+    const clampedY = Math.max(ndcTop - 10, Math.min(ndcTop + ndcSize + 10, plotY));
+    ctx.fillStyle = inNdc ? '#7be882' : '#ff7a7a';
+    ctx.beginPath(); ctx.arc(clampedX, clampedY, 6, 0, Math.PI * 2); ctx.fill();
+
+    // Pixel viewport rectangle
+    const vpW = 280, vpH = vpW / aspect;
+    const vpX = rightPanel.x + (rightPanel.w - vpW) / 2;
+    const vpY = ndcTop + ndcSize + 30;
+    ctx.fillStyle = '#0d121a';
+    ctx.fillRect(vpX, vpY, vpW, vpH);
+    ctx.strokeStyle = '#ffb86b';
+    ctx.strokeRect(vpX, vpY, vpW, vpH);
+    ctx.fillStyle = '#9aa3b2';
+    ctx.fillText('viewport ' + vw + ' x ' + vh + ' px', vpX, vpY - 6);
+    ctx.fillText('(0,0)', vpX - 22, vpY - 2);
+    ctx.fillText('(' + vw + ',' + vh + ')', vpX + vpW - 6, vpY + vpH + 12);
+
+    // Plot pixel position
+    const pxX = vpX + (proj.xScreen / vw) * vpW;
+    const pxY = vpY + (proj.yScreen / vh) * vpH;
+    const inViewport = proj.xScreen >= 0 && proj.xScreen <= vw && proj.yScreen >= 0 && proj.yScreen <= vh && inFront;
+    const cpxX = Math.max(vpX - 10, Math.min(vpX + vpW + 10, pxX));
+    const cpxY = Math.max(vpY - 10, Math.min(vpY + vpH + 10, pxY));
+    ctx.fillStyle = inViewport ? '#7be882' : '#ff7a7a';
+    ctx.beginPath(); ctx.arc(cpxX, cpxY, 6, 0, Math.PI * 2); ctx.fill();
+
+    // Warning text if behind camera
+    if (!inFront) {
+      ctx.fillStyle = '#ff7a7a';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText('WARNING: point is behind camera (z >= 0).', rightPanel.x + 10, rightPanel.y + rightPanel.h - 18);
+      ctx.font = '12px sans-serif';
+      ctx.fillText('-z is now negative -> formula sign-flips. Output is geometrically meaningless.', rightPanel.x + 10, rightPanel.y + rightPanel.h - 4);
+    }
+
+    readout.textContent =
+      'x_ndc = ' + proj.xNdc.toFixed(2) +
+      '   y_ndc = ' + proj.yNdc.toFixed(2) +
+      '   x_screen = ' + proj.xScreen.toFixed(2) +
+      '   y_screen = ' + proj.yScreen.toFixed(2);
+  }
+
+  // Drag handling on left panel
+  let dragging = false;
+  function ptInLeftPanel(px, py) {
+    return px >= leftPanel.x && px <= leftPanel.x + leftPanel.w &&
+           py >= leftPanel.y && py <= leftPanel.y + leftPanel.h;
+  }
+
+  function getMouseLocal(evt) {
+    const r = canvas.getBoundingClientRect();
+    const sx = canvas.width / r.width;
+    const sy = canvas.height / r.height;
+    return {
+      x: (evt.clientX - r.left) * sx,
+      y: (evt.clientY - r.top) * sy
+    };
+  }
+
+  canvas.addEventListener('mousedown', (e) => {
+    const m = getMouseLocal(e);
+    if (ptInLeftPanel(m.x, m.y)) {
+      dragging = true;
+      const w = leftPxToWorld(m.x, m.y);
+      worldX = Math.max(-10, Math.min(10, w.x));
+      worldZ = Math.max(-22, Math.min(2, w.z));
+      draw();
+    }
+  });
+  canvas.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const m = getMouseLocal(e);
+    const w = leftPxToWorld(m.x, m.y);
+    worldX = Math.max(-10, Math.min(10, w.x));
+    worldZ = Math.max(-22, Math.min(2, w.z));
+    draw();
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+
+  // Touch support
+  canvas.addEventListener('touchstart', (e) => {
+    if (!e.touches[0]) return;
+    const m = getMouseLocal(e.touches[0]);
+    if (ptInLeftPanel(m.x, m.y)) {
+      dragging = true;
+      const w = leftPxToWorld(m.x, m.y);
+      worldX = Math.max(-10, Math.min(10, w.x));
+      worldZ = Math.max(-22, Math.min(2, w.z));
+      draw();
+      e.preventDefault();
+    }
+  }, { passive: false });
+  canvas.addEventListener('touchmove', (e) => {
+    if (!dragging || !e.touches[0]) return;
+    const m = getMouseLocal(e.touches[0]);
+    const w = leftPxToWorld(m.x, m.y);
+    worldX = Math.max(-10, Math.min(10, w.x));
+    worldZ = Math.max(-22, Math.min(2, w.z));
+    draw();
+    e.preventDefault();
+  }, { passive: false });
+  canvas.addEventListener('touchend', () => { dragging = false; });
+
+  fovInput.addEventListener('input', draw);
+  vwInput.addEventListener('input', draw);
+  vhInput.addEventListener('input', draw);
+
+  draw();
+})();
+</script>
+
+<h2>6. Worked examples</h2>
+
+<h3>Example 1: a point on the optical axis</h3>
+<p>
+World point \((0, 0, -10)\). Camera at the origin, vertical FOV \(\theta_y = 50°\), viewport \(W = 1920\), \(H = 1080\). What are the NDC and screen pixel coordinates?
+</p>
+
+<p>
+Using the simplified pinhole formula with \(f = 1/\tan(\theta_y/2)\):
+</p>
+$$ f = \frac{1}{\tan(25°)} \approx \frac{1}{0.4663} \approx 2.1445 $$
+$$ \text{aspect} = \frac{1920}{1080} \approx 1.7778 $$
+$$ x_{\text{ndc}} = \frac{x \cdot f}{-z \cdot \text{aspect}} = \frac{0 \cdot 2.1445}{10 \cdot 1.7778} = 0 $$
+$$ y_{\text{ndc}} = \frac{y \cdot f}{-z} = \frac{0}{10} = 0 $$
+
+<p>
+The point sits dead-center in NDC. Now the viewport mapping:
+</p>
+$$ x_{\text{screen}} = \frac{0 + 1}{2} \cdot 1920 = 960 $$
+$$ y_{\text{screen}} = \frac{1 - 0}{2} \cdot 1080 = 540 $$
+
+<p>
+So pixel \((960, 540)\) - the exact center of the viewport. That sanity-checks: a point on the optical axis always projects to the principal point, which sits at the viewport center.
+</p>
+
+<h3>Example 2: an off-axis point at the same depth</h3>
+<p>
+Same camera and viewport. World point \((2, 1.5, -10)\) - now a real, non-trivial 3D point. Recompute:
+</p>
+$$ x_{\text{ndc}} = \frac{2 \cdot 2.1445}{10 \cdot 1.7778} = \frac{4.289}{17.778} \approx 0.2413 $$
+$$ y_{\text{ndc}} = \frac{1.5 \cdot 2.1445}{10} \approx 0.3217 $$
+$$ x_{\text{screen}} = \frac{0.2413 + 1}{2} \cdot 1920 \approx 1191.6 $$
+$$ y_{\text{screen}} = \frac{1 - 0.3217}{2} \cdot 1080 \approx 366.3 $$
+
+<p>
+The point lands in the upper-right quadrant of the viewport. Notice that even though world-y was <em>positive</em> (above the optical axis), the screen-y came out <em>less than 540</em> (closer to the top). That is the Y-flip in action: pixel y grows downward, so points "above" in scene space have <em>smaller</em> pixel y values.
+</p>
+
+<h3>Example 3: a panel corner</h3>
+<p>
+A panel sits at \(z = -10\) with half-width 800 and half-height 450 (in arbitrary scene units, not pixels). The top-right corner is at world \((800, 450, -10)\). Same camera as before.
+</p>
+$$ x_{\text{ndc}} = \frac{800 \cdot 2.1445}{10 \cdot 1.7778} \approx 96.5 $$
+<p>
+That is way outside the \([-1, +1]\) NDC range. The corner is far off-screen. This is exactly what <code>getPlaneScreenRect</code> handles: it takes the projected corner positions (some of which can fall outside the viewport) and clamps the resulting rectangle to the viewport with the <code>Math.max(0, ...)</code> calls. Were you to plug those numbers in:
+</p>
+$$ x_{\text{screen}} = \frac{96.5 + 1}{2} \cdot 1920 \approx 93{,}600 $$
+<p>
+The function returns <code>{ left: Math.max(0, 93600) = 93600, ... }</code>, which would then be sensibly handled by the rest of the pipeline (the inset would just exceed the viewport, indicating "fully clipped on this side").
+</p>
+
+<h2>7. Exercises</h2>
+
+<ol>
+  <li>(routine) Camera vertical FOV \(60°\), viewport \(1280 \times 720\), point at world \((0, 0, -5)\). Compute \(x_{\text{ndc}}, y_{\text{ndc}}, x_{\text{screen}}, y_{\text{screen}}\).</li>
+  <li>(routine) Same camera. Point at world \((1, 1, -5)\). Compute the same four values.</li>
+  <li>(routine) Same camera. The point doubles its depth - now at \((1, 1, -10)\). What happens to its screen position relative to (2)?</li>
+  <li>(conceptual) Why does the Y-flip exist in <code>projectToScreen</code>? Where in the rendering pipeline is the y-up convention agreed upon, and where does it switch to y-down?</li>
+  <li>(conceptual) Two world points lie on the same ray through the camera origin: \((1, 1, -5)\) and \((2, 2, -10)\). Without doing the arithmetic, predict whether their NDC coordinates are equal, and explain why.</li>
+  <li>(project-applied) The project's camera FOV doubles from \(50°\) to \(100°\). For the point in exercise (1), does \(x_{\text{screen}}\) increase, decrease, or stay the same? Justify mathematically.</li>
+  <li>(project-applied) Open <code>css3d-renderer.ts</code>. Suppose a contributor "simplifies" <code>getCameraCSSMatrix</code> by removing every minus sign from the Y-row entries. What visible bug would users see in the browser?</li>
+</ol>
+
+<h3>Extension challenges</h3>
+<ol start="8">
+  <li>(extension) Using <code>getPlaneScreenRect</code>, write down (in pseudocode or JS) what the returned <code>ScreenRect</code> would look like for a panel that is fully behind the camera. What guarantees in the function prevent the result from breaking downstream consumers?</li>
+  <li>(extension) Three.js camera-space looks down \(-z\). DirectX cameras conventionally look down \(+z\). If you ported <code>projectToScreen</code> to a DirectX-style world, which lines change? Be specific.</li>
+</ol>
+
+<h2>8. Where to next</h2>
+<ul>
+  <li><strong>Guide 08 - FOV and frustum height</strong>: the inverse direction. Given a desired panel height, how far does the camera need to be to fit it exactly? You'll see <code>getCenteredPlaneRect</code> at <span class="file-ref">src/projection.ts:158-194</span> use \(\tan(\text{fov}/2)\) again, but applied geometrically rather than projectively.</li>
+  <li><strong>Guide 09 - Screen-space AABBs and clip-path</strong>: the AABB of the four projected corners (the <code>min</code>/<code>max</code> reduction in <code>getPlaneScreenRect</code>) becomes a CSS <code>clip-path: inset(...)</code> mask.</li>
+  <li><strong>Guide 10 - Slerp for camera transitions</strong>: now that the projection math is solid, we'll move the camera between panels and need to interpolate orientation smoothly.</li>
+</ul>
+
+<h2>9. Appendix: solutions</h2>
+
+<details>
+<summary>Solution to Exercise 1</summary>
+<p>
+\(\theta_y = 60°\), so \(f = 1/\tan(30°) = 1/0.5774 \approx 1.7321\). Aspect \(= 1280/720 \approx 1.7778\).
+</p>
+<p>
+\(x_{\text{ndc}} = \dfrac{0 \cdot 1.7321}{5 \cdot 1.7778} = 0\). \(y_{\text{ndc}} = 0/5 = 0\).
+</p>
+<p>
+\(x_{\text{screen}} = (0 + 1)/2 \cdot 1280 = 640\). \(y_{\text{screen}} = (1 - 0)/2 \cdot 720 = 360\).
+</p>
+<p>The center of the viewport, as expected for an on-axis point.</p>
+</details>
+
+<details>
+<summary>Solution to Exercise 2</summary>
+<p>
+\(x_{\text{ndc}} = \dfrac{1 \cdot 1.7321}{5 \cdot 1.7778} = \dfrac{1.7321}{8.889} \approx 0.1948\).
+</p>
+<p>
+\(y_{\text{ndc}} = \dfrac{1 \cdot 1.7321}{5} \approx 0.3464\).
+</p>
+<p>
+\(x_{\text{screen}} = (0.1948 + 1)/2 \cdot 1280 \approx 764.7\). \(y_{\text{screen}} = (1 - 0.3464)/2 \cdot 720 \approx 235.3\).
+</p>
+</details>
+
+<details>
+<summary>Solution to Exercise 3</summary>
+<p>
+With \(z = -10\): \(x_{\text{ndc}} = (1 \cdot 1.7321)/(10 \cdot 1.7778) \approx 0.0974\), exactly half of (2). \(y_{\text{ndc}} \approx 0.1732\), also half.
+</p>
+<p>
+\(x_{\text{screen}} \approx 702.3\), \(y_{\text{screen}} \approx 297.7\). The point has moved <em>closer to the viewport center</em>. Doubling depth halves the apparent offset from the optical axis - the perspective foreshortening you would expect.
+</p>
+</details>
+
+<details>
+<summary>Solution to Exercise 4</summary>
+<p>
+NDC inherits OpenGL's convention: +y is up. This matches the Three.js scene convention (Three.js uses y-up by default). However, the HTML/CSS coordinate system on a 2D screen has +y pointing <em>down</em> from the top-left corner. The Y-flip in <code>(1 - y_ndc) / 2 * H</code> is the bridge: it inverts y-up NDC into y-down pixels.
+</p>
+</details>
+
+<details>
+<summary>Solution to Exercise 5</summary>
+<p>
+They will have identical NDC coordinates. Both points lie on the line \(x = -y/1, y = -y/1, z = ...\) with \((x, y, z) = t \cdot (1, 1, -5)\) for \(t = 1\) and \(t = 2\). Substituting into \(x' = x f / (-z)\) gives \(t f / (5t) = f/5\), independent of \(t\). The whole point of perspective projection is that points on the same ray through the camera origin are <em>indistinguishable</em> on the image plane - this is why the inverse problem (recovering 3D from a single 2D image) is underdetermined.
+</p>
+</details>
+
+<details>
+<summary>Solution to Exercise 6</summary>
+<p>
+The point in (1) is at \((0, 0, -5)\). Both \(x_{\text{ndc}}\) and \(y_{\text{ndc}}\) are \(0\) regardless of FOV (the numerator is zero). So \(x_{\text{screen}}\) stays at \(640\). FOV affects how far <em>off-axis</em> points are pushed - it has no effect on a point exactly on the optical axis. Tricky! For a non-axis point, doubling FOV roughly halves \(f\), which in turn roughly halves the NDC value, pulling the point toward the viewport center.
+</p>
+</details>
+
+<details>
+<summary>Solution to Exercise 7</summary>
+<p>
+The Y-row of the camera matrix is what flips world y-up into screen y-down. Removing the negations would leave the camera matrix in y-up form, but CSS still treats +y as down. The visible result: the entire scene would render <em>upside down</em>. Panels above the camera in scene space would appear at the bottom of the viewport, and vice versa. The object matrix's Y-column negation would still be there, so the panels' content would also be individually flipped, compounding the bug.
+</p>
+</details>
+
+<details>
+<summary>Solution to Exercise 8</summary>
+<p>
+With all four corners behind the camera (\(z &gt; 0\)), the perspective divide produces large negative \(-z\) values, the formula sign-flips, and the projected pixel coordinates can fall anywhere - frequently far outside the viewport, sometimes on the wrong side of it. The function's <code>Math.max(0, ...)</code> floors clamp each inset to a non-negative number, so the resulting <code>ScreenRect</code> never has negative components and downstream code that expects valid CSS inset values does not crash. But the rectangle itself is <em>geometrically meaningless</em>; in production code you would want to skip the projection entirely (or replace it with a "fully clipped" sentinel) when any corner has \(z &gt; 0\). The current implementation does not do this - it relies on the calling code to never request projection of off-screen panels.
+</p>
+</details>
+
+<details>
+<summary>Solution to Exercise 9</summary>
+<p>
+Replace <code>-z</code> with <code>+z</code> in the perspective-divide denominator. Equivalently: in the projection matrix, the third-column <code>-1</code> in the bottom row becomes <code>+1</code>, and the depth-mapping entries swap signs. The viewport-mapping formulas (the last two lines of <code>projectToScreen</code>) are NDC-space and stay the same. So practically, you would change one place: the projection matrix construction inside Three.js (or the camera setup), not <code>projectToScreen</code> itself - which is part of why the function is portable.
+</p>
+</details>
+
+</main>
+</body>
+</html>

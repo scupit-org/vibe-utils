@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Guide 12 — Adaptive Camera Transitions</title>
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(','\\)'], ['$', '$']],
+      displayMath: [['$$','$$'], ['\\[','\\]']]
+    }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<style>
+  :root {
+    --bg: #11141a;
+    --panel: #1a1f29;
+    --ink: #e7ecf3;
+    --muted: #93a0b3;
+    --accent: #8ad6ff;
+    --good: #6fd49a;
+    --bad: #ff8aa3;
+    --warn: #ffce6f;
+    --code-bg: #0c1016;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto;
+    max-width: 980px;
+    padding: 32px 24px 80px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  h1 { font-size: 2.0rem; margin-bottom: 0.2em; }
+  h2 { margin-top: 2.3em; border-bottom: 1px solid #2a3140; padding-bottom: 0.25em; }
+  h3 { margin-top: 1.6em; color: var(--accent); }
+  p, li { color: var(--ink); }
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--panel);
+    padding: 12px 16px;
+    margin: 1.2em 0;
+    border-radius: 4px;
+  }
+  .warn {
+    border-left: 3px solid var(--warn);
+    background: #2a2418;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid #232a36;
+    border-radius: 6px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    font-size: 0.92em;
+    line-height: 1.45;
+  }
+  code { font-family: "JetBrains Mono", Consolas, Menlo, monospace; }
+  pre code { color: #d8e3f0; }
+  .filename {
+    color: var(--muted);
+    font-size: 0.86em;
+    margin-bottom: 4px;
+    font-family: "JetBrains Mono", Consolas, Menlo, monospace;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid #232a36;
+    border-radius: 8px;
+    padding: 16px;
+    margin: 1em 0 1.6em;
+  }
+  canvas {
+    display: block;
+    background: #060a10;
+    border: 1px solid #232a36;
+    border-radius: 6px;
+    width: 100%;
+    height: auto;
+    touch-action: none;
+  }
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px 18px;
+    margin-top: 12px;
+  }
+  .controls label {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.88em;
+    color: var(--muted);
+  }
+  .controls input[type=range] { width: 100%; }
+  .readout {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+    font-family: "JetBrains Mono", Consolas, Menlo, monospace;
+    font-size: 0.88em;
+  }
+  .readout div {
+    background: #0c1016;
+    border: 1px solid #232a36;
+    border-radius: 4px;
+    padding: 6px 10px;
+  }
+  .readout span { color: var(--accent); }
+  .regime-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.85em;
+  }
+  .pill-early { background: #1f3a2c; color: var(--good); }
+  .pill-blend { background: #3a3320; color: var(--warn); }
+  .pill-orbit { background: #3a1f33; color: var(--bad); }
+  details {
+    background: var(--panel);
+    border: 1px solid #232a36;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 0.8em 0;
+  }
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  ul { padding-left: 22px; }
+  .toggle-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  .toggle-row label { color: var(--muted); font-size: 0.9em; }
+  table { border-collapse: collapse; margin: 1em 0; }
+  th, td { border: 1px solid #2a3140; padding: 6px 12px; text-align: left; }
+  th { background: #1a1f29; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>Guide 12 — Adaptive Camera Transitions</h1>
+<p style="color:var(--muted);">Forward + up angles, regime selection via smoothstep, Early-Look vs Orbit, and timeline composition with <code>remap</code>.</p>
+
+<h2>1. Why this matters</h2>
+
+<p>
+When the user clicks a panel in <code>web-3d-panel-navigation</code>, the camera has to fly from its current state
+(some overview perspective) to the panel-perpendicular state (looking straight at the panel from the right distance).
+The naive solution — <code>lerp(from, to, t)</code> on position and target separately — falls apart in two ways:
+</p>
+
+<ul>
+  <li><strong>Lifeless when close.</strong> If the two states are similar, a linear lerp is mechanically straight and feels robotic. We want the camera to "look ahead" before it arrives.</li>
+  <li><strong>Origin-sweeping when far.</strong> If states A and B are on opposite sides of the scene (e.g. one panel is at $+Z$, the other at $+X$), lerping the position passes the camera <em>through the origin</em>. Visually, you swoop into the middle of the scene and back out. Disorienting.</li>
+</ul>
+
+<p>
+The project's solution is a two-strategy adaptive blend. It lives in
+<code>src/camera-transitions.ts:41-162</code> (<code>applyTransition</code>, <code>calculateTransitionState</code>,
+<code>calculateEarlyLookState</code>, <code>calculateOrbitState</code>) and is invoked by
+<code>src/zoom-navigation.ts:200-218</code> (zoom-in) and <code>:331-349</code> (zoom-out).
+The pipeline:
+</p>
+
+<ol>
+  <li>Measure how much reorientation is needed (forward angle + up angle).</li>
+  <li>Pick a regime: <strong>Early Look</strong> (slide and lock-on) for small reorientations, <strong>Orbit</strong> (sweep around a midpoint) for large ones.</li>
+  <li>Smooth-blend between the two regimes in a narrow transition zone (<span style="white-space:nowrap;">$30°$–$35°$</span> total angle).</li>
+  <li>Compose this with a clip-rect animation on a global timeline using <code>remap</code>.</li>
+</ol>
+
+<div class="note">
+This guide assumes you have guides 01 (vectors / dot product), 02 (clamp-then-acos for angles), 03 (lerp,
+smoothstep, easing curves, <code>remap</code>), and 10 (slerp on direction vectors with the parallel fallback)
+under your belt. We will cite them rather than re-derive.
+</div>
+
+<h2>2. Building intuition</h2>
+
+<p>
+Picture two camera states from above (top-down, $XZ$ plane):
+</p>
+
+<ul>
+  <li><strong>State A:</strong> camera at $\mathbf{p}_A$, looking at panel target $\mathbf{t}_A$, with up $\hat{\mathbf{u}}_A$.</li>
+  <li><strong>State B:</strong> camera at $\mathbf{p}_B$, looking at $\mathbf{t}_B$, with up $\hat{\mathbf{u}}_B$.</li>
+</ul>
+
+<p>
+The <em>total reorientation angle</em> is the sum of:
+</p>
+
+<ul>
+  <li>$\theta_{\text{fwd}}$: angle between the two forward (look-at minus position) vectors. Captures "how much do I have to turn left/right/up to face the new target?"</li>
+  <li>$\theta_{\text{up}}$: angle between the two up vectors. Captures roll/tilt that the forward angle alone misses (e.g. a panel that's roll-rotated relative to overview).</li>
+</ul>
+
+<p>
+Why sum them rather than take a max or a magnitude? Because either one being large is a strong signal that the
+two states feel "far apart" perceptually. The sum is a cheap, monotone scalar that grows when either angle grows.
+It does not need to be physically meaningful — it just needs to be a regime selector.
+</p>
+
+<p>
+Now the regime decisions:
+</p>
+
+<ul>
+  <li><strong>Total small ($\leq 30°$):</strong> the two states are close. A straight-line position lerp doesn't sweep through the origin (the path is short anyway). Use <strong>Early Look</strong>.</li>
+  <li><strong>Total large ($\geq 35°$):</strong> the two states are far apart. A straight lerp would scoop through the middle of the scene. Use <strong>Orbit</strong>: keep the camera roughly the same distance from the (moving) target by slerping its offset.</li>
+  <li><strong>In between (transition zone, $30°$ to $35°$):</strong> blend the two strategies componentwise so the cutover is invisible.</li>
+</ul>
+
+<h2>3. The math</h2>
+
+<h3>3.1 Forward angle</h3>
+
+<p>
+The camera's forward direction is the unit vector from its position to its target:
+</p>
+
+$$
+\hat{\mathbf{f}} = \operatorname{normalize}(\mathbf{t} - \mathbf{p}).
+$$
+
+<p>
+The angle between two such forwards uses the clamp-then-acos pattern from guide 02
+(clamping protects against floating-point dot products that drift outside $[-1, 1]$):
+</p>
+
+$$
+\theta_{\text{fwd}} = \arccos\!\big(\operatorname{clamp}(\hat{\mathbf{f}}_A \cdot \hat{\mathbf{f}}_B,\ -1,\ 1)\big).
+$$
+
+<p>The TS code is line-for-line this formula:</p>
+
+<div class="filename">src/camera-transitions.ts:63-67</div>
+<pre><code>const fromFwd = new THREE.Vector3().subVectors(from.target, from.position).normalize();
+const toFwd = new THREE.Vector3().subVectors(to.target, to.position).normalize();
+const fwdDot = THREE.MathUtils.clamp(fromFwd.dot(toFwd), -1, 1);
+const fwdAngle = Math.acos(fwdDot);</code></pre>
+
+<h3>3.2 Up angle</h3>
+
+<p>
+The up vector is already unit-length in the project (the camera-controller normalizes it on construction), so:
+</p>
+
+$$
+\theta_{\text{up}} = \arccos\!\big(\operatorname{clamp}(\hat{\mathbf{u}}_A \cdot \hat{\mathbf{u}}_B,\ -1,\ 1)\big).
+$$
+
+<div class="filename">src/camera-transitions.ts:70-71</div>
+<pre><code>const upDot = THREE.MathUtils.clamp(from.up.dot(to.up), -1, 1);
+const upAngle = Math.acos(upDot);</code></pre>
+
+<h3>3.3 Total reorientation</h3>
+
+$$
+\theta_{\text{total}} = \theta_{\text{fwd}} + \theta_{\text{up}}.
+$$
+
+<p>One line of TS:</p>
+
+<div class="filename">src/camera-transitions.ts:74</div>
+<pre><code>const totalAngle = fwdAngle + upAngle;</code></pre>
+
+<h3>3.4 Regime selection via smoothstep</h3>
+
+<p>
+Recall <code>smoothstep</code> from guide 03: a Hermite curve that is exactly $0$ below <code>edge0</code>,
+exactly $1$ above <code>edge1</code>, and a smooth $C^1$ ramp in between. The project uses thresholds
+$\theta_0 = 30°$ and $\theta_1 = 35°$:
+</p>
+
+$$
+\text{blend} = \operatorname{smoothstep}(\theta_0,\ \theta_1,\ \theta_{\text{total}}).
+$$
+
+<p>This <code>blend</code> is the lerp parameter from "Early Look" (blend = 0) to "Orbit" (blend = 1).</p>
+
+<div class="filename">src/camera-transitions.ts:76-79</div>
+<pre><code>// Blend: 0 (Early Look) at ≤30°, 1 (Orbit) at ≥35°
+const lowerAngle = 30 * THREE.MathUtils.DEG2RAD;
+const upperAngle = 35 * THREE.MathUtils.DEG2RAD;
+const blend = smoothstep(lowerAngle, upperAngle, totalAngle);</code></pre>
+
+<div class="note warn">
+The current shipped implementation has a hard cutover at <code>blend &lt; 0.5</code> rather than a
+componentwise blend (see <code>camera-transitions.ts:81-87</code>). Below we describe the conceptually clean
+"both strategies, then lerp by <code>blend</code>" form because it is the model the smoothstep variable was
+designed for, and it generalises to any componentwise blending you might want to do. Either form gives a
+visually smooth cutover because <code>smoothstep</code>'s zero-derivative endpoints mean the regime is
+already pinned to one side at $\theta_{\text{total}} \le 30°$ and to the other at $\theta_{\text{total}} \ge 35°$.
+</div>
+
+<h3>3.5 Strategy 1 — Early Look</h3>
+
+<p>
+Used when $\theta_{\text{total}} \le \theta_0$. The idea: <strong>the look-at target arrives at the destination
+panel before the camera body finishes its slide</strong>. This makes the rotation feel concurrent with the
+translation rather than sequential, and it gives the user the sense that the camera "knows where it's going"
+the moment they click.
+</p>
+
+<p>Position uses the symmetric ease:</p>
+
+$$
+\mathbf{p}(t) = \operatorname{lerp}(\mathbf{p}_A,\ \mathbf{p}_B,\ \operatorname{easeInOutCubic}(t)).
+$$
+
+<p>Target uses an "early-arrival" remap (so it locks on at $t = 0.7$) followed by an ease-out:</p>
+
+$$
+\tau = \min\!\left(\frac{t}{0.7},\ 1\right),\qquad
+\mathbf{t}(t) = \operatorname{lerp}(\mathbf{t}_A,\ \mathbf{t}_B,\ \operatorname{easeOutCubic}(\tau)).
+$$
+
+<div class="filename">src/camera-transitions.ts:101-109</div>
+<pre><code>const posT = easeInOutCubic(rawT);
+
+// Target uses a faster curve — arrives at ~70% of the animation
+const targetRaw = Math.min(rawT / 0.7, 1.0);
+const targetT = easeOutCubic(targetRaw);
+
+const position = new THREE.Vector3().lerpVectors(from.position, to.position, posT);
+const target = new THREE.Vector3().lerpVectors(from.target, to.target, targetT);
+const { up, fov } = lerpUpAndFov(from, to, posT);</code></pre>
+
+<p>
+<strong>Why different curves for position and target?</strong> The position uses <code>easeInOutCubic</code>
+because the camera is a physical-feeling object — a rigid body that should accelerate at the start and
+decelerate at the end. The target is a non-physical "where is the camera looking" semantic; an
+<code>easeOutCubic</code> applied to a remapped <code>t/0.7</code> gives a quick rotational lock-on followed
+by a smooth deceleration <em>without</em> the slow start. The result: at $t = 0.35$ (camera barely moving),
+the camera is already aiming most of the way at the destination. The motion feels responsive instead of lazy.
+</p>
+
+<h3>3.6 Strategy 2 — Orbit</h3>
+
+<p>
+Used when $\theta_{\text{total}} \ge \theta_1$. The idea: keep the camera at a (lerped) distance from the
+(lerped) target, but rotate the offset around the midpoint using slerp.
+</p>
+
+<p>Step by step. Let $t' = \operatorname{easeInOutCubic}(t)$. Compute the midpoint of the two targets:</p>
+
+$$
+\mathbf{m} = \operatorname{lerp}(\mathbf{t}_A,\ \mathbf{t}_B,\ 0.5).
+$$
+
+<p>Compute each camera position as an offset from $\mathbf{m}$:</p>
+
+$$
+\mathbf{o}_A = \mathbf{p}_A - \mathbf{m},\qquad
+\mathbf{o}_B = \mathbf{p}_B - \mathbf{m}.
+$$
+
+<p>Lerp the radius (length) and slerp the direction (unit vector) — see guide 10:</p>
+
+$$
+r(t') = \operatorname{lerp}(\|\mathbf{o}_A\|,\ \|\mathbf{o}_B\|,\ t'),
+\qquad
+\hat{\mathbf{d}}(t') = \operatorname{slerp}(\hat{\mathbf{o}}_A,\ \hat{\mathbf{o}}_B,\ t').
+$$
+
+<p>Reassemble:</p>
+
+$$
+\mathbf{p}(t) = \mathbf{m} + r(t') \cdot \hat{\mathbf{d}}(t').
+$$
+
+<p>The target is the simple eased lerp:</p>
+
+$$
+\mathbf{t}(t) = \operatorname{lerp}(\mathbf{t}_A,\ \mathbf{t}_B,\ t').
+$$
+
+<p>The slerp uses the parallel-vector fallback from guide 10. Here is the full TS:</p>
+
+<div class="filename">src/camera-transitions.ts:124-158</div>
+<pre><code>const t = easeInOutCubic(rawT);
+
+// Linearly interpolate the look-at target
+const target = new THREE.Vector3().lerpVectors(from.target, to.target, t);
+
+// For position: slerp around the midpoint of the two targets
+const midTarget = new THREE.Vector3().lerpVectors(from.target, to.target, 0.5);
+const fromOffset = new THREE.Vector3().subVectors(from.position, midTarget);
+const toOffset = new THREE.Vector3().subVectors(to.position, midTarget);
+
+// Interpolate radius
+const fromLen = fromOffset.length();
+const toLen = toOffset.length();
+const currentLen = fromLen + (toLen - fromLen) * t;
+
+// Slerp direction
+const fromDir = fromOffset.clone().normalize();
+const toDir = toOffset.clone().normalize();
+const dot = THREE.MathUtils.clamp(fromDir.dot(toDir), -1, 1);
+const theta = Math.acos(dot);
+
+let position: THREE.Vector3;
+if (theta &lt; 0.001) {
+  // Nearly parallel — fall back to lerp
+  position = new THREE.Vector3().lerpVectors(from.position, to.position, t);
+} else {
+  const sinTheta = Math.sin(theta);
+  const a = Math.sin((1 - t) * theta) / sinTheta;
+  const b = Math.sin(t * theta) / sinTheta;
+  const slerpedDir = new THREE.Vector3()
+    .addScaledVector(fromDir, a)
+    .addScaledVector(toDir, b)
+    .normalize();
+  position = midTarget.clone().add(slerpedDir.multiplyScalar(currentLen));
+}</code></pre>
+
+<h3>3.7 Componentwise blend</h3>
+
+<p>
+Conceptually, in the transition zone $\theta_{\text{total}} \in [\theta_0, \theta_1]$ the final state is
+the componentwise lerp:
+</p>
+
+$$
+\mathbf{p}_{\text{out}} = \operatorname{lerp}(\mathbf{p}_{\text{EL}},\ \mathbf{p}_{\text{Orbit}},\ \text{blend}),
+$$
+
+$$
+\mathbf{t}_{\text{out}} = \operatorname{lerp}(\mathbf{t}_{\text{EL}},\ \mathbf{t}_{\text{Orbit}},\ \text{blend}),
+$$
+
+<p>and likewise for up and FOV. Both strategies share the same <code>lerpUpAndFov</code> helper; the only
+fields that actually differ between regimes are <code>position</code> and <code>target</code>.</p>
+
+<h3>3.8 Phase composition with <code>remap</code></h3>
+
+<p>
+The full zoom-in is two parallel timelines:
+</p>
+
+<ul>
+  <li>A camera animation of duration <code>cameraDuration</code> (default 1000 ms).</li>
+  <li>A clip-rect / opacity animation of duration <code>clipDuration</code> (default 400 ms) which starts late so it overlaps the tail of the camera animation by <code>overlapRatio</code> (default 0.15).</li>
+</ul>
+
+<p>
+The total wall-clock duration is:
+</p>
+
+$$
+T = \texttt{cameraDuration} + \texttt{clipDuration} \cdot (1 - \texttt{overlapRatio}).
+$$
+
+<p>
+The camera ends at global progress $g_{\text{camEnd}} = \texttt{cameraDuration}/T$. The clip starts at
+$g_{\text{clipStart}} = g_{\text{camEnd}} - \texttt{overlapRatio}\cdot\texttt{clipDuration}/T$. From a single
+global $g \in [0, 1]$ we extract per-phase local progresses with <code>remap</code> (guide 03):
+</p>
+
+$$
+p_{\text{cam}} = \operatorname{remap}(g,\ 0,\ g_{\text{camEnd}}),
+\qquad
+p_{\text{clip}} = \operatorname{remap}(g,\ g_{\text{clipStart}},\ 1).
+$$
+
+<p>Both are clamped to $[0, 1]$. The TS in <code>zoom-navigation.ts</code> reads exactly this way:</p>
+
+<div class="filename">src/zoom-navigation.ts:200-218</div>
+<pre><code>const { promise, cancel } = this.timeline.runSequence(totalDuration, (progress) =&gt; {
+  const rawCameraT = remap(progress, 0, cameraEnd);
+  this.cameraController.setToState(
+    calculateTransitionState(startCameraState, targetCameraState, rawCameraT)
+  );
+
+  if (progress &gt;= clipStart) {
+    const clipRaw = remap(progress, clipStart, 1.0);
+    const clipT = clipRaw * clipRaw * (3 - 2 * clipRaw);
+    const currentRect = lerpScreenRect(planeRect, targetRect, clipT);
+    this.clipController.setClipRect(currentRect);
+    this.clipController.setOpacity(clipT);
+  }
+
+  if (progress &gt;= clipStart) {
+    const fadeT = remap(progress, clipStart, planeFadeEnd);
+    this.sceneGraph.setPlaneOpacity(planeId, 1 - fadeT);
+  }
+});</code></pre>
+
+<p>The zoom-out (<code>:331-349</code>) is the same pattern with the clip phase first and the camera phase second; you'll see the "reverse" call <code>calculateTransitionState(overviewState, startCameraState, 1 - rawCameraT)</code>.</p>
+
+<h2>4. In this codebase</h2>
+
+<p>The four code excerpts above are the project's full implementation. Walking the call:</p>
+
+<ol>
+  <li><code>zoom-navigation.ts:200</code> ticks the timeline. Each tick has a global <code>progress</code> in $[0, 1]$.</li>
+  <li>It computes <code>rawCameraT = remap(progress, 0, cameraEnd)</code> and feeds it to <code>calculateTransitionState</code>.</li>
+  <li>Inside <code>calculateTransitionState</code> (lines 58-88), the angles get computed (3.1, 3.2, 3.3), <code>blend</code> gets computed via <code>smoothstep</code> (3.4), and either <code>calculateEarlyLookState</code> (3.5) or <code>calculateOrbitState</code> (3.6) is returned.</li>
+  <li>The result is fed to <code>cameraController.setToState</code>, which writes position/target/up/FOV into the camera.</li>
+  <li>Once <code>progress &ge; clipStart</code>, the clip rectangle starts animating with its own <code>remap</code>'d local progress.</li>
+</ol>
+
+<p>The two <code>remap</code> calls are not coincidence. They are the project's general way of running multiple parallel phases on one global clock, and both come from <code>src/easing.ts:34</code>.</p>
+
+<h2>5. Interactive playground</h2>
+
+<div class="panel">
+  <p style="margin-top:0;"><strong>Top-down view (XZ plane).</strong> Drag the red and blue camera glyphs (or their target dots) to set states A and B. The green glyph animates along the chosen blended path as you drag the $t$ slider.</p>
+  <canvas id="topCanvas" width="900" height="460"></canvas>
+
+  <div class="toggle-row">
+    <label><input type="checkbox" id="includeUp"> include up rotation (toggles a non-trivial $\theta_{\text{up}}$)</label>
+    <label><input type="checkbox" id="overlayPaths"> show all three regimes overlaid</label>
+  </div>
+
+  <div class="controls">
+    <label>$t$ (animation progress)
+      <input type="range" id="tSlider" min="0" max="1" step="0.001" value="0.5">
+    </label>
+  </div>
+
+  <div class="readout">
+    <div>$\theta_{\text{fwd}}$ = <span id="fwdOut">—</span></div>
+    <div>$\theta_{\text{up}}$ = <span id="upOut">—</span></div>
+    <div>$\theta_{\text{total}}$ = <span id="totOut">—</span></div>
+    <div>blend = <span id="blendOut">—</span></div>
+    <div>regime: <span id="regimeOut">—</span></div>
+  </div>
+</div>
+
+<div class="panel">
+  <p style="margin-top:0;"><strong>Timeline ruler.</strong> The horizontal bar is global progress $g \in [0, 1]$. The two coloured strips show the camera-phase span (orange) and the clip-phase span (cyan); the overlap region is highlighted in yellow. Adjust the durations to see how <code>cameraEnd</code> and <code>clipStart</code> move.</p>
+  <canvas id="timelineCanvas" width="900" height="220"></canvas>
+
+  <div class="controls">
+    <label>cameraDuration (ms)
+      <input type="range" id="camDur" min="200" max="2000" step="10" value="1000">
+      <span id="camDurOut" style="color:var(--accent);"></span>
+    </label>
+    <label>clipDuration (ms)
+      <input type="range" id="clipDur" min="100" max="800" step="10" value="400">
+      <span id="clipDurOut" style="color:var(--accent);"></span>
+    </label>
+    <label>overlapRatio
+      <input type="range" id="overlap" min="0" max="0.5" step="0.01" value="0.15">
+      <span id="overlapOut" style="color:var(--accent);"></span>
+    </label>
+  </div>
+
+  <div class="readout">
+    <div>total duration = <span id="totalDurOut">—</span></div>
+    <div>cameraEnd = <span id="camEndOut">—</span></div>
+    <div>clipStart = <span id="clipStartOut">—</span></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ---------- Helpers ----------
+  function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function smoothstep(e0, e1, x) {
+    const t = clamp((x - e0) / (e1 - e0), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+  function easeInOutCubic(t) {
+    return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2;
+  }
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+  function remap(t, s, e) {
+    if (t <= s) return 0;
+    if (t >= e) return 1;
+    return (t - s) / (e - s);
+  }
+  function vlen(v) { return Math.hypot(v.x, v.y); }
+  function vsub(a, b) { return { x: a.x - b.x, y: a.y - b.y }; }
+  function vadd(a, b) { return { x: a.x + b.x, y: a.y + b.y }; }
+  function vscale(a, s) { return { x: a.x * s, y: a.y * s }; }
+  function vlerp(a, b, t) { return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) }; }
+  function vnorm(v) { const L = vlen(v); return L < 1e-9 ? {x:0,y:0} : { x: v.x/L, y: v.y/L }; }
+  function vdot(a, b) { return a.x*b.x + a.y*b.y; }
+  function vslerp(a, b, t) {
+    const ad = vnorm(a), bd = vnorm(b);
+    const d = clamp(vdot(ad, bd), -1, 1);
+    const th = Math.acos(d);
+    if (th < 0.001) return vlerp(a, b, t);
+    const s = Math.sin(th);
+    const x = Math.sin((1 - t)*th)/s;
+    const y = Math.sin(t*th)/s;
+    return { x: ad.x*x + bd.x*y, y: ad.y*x + bd.y*y };
+  }
+
+  // ---------- Top-down playground ----------
+  const tc = document.getElementById('topCanvas');
+  const tctx = tc.getContext('2d');
+  const tSlider = document.getElementById('tSlider');
+  const includeUp = document.getElementById('includeUp');
+  const overlayPaths = document.getElementById('overlayPaths');
+
+  // World coords. Origin at canvas center. +x right, +y down. (Treat as XZ.)
+  // Cameras are points with a target point. Forward = target - position.
+  const stateA = {
+    pos: { x: -260, y: 100 },
+    tgt: { x: -60, y: -10 },
+    color: '#ff8aa3',
+    label: 'A'
+  };
+  const stateB = {
+    pos: { x: 260, y: 80 },
+    tgt: { x: 60, y: -20 },
+    color: '#8ad6ff',
+    label: 'B'
+  };
+
+  // Up vectors (only used when includeUp is on). Stored as 2D unit vectors
+  // representing the in-plane component. Default both are (0, -1) (north),
+  // meaning theta_up = 0 unless toggled.
+  const upA_default = { x: 0, y: -1 };
+  const upB_default = { x: 0, y: -1 };
+  // When includeUp is on, force a 25-degree disagreement so total angle has a healthy tilt component.
+  function getUps() {
+    if (!includeUp.checked) return { upA: upA_default, upB: upB_default };
+    const a = -25 * Math.PI / 180;
+    return {
+      upA: { x: Math.sin(a), y: -Math.cos(a) },
+      upB: { x: Math.sin(-a), y: -Math.cos(-a) }
+    };
+  }
+
+  // Hit-testing handles
+  const handles = [
+    { state: stateA, kind: 'pos' },
+    { state: stateA, kind: 'tgt' },
+    { state: stateB, kind: 'pos' },
+    { state: stateB, kind: 'tgt' }
+  ];
+  let dragging = null;
+
+  function toCanvas(p) {
+    return { x: p.x + tc.width/2, y: p.y + tc.height/2 };
+  }
+  function toWorld(p) {
+    return { x: p.x - tc.width/2, y: p.y - tc.height/2 };
+  }
+
+  function pickHandle(world) {
+    for (const h of handles) {
+      const pt = h.kind === 'pos' ? h.state.pos : h.state.tgt;
+      if (Math.hypot(pt.x - world.x, pt.y - world.y) < 16) return h;
+    }
+    return null;
+  }
+
+  function onPointerDown(e) {
+    const rect = tc.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) * (tc.width / rect.width);
+    const cy = (e.clientY - rect.top) * (tc.height / rect.height);
+    dragging = pickHandle(toWorld({ x: cx, y: cy }));
+    if (dragging) tc.setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e) {
+    if (!dragging) return;
+    const rect = tc.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) * (tc.width / rect.width);
+    const cy = (e.clientY - rect.top) * (tc.height / rect.height);
+    const w = toWorld({ x: cx, y: cy });
+    if (dragging.kind === 'pos') dragging.state.pos = w;
+    else dragging.state.tgt = w;
+    draw();
+  }
+  function onPointerUp(e) { dragging = null; }
+  tc.addEventListener('pointerdown', onPointerDown);
+  tc.addEventListener('pointermove', onPointerMove);
+  tc.addEventListener('pointerup', onPointerUp);
+  tc.addEventListener('pointercancel', onPointerUp);
+  tSlider.addEventListener('input', draw);
+  includeUp.addEventListener('change', draw);
+  overlayPaths.addEventListener('change', draw);
+
+  // ---------- Strategy implementations (2D pos/tgt) ----------
+  function earlyLookState(A, B, t) {
+    const posT = easeInOutCubic(t);
+    const targetRaw = Math.min(t / 0.7, 1.0);
+    const targetT = easeOutCubic(targetRaw);
+    return {
+      pos: vlerp(A.pos, B.pos, posT),
+      tgt: vlerp(A.tgt, B.tgt, targetT)
+    };
+  }
+  function orbitState(A, B, rawT) {
+    const t = easeInOutCubic(rawT);
+    const tgt = vlerp(A.tgt, B.tgt, t);
+    const mid = vlerp(A.tgt, B.tgt, 0.5);
+    const oA = vsub(A.pos, mid);
+    const oB = vsub(B.pos, mid);
+    const fromLen = vlen(oA), toLen = vlen(oB);
+    const r = lerp(fromLen, toLen, t);
+    const dA = vnorm(oA), dB = vnorm(oB);
+    const d = clamp(vdot(dA, dB), -1, 1);
+    const th = Math.acos(d);
+    let dir;
+    if (th < 0.001) {
+      // fall back to position lerp
+      return { pos: vlerp(A.pos, B.pos, t), tgt };
+    }
+    const s = Math.sin(th);
+    const a = Math.sin((1 - t)*th)/s;
+    const b = Math.sin(t*th)/s;
+    dir = { x: dA.x*a + dB.x*b, y: dA.y*a + dB.y*b };
+    dir = vnorm(dir);
+    const pos = vadd(mid, vscale(dir, r));
+    return { pos, tgt };
+  }
+  function blendedState(A, B, t, blend) {
+    const el = earlyLookState(A, B, t);
+    const ob = orbitState(A, B, t);
+    return {
+      pos: vlerp(el.pos, ob.pos, blend),
+      tgt: vlerp(el.tgt, ob.tgt, blend)
+    };
+  }
+
+  function angles() {
+    const fA = vnorm(vsub(stateA.tgt, stateA.pos));
+    const fB = vnorm(vsub(stateB.tgt, stateB.pos));
+    const fdot = clamp(vdot(fA, fB), -1, 1);
+    const fwd = Math.acos(fdot);
+    const { upA, upB } = getUps();
+    const udot = clamp(vdot(upA, upB), -1, 1);
+    const up = Math.acos(udot);
+    return { fwd, up, total: fwd + up };
+  }
+
+  function regimeAndBlend() {
+    const { fwd, up, total } = angles();
+    const lo = 30 * Math.PI/180;
+    const hi = 35 * Math.PI/180;
+    const blend = smoothstep(lo, hi, total);
+    let label, pill;
+    if (total <= lo) { label = 'Early Look'; pill = 'pill-early'; }
+    else if (total >= hi) { label = 'Orbit'; pill = 'pill-orbit'; }
+    else { label = 'blend'; pill = 'pill-blend'; }
+    return { fwd, up, total, blend, label, pill };
+  }
+
+  // ---------- Drawing ----------
+  function drawCamGlyph(ctx, p, color, label, isGhost) {
+    const c = toCanvas(p.pos);
+    const t = toCanvas(p.tgt);
+    ctx.save();
+    // forward arrow
+    ctx.strokeStyle = color;
+    ctx.lineWidth = isGhost ? 1 : 2;
+    ctx.globalAlpha = isGhost ? 0.35 : 1;
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y);
+    ctx.lineTo(t.x, t.y);
+    ctx.stroke();
+    // body
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, isGhost ? 5 : 9, 0, Math.PI*2);
+    ctx.fill();
+    // target dot
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, isGhost ? 2.5 : 4, 0, Math.PI*2);
+    ctx.fill();
+    // label
+    if (!isGhost && label) {
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(label, c.x, c.y);
+    }
+    ctx.restore();
+  }
+
+  function drawPath(ctx, A, B, kind, color) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    for (let i = 0; i <= 60; i++) {
+      const t = i / 60;
+      let s;
+      if (kind === 'early') s = earlyLookState(A, B, t);
+      else if (kind === 'orbit') s = orbitState(A, B, t);
+      else s = blendedState(A, B, t, regimeAndBlend().blend);
+      const c = toCanvas(s.pos);
+      if (i === 0) ctx.moveTo(c.x, c.y);
+      else ctx.lineTo(c.x, c.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function draw() {
+    tctx.clearRect(0, 0, tc.width, tc.height);
+    // grid
+    tctx.save();
+    tctx.strokeStyle = '#1a2230';
+    tctx.lineWidth = 1;
+    for (let x = 0; x < tc.width; x += 40) {
+      tctx.beginPath(); tctx.moveTo(x, 0); tctx.lineTo(x, tc.height); tctx.stroke();
+    }
+    for (let y = 0; y < tc.height; y += 40) {
+      tctx.beginPath(); tctx.moveTo(0, y); tctx.lineTo(tc.width, y); tctx.stroke();
+    }
+    // origin axis
+    tctx.strokeStyle = '#2a3a55';
+    tctx.beginPath();
+    tctx.moveTo(tc.width/2, 0); tctx.lineTo(tc.width/2, tc.height);
+    tctx.moveTo(0, tc.height/2); tctx.lineTo(tc.width, tc.height/2);
+    tctx.stroke();
+    tctx.restore();
+
+    const info = regimeAndBlend();
+
+    // paths
+    if (overlayPaths.checked) {
+      drawPath(tctx, stateA, stateB, 'early', '#6fd49a');
+      drawPath(tctx, stateA, stateB, 'orbit', '#ff8aa3');
+      drawPath(tctx, stateA, stateB, 'blend', '#ffce6f');
+    } else {
+      const kind = info.label === 'Early Look' ? 'early' : info.label === 'Orbit' ? 'orbit' : 'blend';
+      drawPath(tctx, stateA, stateB, kind, '#ffce6f');
+    }
+
+    // glyphs
+    drawCamGlyph(tctx, stateA, stateA.color, 'A');
+    drawCamGlyph(tctx, stateB, stateB.color, 'B');
+
+    // animated green glyph at slider t
+    const t = parseFloat(tSlider.value);
+    const animState = blendedState(stateA, stateB, t, info.blend);
+    drawCamGlyph(tctx, animState, '#6fd49a', null);
+
+    // legend / overlays
+    tctx.save();
+    tctx.font = '12px sans-serif';
+    tctx.fillStyle = '#93a0b3';
+    tctx.fillText('Drag the dots. Origin is the center cross.', 12, tc.height - 10);
+    if (overlayPaths.checked) {
+      tctx.fillStyle = '#6fd49a'; tctx.fillText('Early-Look path', 12, 16);
+      tctx.fillStyle = '#ff8aa3'; tctx.fillText('Orbit path', 12, 32);
+      tctx.fillStyle = '#ffce6f'; tctx.fillText('Blended path (current)', 12, 48);
+    }
+    tctx.restore();
+
+    // readouts
+    document.getElementById('fwdOut').textContent = (info.fwd * 180/Math.PI).toFixed(1) + '°';
+    document.getElementById('upOut').textContent = (info.up * 180/Math.PI).toFixed(1) + '°';
+    document.getElementById('totOut').textContent = (info.total * 180/Math.PI).toFixed(1) + '°';
+    document.getElementById('blendOut').textContent = info.blend.toFixed(3);
+    const r = document.getElementById('regimeOut');
+    r.innerHTML = '<span class="regime-pill ' + info.pill + '">' + info.label + '</span>';
+  }
+  draw();
+
+  // ---------- Timeline ruler ----------
+  const tlc = document.getElementById('timelineCanvas');
+  const tlctx = tlc.getContext('2d');
+  const camDur = document.getElementById('camDur');
+  const clipDur = document.getElementById('clipDur');
+  const overlap = document.getElementById('overlap');
+
+  function drawTimeline() {
+    const cd = parseFloat(camDur.value);
+    const ld = parseFloat(clipDur.value);
+    const ov = parseFloat(overlap.value);
+    const total = cd + ld * (1 - ov);
+    const camEnd = cd / total;
+    const clipStart = camEnd - (ov * ld / total);
+
+    document.getElementById('camDurOut').textContent = cd.toFixed(0) + ' ms';
+    document.getElementById('clipDurOut').textContent = ld.toFixed(0) + ' ms';
+    document.getElementById('overlapOut').textContent = ov.toFixed(2);
+    document.getElementById('totalDurOut').textContent = total.toFixed(0) + ' ms';
+    document.getElementById('camEndOut').textContent = camEnd.toFixed(3);
+    document.getElementById('clipStartOut').textContent = clipStart.toFixed(3);
+
+    tlctx.clearRect(0, 0, tlc.width, tlc.height);
+    const m = 40, w = tlc.width - 2*m;
+    const xAt = g => m + g * w;
+
+    // axis
+    tlctx.strokeStyle = '#2a3a55';
+    tlctx.lineWidth = 1;
+    tlctx.beginPath();
+    tlctx.moveTo(m, 30); tlctx.lineTo(m + w, 30);
+    tlctx.stroke();
+    tlctx.fillStyle = '#93a0b3';
+    tlctx.font = '11px sans-serif';
+    tlctx.textAlign = 'center';
+    for (let i = 0; i <= 10; i++) {
+      const x = m + (i/10) * w;
+      tlctx.beginPath(); tlctx.moveTo(x, 26); tlctx.lineTo(x, 34); tlctx.stroke();
+      tlctx.fillText((i/10).toFixed(1), x, 18);
+    }
+    tlctx.textAlign = 'left';
+
+    // camera bar
+    const camY = 70, clipY = 130;
+    tlctx.fillStyle = '#3a2a18';
+    tlctx.fillRect(xAt(0), camY, xAt(camEnd) - xAt(0), 28);
+    tlctx.strokeStyle = '#ffae6f';
+    tlctx.strokeRect(xAt(0), camY, xAt(camEnd) - xAt(0), 28);
+    tlctx.fillStyle = '#ffce6f';
+    tlctx.fillText('camera phase: 0 → ' + camEnd.toFixed(3), xAt(0) + 6, camY + 18);
+
+    // clip bar
+    tlctx.fillStyle = '#1a2c33';
+    tlctx.fillRect(xAt(clipStart), clipY, xAt(1) - xAt(clipStart), 28);
+    tlctx.strokeStyle = '#8ad6ff';
+    tlctx.strokeRect(xAt(clipStart), clipY, xAt(1) - xAt(clipStart), 28);
+    tlctx.fillStyle = '#8ad6ff';
+    tlctx.fillText('clip phase: ' + clipStart.toFixed(3) + ' → 1', xAt(clipStart) + 6, clipY + 18);
+
+    // overlap region (between clipStart and camEnd) highlighted yellow
+    if (clipStart < camEnd) {
+      const ox = xAt(clipStart);
+      const ow = xAt(camEnd) - xAt(clipStart);
+      tlctx.fillStyle = 'rgba(255, 220, 100, 0.18)';
+      tlctx.fillRect(ox, camY - 6, ow, (clipY + 28) - (camY - 6) + 12);
+      tlctx.strokeStyle = '#ffce6f';
+      tlctx.setLineDash([4, 3]);
+      tlctx.strokeRect(ox, camY - 6, ow, (clipY + 28) - (camY - 6) + 12);
+      tlctx.setLineDash([]);
+      tlctx.fillStyle = '#ffce6f';
+      tlctx.font = 'bold 11px sans-serif';
+      tlctx.fillText('overlap', ox + 6, camY - 10);
+      tlctx.font = '11px sans-serif';
+    }
+  }
+  camDur.addEventListener('input', drawTimeline);
+  clipDur.addEventListener('input', drawTimeline);
+  overlap.addEventListener('input', drawTimeline);
+  drawTimeline();
+})();
+</script>
+
+<h2>6. Worked examples</h2>
+
+<h3>Example 1 — orthogonal panels (Orbit regime)</h3>
+<p>State A: $\mathbf{p}_A = (0, 0, 1500)$, $\mathbf{t}_A = (0, 0, 0)$, $\hat{\mathbf{u}}_A = (0, 1, 0)$. State B: $\mathbf{p}_B = (1500, 0, 0)$, $\mathbf{t}_B = (0, 0, 0)$, $\hat{\mathbf{u}}_B = (0, 1, 0)$. Compute $\theta_{\text{fwd}}$, $\theta_{\text{up}}$, $\theta_{\text{total}}$, the regime / blend, and the camera position at $t = 0.5$.</p>
+
+<p><strong>Forward angle.</strong> $\hat{\mathbf{f}}_A = \operatorname{normalize}((0,0,0) - (0,0,1500)) = (0, 0, -1)$. $\hat{\mathbf{f}}_B = (-1, 0, 0)$. Dot product $= 0$. So $\theta_{\text{fwd}} = \arccos(0) = 90°$.</p>
+
+<p><strong>Up angle.</strong> $(0,1,0) \cdot (0,1,0) = 1$, so $\theta_{\text{up}} = 0°$.</p>
+
+<p><strong>Total.</strong> $\theta_{\text{total}} = 90°$, well above $\theta_1 = 35°$, so $\text{blend} = 1$ → pure Orbit.</p>
+
+<p><strong>Position at $t = 0.5$.</strong> $t' = \operatorname{easeInOutCubic}(0.5) = 0.5$. Midpoint $\mathbf{m} = (0,0,0)$. Offsets $\mathbf{o}_A = (0,0,1500)$, $\mathbf{o}_B = (1500,0,0)$. Lengths both $1500$, so $r = 1500$. Directions $(0,0,1)$ and $(1,0,0)$, dot $0$, so $\theta = 90°$, $\sin\theta = 1$. With $t' = 0.5$, $a = b = \sin(45°) = \tfrac{\sqrt{2}}{2}$. Slerped direction $= (\tfrac{\sqrt{2}}{2}, 0, \tfrac{\sqrt{2}}{2})$, then normalized (already unit). Position $= 1500 \cdot (\tfrac{\sqrt{2}}{2}, 0, \tfrac{\sqrt{2}}{2}) \approx (1060.66, 0, 1060.66)$.</p>
+
+<p>Note how this stays at radius 1500 from the origin — a Lerp of the positions would give $(750, 0, 750)$ at radius $\approx 1060$, scooping inward. Orbit holds the radius; lerp does not.</p>
+
+<h3>Example 2 — small reorientation (Early Look regime)</h3>
+<p>State A: $\mathbf{p}_A = (0, 0, 1500)$, $\mathbf{t}_A = (0, 0, 0)$. State B: $\mathbf{p}_B = (100, 0, 1490)$, $\mathbf{t}_B = (50, 0, 0)$. Up vectors equal.</p>
+
+<p>$\hat{\mathbf{f}}_A = (0,0,-1)$. $\mathbf{t}_B - \mathbf{p}_B = (-50, 0, -1490)$, length $\approx 1490.84$, so $\hat{\mathbf{f}}_B \approx (-0.0335, 0, -0.9994)$. Dot $\approx 0.9994$, so $\theta_{\text{fwd}} \approx \arccos(0.9994) \approx 1.93°$. Up angle $0°$. Total $\approx 1.93°$, well below $\theta_0 = 30°$, so $\text{blend} = 0$ → pure Early Look.</p>
+
+<p>Position at $t = 0.5$: $\operatorname{easeInOutCubic}(0.5) = 0.5$, so $\mathbf{p}(0.5) = (50, 0, 1495)$. Target at $t = 0.5$: $\tau = \min(0.5/0.7, 1) = 0.714$, $\operatorname{easeOutCubic}(0.714) = 1 - (1 - 0.714)^3 = 1 - 0.0234 = 0.977$, so $\mathbf{t}(0.5) = \operatorname{lerp}((0,0,0), (50,0,0), 0.977) = (48.84, 0, 0)$. The target is essentially already at its destination while the camera is still halfway there. That is the "early lock-on" effect.</p>
+
+<h3>Example 3 — in the transition zone</h3>
+<p>Take a configuration with $\theta_{\text{fwd}} = 25°$, $\theta_{\text{up}} = 7°$. Then $\theta_{\text{total}} = 32°$. With $\theta_0 = 30°$, $\theta_1 = 35°$:</p>
+<p>Normalize: $u = (32 - 30)/(35 - 30) = 0.4$. Smoothstep: $u^2(3 - 2u) = 0.16 \cdot 2.2 = 0.352$. So $\text{blend} \approx 0.352$, meaning the output is $\approx 65\%$ Early-Look-like and $\approx 35\%$ Orbit-like.</p>
+
+<h2>7. Exercises</h2>
+<ol>
+  <li><strong>(routine)</strong> Compute $\text{blend}$ for $\theta_{\text{total}} = 31°$, $33°$, and $34.5°$.</li>
+  <li><strong>(routine)</strong> $\hat{\mathbf{f}}_A = (1, 0, 0)$, $\hat{\mathbf{f}}_B = (0.7071, 0, -0.7071)$. Compute $\theta_{\text{fwd}}$ in degrees.</li>
+  <li><strong>(conceptual)</strong> Why does Early Look ease the position with <code>easeInOutCubic</code> but the target with <code>easeOutCubic</code> on a remapped <code>t/0.7</code>? Specifically, what would feel wrong if the <em>position</em> used the same <code>t/0.7</code> early-arrival remap?</li>
+  <li><strong>(conceptual)</strong> The slerp branch in <code>calculateOrbitState</code> falls back to <code>lerpVectors</code> when $\theta &lt; 0.001$. Construct a state pair that triggers this fallback. What would happen numerically if the fallback were missing?</li>
+  <li><strong>(project-applied)</strong> Suppose you change the smoothstep zone from $30°$–$35°$ to $60°$–$65°$. Predict, in user-visible terms, what happens for a transition whose total angle is $45°$. Does the camera path change?</li>
+  <li><strong>(extension)</strong> The current shipping code uses a hard cutover at <code>blend &lt; 0.5</code> rather than the componentwise <code>lerp(EL, Orbit, blend)</code> from §3.7. Argue why the hard cutover still feels smooth in practice. (Hint: think about the shape of <code>smoothstep</code> at its endpoints.)</li>
+  <li><strong>(extension)</strong> With $\texttt{cameraDuration} = 1000$, $\texttt{clipDuration} = 400$, $\texttt{overlapRatio} = 0.15$, compute $T$, $g_{\text{camEnd}}$, and $g_{\text{clipStart}}$. At what wall-clock millisecond does the clip phase begin?</li>
+</ol>
+
+<h2>8. Where to next</h2>
+<p>The next four guides leave the "navigation math" track and enter the shader-math track:</p>
+<ul>
+  <li>Guide 13: shader gradients and falloff. The starfield background is a fragment shader — guides 13 and 14 are about the math behind it.</li>
+  <li>Guide 14: time-varying twinkle and additive blending.</li>
+  <li>Guide 15: uniform sphere sampling for star placement (rejection sampling and inverse-CDF).</li>
+  <li>Guide 16: equirectangular mapping and seam handling for any future panoramic textures.</li>
+</ul>
+
+<h2>Appendix — solutions</h2>
+
+<details>
+<summary>1. Smoothstep at $31°, 33°, 34.5°$</summary>
+<p>$u(31°) = 0.2$, smoothstep $= 0.04 \cdot 2.6 = 0.104$.<br>
+$u(33°) = 0.6$, smoothstep $= 0.36 \cdot 1.8 = 0.648$.<br>
+$u(34.5°) = 0.9$, smoothstep $= 0.81 \cdot 1.2 = 0.972$.</p>
+</details>
+
+<details>
+<summary>2. Forward angle from $(1,0,0)$ to $(0.7071, 0, -0.7071)$</summary>
+<p>Dot product $= 0.7071$. $\arccos(0.7071) = 45°$.</p>
+</details>
+
+<details>
+<summary>3. Why different easing for position vs target</summary>
+<p>Position is a physical-feeling quantity: the camera is a "thing" with momentum, so a symmetric ease-in-out (slow start, slow end) is what users expect from anything that visibly moves. The target is a non-physical semantic — it's "where the lens is aimed." If position used the same <code>t/0.7</code> early-arrival remap, the camera body would race the first $70\%$ of the way and then sit for the remaining $30\%$, which looks broken. By keeping the position on a symmetric ease and only racing the target, the user sees the camera immediately commit visually (rotation locks on early) while the body still slides in at a calm physical pace.</p>
+</details>
+
+<details>
+<summary>4. The slerp fallback</summary>
+<p>It triggers when $\hat{\mathbf{o}}_A$ and $\hat{\mathbf{o}}_B$ are nearly parallel — for example, two states with the same camera-to-target direction but different distances (e.g. $\mathbf{p}_A = (0,0,1500)$ and $\mathbf{p}_B = (0,0,1200)$ both looking at the origin). Then $\theta \to 0$, $\sin\theta \to 0$, and the formula <code>sin((1-t)θ)/sinθ</code> divides $0/0$. Without the fallback you get NaNs and the camera teleports; with it, the code does a plain lerp which is exactly the geometric limit anyway. See guide 10 for the full slerp derivation.</p>
+</details>
+
+<details>
+<summary>5. Smoothstep zone $60°$–$65°$ for a $45°$ transition</summary>
+<p>$45° &lt; 60°$, so $\text{blend} = 0$ → pure Early Look. The user would see the camera <em>lerp linearly</em> through the scene origin instead of orbiting around it. Visually: the camera scoops into the middle of the scene before continuing on to the destination panel, possibly clipping into other panels along the way. This is the disorientation the project specifically engineered Orbit to avoid.</p>
+</details>
+
+<details>
+<summary>6. Why the hard cutover still feels smooth</summary>
+<p>Smoothstep has zero derivative at both endpoints. Near $\theta_0$ the blend value is approaching $0$ smoothly, and near $\theta_1$ it is approaching $1$ smoothly, so the strategies you're cutting between are themselves nearly identical at the cutover point — the EL state and the Orbit state are not wildly different when the angle is borderline. The visual cutover shows up only as a small change in path curvature, not a teleport. (For applications where even that subtle change is unacceptable, the componentwise blend in §3.7 is the principled answer.)</p>
+</details>
+
+<details>
+<summary>7. Phase composition arithmetic</summary>
+<p>$T = 1000 + 400 \cdot 0.85 = 1340$ ms. $g_{\text{camEnd}} = 1000/1340 \approx 0.7463$. $g_{\text{clipStart}} = 0.7463 - (0.15 \cdot 400/1340) = 0.7463 - 0.0448 \approx 0.7015$. The clip phase begins at $g_{\text{clipStart}} \cdot T \approx 0.7015 \cdot 1340 \approx 940$ ms after the animation starts. (Sanity check: the clip phase runs from $\approx 940$ ms to $1340$ ms, a duration of $400$ ms — exactly <code>clipDuration</code>.)</p>
+</details>
+
+</body>
+</html>

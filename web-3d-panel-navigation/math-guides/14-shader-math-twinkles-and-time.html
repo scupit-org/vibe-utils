@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Guide 14 — Shader math: twinkles and time</title>
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(','\\)'], ['$', '$']],
+      displayMath: [['$$','$$'], ['\\[','\\]']]
+    }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b24;
+    --panel-2: #1d2330;
+    --ink: #e7ecf3;
+    --muted: #95a0b3;
+    --accent: #ffd29a;
+    --accent-2: #b5c9ff;
+    --rule: #2a3142;
+  }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 Oxygen, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 36px 28px 96px 28px;
+  }
+  h1, h2, h3 {
+    color: var(--ink);
+    line-height: 1.2;
+  }
+  h1 { font-size: 2.0rem; margin-top: 0; }
+  h2 { font-size: 1.45rem; margin-top: 2.4em; border-bottom: 1px solid var(--rule); padding-bottom: 0.3em; }
+  h3 { font-size: 1.15rem; margin-top: 1.8em; color: var(--accent); }
+  p, li { color: var(--ink); }
+  .muted { color: var(--muted); }
+  pre {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: 0.9rem;
+  }
+  code { font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+  p code, li code {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  .callout {
+    background: var(--panel-2);
+    border-left: 3px solid var(--accent);
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin: 14px 0;
+  }
+  .figure {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 14px;
+    margin: 18px 0;
+  }
+  .figure canvas { display: block; margin: 0 auto; background: #0a0d12; border-radius: 4px; }
+  .figure .caption { color: var(--muted); font-size: 0.88rem; margin-top: 8px; text-align: center; }
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 18px;
+    margin-top: 12px;
+  }
+  .controls label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.92rem;
+    color: var(--ink);
+  }
+  .controls input[type="range"] { flex: 1; }
+  .controls .val { color: var(--accent); width: 50px; text-align: right; font-variant-numeric: tabular-nums; }
+  .toggles { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; }
+  .toggles label { display: flex; align-items: center; gap: 6px; font-size: 0.92rem; }
+  details { margin: 10px 0 24px 0; }
+  summary {
+    cursor: pointer;
+    color: var(--accent-2);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  th, td { padding: 6px 10px; border-bottom: 1px solid var(--rule); text-align: left; }
+  th { color: var(--accent); font-weight: 600; }
+  .small { font-size: 0.88rem; }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Guide 14 — Shader math: twinkles and time</h1>
+<p class="muted">Part of the web-3d-panel-navigation math curriculum. You just finished guide 13 (GLSL primer, smoothstep falloff). This guide stays in fragment-shader territory, but the math we care about now is what makes a starfield <em>feel like a sky</em> rather than a grid of dots: phase, frequency, color tint distribution, and additive blending.</p>
+
+<h2>1. Why this matters</h2>
+
+<p>Open <code>src/skybox/starfield-skybox.ts</code>. The fragment shader at lines 53–61 does almost no math, but every line carries a deliberate choice:</p>
+
+<pre><code>// starfield-skybox.ts:54-60
+vec2 centered = gl_PointCoord - vec2(0.5);
+float dist = length(centered);
+float falloff = smoothstep(0.5, 0.1, dist);
+float twinkle = 0.7 + 0.3 * sin(uTime * uTwinkleFreq + vPhase);
+float intensity = vBrightness * twinkle * falloff;
+vec3 color = mix(uColorWarm, uColorCool, vTint);
+gl_FragColor = vec4(color * intensity, intensity);</code></pre>
+
+<p>Three things combine to make this feel like a sky:</p>
+<ul>
+  <li><strong>Phase</strong> — line 57 adds a per-star phase <code>vPhase</code> inside the sine. Without it, every star pulses on the same beat and the whole field strobes like a christmas tree.</li>
+  <li><strong>Power-law tint</strong> — line 89 sets <code>tints[i] = Math.pow(Math.random(), 1.8)</code>. Most stars get a tint near zero (warm); a few get a tint near one (cool). A 50/50 mix would look painted; a biased mix looks observed.</li>
+  <li><strong>Additive blending</strong> — line 124 sets <code>blending: THREE.AdditiveBlending</code>. Where two stars overlap, light <em>adds</em>. That is how real emissive light behaves; the over-paint default is wrong for stars.</li>
+</ul>
+
+<p>None of these tricks are deep. But understanding why each one is the right knob to turn is the whole point of this guide.</p>
+
+<h2>2. Building intuition</h2>
+
+<h3>2a. Phase</h3>
+
+<p>A sine wave has the same shape no matter where you start sampling it. Shifting the input by a constant slides the wave horizontally — that constant is the <em>phase</em>:</p>
+
+$$\sin(\omega t + \varphi) \;=\; \sin\bigl(\omega(t + \varphi/\omega)\bigr).$$
+
+<p>Different stars get different $\varphi$ values. They all oscillate at the same frequency $\omega$, but they cross zero, peak, and trough at different times. The result is incoherent shimmer instead of a single pulse.</p>
+
+<div class="figure">
+  <canvas id="phaseCanvas" width="800" height="260"></canvas>
+  <div class="caption">Six sine waves with the same $\omega$ but six different $\varphi$ values, stacked. Vertical line shows "now." Each star samples its row at this line.</div>
+</div>
+
+<h3>2b. Power law</h3>
+
+<p>Take a uniform random number $u \in [0, 1)$ and raise it to a power $p$. If $p = 1$, nothing changes — the output is still uniform. If $p > 1$, you bend the function downward in the middle: most $u$ values map to small outputs.</p>
+
+<div class="figure">
+  <canvas id="powerCanvas" width="800" height="320"></canvas>
+  <div class="caption">Left: $f(u) = u^p$ for several $p$. Right: histogram of $u^p$ for $u \sim \text{Uniform}[0,1)$. As $p$ grows, mass piles up near zero.</div>
+</div>
+
+<h3>2c. Additive blending</h3>
+
+<p>Two overlapping circles. With over-paint, the top circle hides the bottom where they cross. With additive, the colors add, and the overlap is brighter. Stars are emissive: photons from two stars add at the sensor, they do not occlude each other.</p>
+
+<div class="figure">
+  <canvas id="blendCanvas" width="800" height="220"></canvas>
+  <div class="caption">Left: over-paint. Middle: additive. Right: same additive at lower intensity, showing that overlap reads as a brighter region rather than a hidden shape.</div>
+</div>
+
+<h2>3. The math</h2>
+
+<h3>3a. Sinusoidal phase modulation</h3>
+
+<p>Define the project's twinkle expression as</p>
+
+$$\text{twinkle}(t) \;=\; b \;+\; a \cdot \sin(\omega\, t + \varphi),$$
+
+<p>with</p>
+<ul>
+  <li>$b$ = base intensity = <code>0.7</code> in the shader,</li>
+  <li>$a$ = amplitude = <code>0.3</code>,</li>
+  <li>$\omega$ = angular frequency = the uniform <code>uTwinkleFreq</code>, default <code>1.5</code> rad/s (line 21: <code>const DEFAULT_TWINKLE_FREQ = 1.5</code>),</li>
+  <li>$\varphi$ = per-star phase, drawn once at construction.</li>
+</ul>
+
+<p>Because $\sin$ is bounded in $[-1, 1]$,</p>
+
+$$\text{twinkle}(t) \;\in\; [\,b - a,\; b + a\,] \;=\; [0.4, \; 1.0].$$
+
+<p>That bound is the design choice. A star never goes fully dark (it never drops to $0$) and it never overshoots <code>1.0</code>. The minimum brightness <code>0.4</code> is what keeps the field feeling alive when paused — even at the trough, every star is visibly emitting.</p>
+
+<div class="callout">
+  <p><strong>Units check.</strong> $\omega$ is in radians per second because <code>uTime</code> is in seconds (see <code>starfield-skybox.ts:149</code>: <code>uTime.value = elapsed * 0.001</code>). The perceptual frequency in cycles per second is</p>
+  $$f \;=\; \frac{\omega}{2\pi} \;\approx\; \frac{1.5}{6.283} \;\approx\; 0.239 \text{ Hz},$$
+  <p>so an individual star completes a full bright-dim-bright cycle roughly every 4.2 seconds. Slow enough that you don't notice any single star, fast enough that the field as a whole is always moving.</p>
+</div>
+
+<h3>3b. Per-particle phase</h3>
+
+<p>Without per-star phase, every star evaluates $\sin(\omega t + \varphi_0)$ for the same $\varphi_0$. That means at any time $t$, every star has the same twinkle value. The field brightens and dims as one body. Wrong.</p>
+
+<p>The fix: at construction, give each star a uniformly random phase in $[0, 2\pi]$:</p>
+
+<pre><code>// starfield-skybox.ts:85
+phases[i] = Math.random() * Math.PI * 2;</code></pre>
+
+<p>Stored as a per-vertex attribute <code>aPhase</code>, passed through to the fragment shader as <code>vPhase</code>:</p>
+
+<pre><code>// starfield-skybox.ts:25, 28, 35
+attribute float aPhase;
+varying float vPhase;
+// ...
+vPhase = aPhase;</code></pre>
+
+<p>The full population of stars is now decorrelated. At any given $t$, the twinkle values across all stars are spread across $[0.4, 1.0]$ uniformly (well, sinusoidally weighted; see exercise 5).</p>
+
+<h3>3c. Why $\sin(\omega t + \varphi)$ and not $\sin(\omega t)\cos(\varphi)$?</h3>
+
+<p>It is tempting to factor: surely $\sin(\omega t + \varphi)$ "expands" to something with $\cos(\varphi)$ in it? Yes — the angle-sum identity gives</p>
+
+$$\sin(\omega t + \varphi) \;=\; \sin(\omega t)\cos(\varphi) \;+\; \cos(\omega t)\sin(\varphi).$$
+
+<p>If you accidentally drop the second term and use only $\sin(\omega t)\cos(\varphi)$, you get a <em>standing wave</em>: every star still crosses zero at the same instant ($\omega t = 0, \pi, 2\pi, \dots$), and only the amplitude varies per star. The field still pulses in unison, just with different individual loudnesses. That is exactly the failure mode we were trying to avoid.</p>
+
+<p>The additive form $\omega t + \varphi$ keeps the wave shape and shifts it in time. The multiplicative form $\sin(\omega t)\cos(\varphi)$ keeps the timing and rescales the amplitude. We want shifted timing.</p>
+
+<h3>3d. Power-law color biasing</h3>
+
+<p>Mixing warm and cool 50/50 (uniform tint) gives an evenly purple-pink field. The eye reads it as artificial. A real night sky is almost entirely warm-white with a few standout cool blue stars.</p>
+
+<p>The trick on line 89:</p>
+
+<pre><code>// starfield-skybox.ts:87-89
+// Bias the palette toward the warm end — a few cool stars stand out
+// more than a 50/50 mix would.
+tints[i] = Math.pow(Math.random(), 1.8);</code></pre>
+
+<p>Then in the shader (line 59): <code>color = mix(uColorWarm, uColorCool, vTint)</code>. So <code>tint = 0</code> means pure warm, <code>tint = 1</code> means pure cool, and the bias squashes most stars to the warm end.</p>
+
+<p><strong>Inverse-CDF derivation.</strong> Let $U \sim \text{Uniform}[0, 1)$ and $X = U^p$ with $p > 0$. We want the distribution of $X$. The CDF of $X$ is</p>
+
+$$F_X(x) \;=\; P(X \leq x) \;=\; P(U^p \leq x) \;=\; P\bigl(U \leq x^{1/p}\bigr) \;=\; x^{1/p}, \qquad x \in [0, 1].$$
+
+<p>Differentiating gives the density</p>
+
+$$f_X(x) \;=\; \frac{1}{p} \, x^{\,1/p - 1}, \qquad x \in (0, 1].$$
+
+<p>For $p > 1$, the exponent $1/p - 1$ is negative, so $f_X(x) \to \infty$ as $x \to 0^+$ — mass piles up near zero. With $p = 1.8$:</p>
+
+$$f_X(x) \;=\; \frac{1}{1.8} \, x^{\,1/1.8 - 1} \;=\; 0.\overline{5} \cdot x^{-0.444\dots},$$
+
+<p>and the median is the $x$ where $F_X(x) = 0.5$, i.e.</p>
+
+$$x^{1/1.8} = 0.5 \;\Longrightarrow\; x = 0.5^{1.8} \;\approx\; 0.287.$$
+
+<p>So half of all stars have a tint $\leq 0.287$ — meaning more than half of the field is mixed toward the warm end by at least 71% warm-to-29%-cool.</p>
+
+<h3>3e. Additive blending math</h3>
+
+<p>The OpenGL blending equation is</p>
+
+$$C_{\text{out}} \;=\; C_{\text{src}} \cdot s_{\text{src}} \;+\; C_{\text{dst}} \cdot s_{\text{dst}},$$
+
+<p>where $s_{\text{src}}$ and $s_{\text{dst}}$ are the source and destination blend factors. Two common configurations:</p>
+
+<table>
+  <tr><th>Mode</th><th>$s_{\text{src}}$</th><th>$s_{\text{dst}}$</th><th>Equation</th></tr>
+  <tr><td>Over-paint</td><td>$\alpha_{\text{src}}$</td><td>$1 - \alpha_{\text{src}}$</td><td>$C = C_s\alpha_s + C_d(1 - \alpha_s)$</td></tr>
+  <tr><td>Additive</td><td>$1$</td><td>$1$</td><td>$C = C_s + C_d$</td></tr>
+</table>
+
+<p>The output is then clamped per channel to $[0, 1]$ by the framebuffer (or kept HDR if you set up a float framebuffer; we don't here).</p>
+
+<p>Three.js's <code>THREE.AdditiveBlending</code> sets the source factor to <code>SrcAlpha</code> and the destination factor to <code>One</code>, so technically the equation is</p>
+
+$$C_{\text{out}} \;=\; C_{\text{src}} \cdot \alpha_{\text{src}} \;+\; C_{\text{dst}}.$$
+
+<p>And because the fragment shader writes</p>
+
+<pre><code>gl_FragColor = vec4(color * intensity, intensity);</code></pre>
+
+<p>the alpha is the same as the intensity. So when the GPU multiplies <code>color * intensity</code> by <code>intensity</code> as the source factor, you actually get a slight quadratic falloff on the contribution. That is fine — and useful: the dimmer a star, the less it pollutes its neighbors. Bright stars dominate. Dim ones lay quiet contribution.</p>
+
+<p>Why additive is right for stars: light from two emissive sources at the same image pixel really does add. A camera sensor counts photons; two stars in the same pixel deposit roughly twice as many. Over-paint, by contrast, asks "which one is on top" — but stars are not occluding each other; they are co-emitting.</p>
+
+<h3>3f. Putting it together</h3>
+
+<p>The final per-pixel intensity for a star sprite is</p>
+
+$$I(t, \mathrm{p}) \;=\; \underbrace{b_{\text{star}}}_{\substack{\text{vBrightness}\\ \text{[0.5,1]}}} \;\cdot\; \underbrace{\bigl(0.7 + 0.3 \sin(\omega t + \varphi)\bigr)}_{\text{twinkle}} \;\cdot\; \underbrace{\mathrm{smoothstep}(0.5, 0.1, \lVert \mathrm{p} - \tfrac{1}{2}\rVert)}_{\text{falloff (guide 13)}},$$
+
+<p>where $\mathrm{p}$ is <code>gl_PointCoord</code>. The final color is</p>
+
+$$\mathbf{c}_{\text{final}} \;=\; \operatorname{mix}(\text{warm}, \text{cool}, \text{tint}) \cdot I,$$
+
+<p>and the fragment writes <code>vec4(c_final, I)</code>. The framebuffer adds it on top of whatever was there before, so overlapping stars build glow.</p>
+
+<h2>4. In this codebase</h2>
+
+<p>Four snippets, walked through.</p>
+
+<h3>4a. The twinkle expression — line 57</h3>
+
+<pre><code>float twinkle = 0.7 + 0.3 * sin(uTime * uTwinkleFreq + vPhase);</code></pre>
+
+<p>Direct translation of $b + a \sin(\omega t + \varphi)$. <code>uTime</code> is updated every frame from <code>elapsed * 0.001</code> (line 149), converting milliseconds to seconds. <code>uTwinkleFreq</code> is the $\omega$ uniform, defaulting to <code>1.5</code>. <code>vPhase</code> is the per-star $\varphi$, varying-passed from the vertex shader.</p>
+
+<h3>4b. Power-law tint — line 89</h3>
+
+<pre><code>// starfield-skybox.ts:85-89
+phases[i] = Math.random() * Math.PI * 2;
+brightnesses[i] = 0.5 + Math.random() * 0.5;
+// Bias the palette toward the warm end — a few cool stars stand out
+// more than a 50/50 mix would.
+tints[i] = Math.pow(Math.random(), 1.8);</code></pre>
+
+<p>Per star, three random draws, all uniform in $[0,1)$ but transformed differently:</p>
+<ul>
+  <li>Phase: scaled to $[0, 2\pi)$. Uniform.</li>
+  <li>Brightness: shifted to $[0.5, 1.0)$. Uniform on its sub-range — every star gets at least 50% brightness so dim stars are still visible, but bright stars stand out 2× more.</li>
+  <li>Tint: raised to the 1.8 power. Skewed toward 0 (warm).</li>
+</ul>
+
+<h3>4c. Additive material — lines 118–124</h3>
+
+<pre><code>// starfield-skybox.ts:118-124
+const starMaterial = new THREE.ShaderMaterial({
+  vertexShader: STARFIELD_VERTEX_SHADER,
+  fragmentShader: STARFIELD_FRAGMENT_SHADER,
+  transparent: true,
+  depthWrite: false,
+  depthTest: false,
+  blending: THREE.AdditiveBlending,</code></pre>
+
+<p>Three settings cooperate:</p>
+<ul>
+  <li><code>transparent: true</code> tells Three.js to consider this material's alpha output and to render it in the transparent pass.</li>
+  <li><code>depthWrite: false</code> means stars don't write to the depth buffer. If they did, a near-transparent star pixel would still occlude things behind it.</li>
+  <li><code>depthTest: false</code> means stars don't read from the depth buffer either — relevant because the skybox is conceptually behind everything; we always want stars to draw.</li>
+  <li><code>blending: THREE.AdditiveBlending</code> selects the additive equation we derived in 3e.</li>
+</ul>
+
+<h3>4d. Per-star phase attribute setup</h3>
+
+<pre><code>// starfield-skybox.ts:75, 85, 94 — collected
+const phases = new Float32Array(count);
+// ...
+phases[i] = Math.random() * Math.PI * 2;
+// ...
+geometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));</code></pre>
+
+<p>One float per star, attached to the geometry as <code>aPhase</code>. The vertex shader reads it as an <code>attribute</code>, then writes it to a <code>varying</code> so the fragment shader can read it. There is no per-frame work involved: phases are drawn once at construction and never touched again. The animation comes entirely from <code>uTime</code> changing each frame.</p>
+
+<h2>5. Interactive playground</h2>
+
+<p>Below is a live emulation of the starfield. Sliders control $b$, $a$, $\omega$, $p$, the warm and cool colors, and the star count. Toggles let you freeze time, force all phases to zero (the unison failure mode), and switch off additive blending (replaces "lighter" with the default over-paint).</p>
+
+<p>Watch what happens to the histogram on the right when you sweep $p$. At $p = 1$ it is flat. At $p = 1.8$ (the project default) it is sharply skewed toward 0. At $p = 4$ almost every star has a tint near zero.</p>
+
+<div class="figure">
+  <canvas id="starCanvas" width="800" height="600"></canvas>
+  <div class="caption">Live starfield emulating the project's per-star math.</div>
+
+  <div class="controls">
+    <label>$b$ (base) <input id="bSlider" type="range" min="0" max="1" step="0.01" value="0.7"><span class="val" id="bVal">0.70</span></label>
+    <label>$a$ (amplitude) <input id="aSlider" type="range" min="0" max="0.5" step="0.01" value="0.3"><span class="val" id="aVal">0.30</span></label>
+    <label>$\omega$ (rad/s) <input id="wSlider" type="range" min="0" max="5" step="0.05" value="1.5"><span class="val" id="wVal">1.50</span></label>
+    <label>$p$ (tint power) <input id="pSlider" type="range" min="0.5" max="4.0" step="0.05" value="1.8"><span class="val" id="pVal">1.80</span></label>
+    <label>Warm color <input id="warmColor" type="color" value="#ffe6c8"></label>
+    <label>Cool color <input id="coolColor" type="color" value="#b5c9ff"></label>
+    <label>Star count <input id="countSlider" type="range" min="50" max="1000" step="10" value="200"><span class="val" id="countVal">200</span></label>
+  </div>
+  <div class="toggles">
+    <label><input id="freezeChk" type="checkbox"> Freeze time</label>
+    <label><input id="noPhaseChk" type="checkbox"> No phase ($\varphi=0$ for all)</label>
+    <label><input id="noAdditiveChk" type="checkbox"> No additive (over-paint)</label>
+    <label><button id="reseedBtn" type="button" style="background:var(--panel-2);color:var(--ink);border:1px solid var(--rule);border-radius:4px;padding:4px 10px;cursor:pointer;">Re-seed stars</button></label>
+  </div>
+</div>
+
+<div class="figure">
+  <canvas id="histCanvas" width="800" height="180"></canvas>
+  <div class="caption">Histogram of <code>tint = u<sup>p</sup></code> for the current $p$ across all stars in the field above.</div>
+</div>
+
+<h2>6. Worked examples</h2>
+
+<h3>Example 1 — Twinkle at a moment in time</h3>
+<p>Given $\omega = 1.5$, $\varphi = \pi/4$, $b = 0.7$, $a = 0.3$, $t = 2.5\,\text{s}$. Compute $\text{twinkle}(t)$.</p>
+
+<p>The argument is</p>
+$$\omega t + \varphi \;=\; 1.5 \cdot 2.5 + \pi/4 \;=\; 3.75 + 0.7854 \;\approx\; 4.5354 \text{ rad}.$$
+<p>And</p>
+$$\sin(4.5354) \;\approx\; -0.9852.$$
+<p>So</p>
+$$\text{twinkle} \;\approx\; 0.7 + 0.3 \cdot (-0.9852) \;\approx\; 0.7 - 0.2956 \;\approx\; 0.404.$$
+<p>Near the trough — this star is at its dimmest right now (lower bound is $0.4$). Sanity check: the next time it hits exactly $0.4$ is when $\sin = -1$, i.e. $\omega t + \varphi = 3\pi/2 + 2\pi k$. Solving for the smallest $t > 2.5$: $1.5 t = 3\pi/2 - \pi/4 = 5\pi/4 \approx 3.927$, so $t \approx 2.618\,\text{s}$.</p>
+
+<h3>Example 2 — Fraction of warm-tinted stars</h3>
+<p>With $p = 1.8$, what fraction of stars have $\text{tint} \leq 0.3$?</p>
+
+<p>From section 3d, the CDF is $F_X(x) = x^{1/p}$, so</p>
+$$P(\text{tint} \leq 0.3) \;=\; 0.3^{\,1/1.8} \;=\; 0.3^{0.5556}.$$
+<p>Computing: $\ln(0.3) \approx -1.2040$, multiplied by $0.5556$ gives $-0.6689$, exponentiated gives $\approx 0.512$.</p>
+<p>So <strong>about 51% of stars</strong> are at least 70% warm. Compare this to $p = 1.0$ (no bias), where $P(\text{tint} \leq 0.3) = 0.3 = 30\%$.</p>
+
+<h3>Example 3 — Effective frequency in Hz</h3>
+<p>If you wanted a star to complete a full cycle every 10 seconds, what value of <code>uTwinkleFreq</code> should you pass?</p>
+
+<p>One full cycle is $2\pi$ radians. Ten seconds means $\omega \cdot 10 = 2\pi$, so $\omega = \pi/5 \approx 0.628$. Pass <code>twinkleFreq: 0.628</code> in <code>StarfieldSkyboxOptions</code>. (The default 1.5 corresponds to ~4.2 second cycles, as derived in section 3a.)</p>
+
+<h2>7. Exercises</h2>
+
+<ol>
+  <li><strong>Routine.</strong> With $b = 0.7$, $a = 0.3$, $\omega = 1.5$, $\varphi = \pi$, compute $\text{twinkle}$ at $t = 0$ and at $t = \pi/3$.</li>
+  <li><strong>Routine.</strong> If you wanted the twinkle to range over $[0.2, 1.0]$ instead of $[0.4, 1.0]$, what $b$ and $a$ would you use?</li>
+  <li><strong>Conceptual.</strong> Why does the power law $u^p$ with $p > 1$ bias toward zero rather than being uniform? Reference the CDF or PDF in your answer.</li>
+  <li><strong>Conceptual.</strong> Show algebraically that $\sin(\omega t)\cos(\varphi)$ has zero crossings at the same set of $t$ for every $\varphi \neq \pi/2 + k\pi$, while $\sin(\omega t + \varphi)$ has zero crossings that depend on $\varphi$. (The first statement implies all stars dim together; the second implies they dim independently.)</li>
+  <li><strong>Distribution.</strong> Suppose at fixed $t$ you look at the distribution of twinkle values across all stars (with uniformly random $\varphi$). What is the distribution? You don't need to compute it exactly — sketch the qualitative shape.</li>
+  <li><strong>Project-applied.</strong> Predict what happens visually if you change $p$ from $1.8$ to $1.0$ (uniform tint) in <code>tints[i] = Math.pow(Math.random(), 1.8)</code>. Use the playground above to check.</li>
+  <li><strong>Project-applied.</strong> Predict what happens visually if you change $a$ from $0.3$ to $0.6$ in the shader. What is the new range of twinkle? Why might that look <em>worse</em>?</li>
+  <li><strong>Extension challenge.</strong> Add a second sine wave to the twinkle expression at a different frequency: $\text{twinkle}(t) = b + a_1 \sin(\omega_1 t + \varphi_1) + a_2 \sin(\omega_2 t + \varphi_2)$. What is the new bound? What constraint on $a_1, a_2$ keeps it inside $[0, 1]$?</li>
+  <li><strong>Extension challenge.</strong> The project uses <code>tint = u<sup>1.8</sup></code>, biasing toward warm. What expression of $u$ would bias toward <em>cool</em> instead, with the same severity? (Hint: there is a one-line transformation.)</li>
+</ol>
+
+<h2>8. Where to next</h2>
+
+<ul>
+  <li><strong>Guide 15 — Uniform sphere sampling.</strong> Where the stars are <em>placed</em>. Look at <code>samplePointOnUnitSphere</code> on lines 64–71 of <code>starfield-skybox.ts</code>. The naive approach (uniform in spherical coordinates) clumps stars at the poles. The right approach uses an inverse-CDF construction much like our $u^p$, applied to $z$.</li>
+  <li><strong>Guide 16 — Equirectangular mapping.</strong> The other skybox style in this project uses a panorama image wrapped onto a sphere. We will derive the $\theta, \phi \to (x, y)$ mapping that lets a flat image cover a sphere without seams.</li>
+</ul>
+
+<h2>9. Appendix: Solutions</h2>
+
+<details>
+  <summary>Show solutions</summary>
+
+  <p><strong>1.</strong> At $t = 0$: $\sin(0 + \pi) = 0$, so twinkle = $0.7$. At $t = \pi/3$: argument is $1.5 \cdot \pi/3 + \pi = \pi/2 + \pi = 3\pi/2$. $\sin(3\pi/2) = -1$, so twinkle = $0.7 - 0.3 = 0.4$. (Trough.)</p>
+
+  <p><strong>2.</strong> The midpoint of $[0.2, 1.0]$ is $0.6$, so $b = 0.6$. The half-range is $0.4$, so $a = 0.4$.</p>
+
+  <p><strong>3.</strong> The PDF of $X = U^p$ is $f_X(x) = (1/p) x^{1/p - 1}$. For $p > 1$, the exponent $1/p - 1$ is negative, so $f_X$ blows up as $x \to 0^+$ — probability density is concentrated near zero. Equivalently, the CDF $F_X(x) = x^{1/p}$ has $F_X(0.5) > 0.5$ when $p > 1$ (e.g. $0.5^{1/1.8} \approx 0.674$), meaning more than half of all probability mass falls below $x = 0.5$.</p>
+
+  <p><strong>4.</strong> $\sin(\omega t)\cos(\varphi) = 0$ iff $\sin(\omega t) = 0$ or $\cos(\varphi) = 0$. The second is independent of $t$; for any $\varphi$ with $\cos\varphi \neq 0$, the zeros are at $\omega t = k\pi$ — the same set for every star. Whereas $\sin(\omega t + \varphi) = 0$ iff $\omega t + \varphi = k\pi$, i.e. $t = (k\pi - \varphi)/\omega$, which depends on $\varphi$.</p>
+
+  <p><strong>5.</strong> The twinkle value at fixed $t$ is $b + a\sin(\Theta)$ where $\Theta = \omega t + \varphi$ is uniform on $[0, 2\pi)$ (since $\varphi$ is uniform and adding a constant to a uniform circular variable is still uniform). The distribution of $\sin(\Theta)$ for $\Theta$ uniform on a full period is the <em>arcsine distribution</em> on $[-1, 1]$ — U-shaped, with peaks at $\pm 1$. So twinkle values pile up near $b - a$ and $b + a$ (the extremes) and are sparse near $b$ (the middle). Counterintuitive but visible if you stare at the field: at any moment, more stars are near full brightness or near minimum than are halfway in between.</p>
+
+  <p><strong>6.</strong> With $p = 1$, tint is uniform. The field will look more evenly purple — half cool, half warm. The "cool stars stand out" effect goes away because being cool is no longer rare.</p>
+
+  <p><strong>7.</strong> New range is $[0.7 - 0.6, 0.7 + 0.6] = [0.1, 1.3]$. Two problems: (a) the upper bound exceeds 1.0, so bright stars get clipped — many stars will pin at the framebuffer max for long stretches, losing nuance; (b) the lower bound 0.1 is so dim that stars effectively flicker out and back, which reads as broken/flashing rather than alive.</p>
+
+  <p><strong>8.</strong> Bound: $|a_1| + |a_2|$ — the worst case is both sines at their extremes simultaneously. To stay in $[0, 1]$ with $b = 0.7$ you need $|a_1| + |a_2| \leq \min(0.7, 0.3) = 0.3$. Pick e.g. $a_1 = 0.2$, $a_2 = 0.1$, $\omega_1 = 1.5$, $\omega_2 = 4.7$ for a slow base wobble plus a faster shimmer.</p>
+
+  <p><strong>9.</strong> Use $1 - u^{1.8}$, or equivalently $1 - \text{Math.pow(Math.random(), 1.8)}$. The CDF mirrors. Or, equivalently, swap warm and cool in the <code>mix</code> call. (The two are mathematically the same outcome.)</p>
+</details>
+
+<script>
+//
+// Figure 2a — phase canvas
+//
+(function() {
+  const c = document.getElementById('phaseCanvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const rows = 6;
+  const rowH = H / rows;
+  const omega = 1.5;
+  const phases = [0, Math.PI/3, 2*Math.PI/3, Math.PI, 4*Math.PI/3, 5*Math.PI/3];
+
+  function draw(now) {
+    ctx.fillStyle = '#0a0d12';
+    ctx.fillRect(0, 0, W, H);
+
+    // "now" marker
+    const tNow = (now / 1000) % 6;
+    const xNow = (tNow / 6) * (W - 60) + 40;
+    ctx.strokeStyle = 'rgba(255, 210, 154, 0.5)';
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(xNow, 0);
+    ctx.lineTo(xNow, H);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (let r = 0; r < rows; r++) {
+      const cy = r * rowH + rowH / 2;
+      const phi = phases[r];
+      ctx.strokeStyle = 'rgba(150,160,180,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(40, cy);
+      ctx.lineTo(W - 20, cy);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#b5c9ff';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      for (let x = 40; x <= W - 20; x++) {
+        const t = ((x - 40) / (W - 60)) * 6;
+        const y = cy - Math.sin(omega * t + phi) * (rowH * 0.35);
+        if (x === 40) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // dot at "now"
+      const yNow = cy - Math.sin(omega * tNow + phi) * (rowH * 0.35);
+      ctx.fillStyle = '#ffd29a';
+      ctx.beginPath();
+      ctx.arc(xNow, yNow, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#95a0b3';
+      ctx.font = '11px sans-serif';
+      ctx.fillText('phi=' + phi.toFixed(2), 4, cy + 4);
+    }
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+})();
+
+//
+// Figure 2b — power law canvas
+//
+(function() {
+  const c = document.getElementById('powerCanvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+
+  function draw() {
+    ctx.fillStyle = '#0a0d12';
+    ctx.fillRect(0, 0, W, H);
+
+    const halfW = W / 2;
+
+    // Left: f(u) = u^p curves
+    const padL = 40, padR = 10, padT = 20, padB = 30;
+    const plotW = halfW - padL - padR;
+    const plotH = H - padT - padB;
+    const ox = padL, oy = padT;
+
+    ctx.strokeStyle = 'rgba(150,160,180,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy + plotH);
+    ctx.lineTo(ox + plotW, oy + plotH);
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ox, oy + plotH);
+    ctx.stroke();
+
+    ctx.fillStyle = '#95a0b3';
+    ctx.font = '11px sans-serif';
+    ctx.fillText('0', ox - 8, oy + plotH + 14);
+    ctx.fillText('1', ox + plotW - 4, oy + plotH + 14);
+    ctx.fillText('u', ox + plotW / 2, oy + plotH + 22);
+    ctx.fillText('u^p', ox - 30, oy + 8);
+
+    const ps = [{p: 0.5, c: '#ffd29a'}, {p: 1.0, c: '#b5c9ff'}, {p: 1.8, c: '#ff9aaa'}, {p: 4.0, c: '#9affc8'}];
+    for (const {p, c: col} of ps) {
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= 200; i++) {
+        const u = i / 200;
+        const v = Math.pow(u, p);
+        const x = ox + u * plotW;
+        const y = oy + (1 - v) * plotH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.fillText('p=' + p, ox + plotW - 36, oy + (1 - Math.pow(0.95, p)) * plotH);
+    }
+
+    // Right: histograms
+    const ox2 = halfW + padL;
+    const plotW2 = halfW - padL - padR;
+    ctx.strokeStyle = 'rgba(150,160,180,0.3)';
+    ctx.beginPath();
+    ctx.moveTo(ox2, oy + plotH);
+    ctx.lineTo(ox2 + plotW2, oy + plotH);
+    ctx.moveTo(ox2, oy);
+    ctx.lineTo(ox2, oy + plotH);
+    ctx.stroke();
+    ctx.fillStyle = '#95a0b3';
+    ctx.fillText('hist of u^p', ox2 + 4, oy + 12);
+
+    const N = 4000;
+    const bins = 30;
+    const hists = [];
+    for (const {p} of ps) {
+      const h = new Array(bins).fill(0);
+      for (let i = 0; i < N; i++) {
+        const u = Math.random();
+        const v = Math.pow(u, p);
+        const b = Math.min(bins - 1, Math.floor(v * bins));
+        h[b]++;
+      }
+      hists.push(h);
+    }
+    const maxCount = Math.max(...hists.flat());
+    const barW = plotW2 / bins;
+    for (let pi = 0; pi < ps.length; pi++) {
+      ctx.strokeStyle = ps[pi].c;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let b = 0; b < bins; b++) {
+        const x = ox2 + b * barW + barW / 2;
+        const y = oy + plotH - (hists[pi][b] / maxCount) * plotH;
+        if (b === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+  draw();
+})();
+
+//
+// Figure 2c — blending canvas
+//
+(function() {
+  const c = document.getElementById('blendCanvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+
+  ctx.fillStyle = '#0a0d12';
+  ctx.fillRect(0, 0, W, H);
+
+  function disc(cx, cy, r, fill) {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Panel 1: over-paint
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, 0, W/3, H); ctx.clip();
+  ctx.globalCompositeOperation = 'source-over';
+  disc(W/6 - 25, H/2, 50, 'rgba(255, 200, 120, 0.85)');
+  disc(W/6 + 25, H/2, 50, 'rgba(160, 200, 255, 0.85)');
+  ctx.fillStyle = '#95a0b3'; ctx.font = '13px sans-serif';
+  ctx.fillText('over-paint', 8, 18);
+  ctx.restore();
+
+  // Panel 2: additive
+  ctx.save();
+  ctx.beginPath(); ctx.rect(W/3, 0, W/3, H); ctx.clip();
+  ctx.globalCompositeOperation = 'lighter';
+  disc(W/2 - 25, H/2, 50, 'rgba(255, 200, 120, 0.85)');
+  disc(W/2 + 25, H/2, 50, 'rgba(160, 200, 255, 0.85)');
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#95a0b3'; ctx.font = '13px sans-serif';
+  ctx.fillText('additive', W/3 + 8, 18);
+  ctx.restore();
+
+  // Panel 3: additive at lower alpha
+  ctx.save();
+  ctx.beginPath(); ctx.rect(2*W/3, 0, W/3, H); ctx.clip();
+  ctx.globalCompositeOperation = 'lighter';
+  disc(5*W/6 - 25, H/2, 50, 'rgba(255, 200, 120, 0.45)');
+  disc(5*W/6 + 25, H/2, 50, 'rgba(160, 200, 255, 0.45)');
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#95a0b3'; ctx.font = '13px sans-serif';
+  ctx.fillText('additive (dim)', 2*W/3 + 8, 18);
+  ctx.restore();
+
+  ctx.strokeStyle = 'rgba(150,160,180,0.3)';
+  ctx.beginPath();
+  ctx.moveTo(W/3, 0); ctx.lineTo(W/3, H);
+  ctx.moveTo(2*W/3, 0); ctx.lineTo(2*W/3, H);
+  ctx.stroke();
+})();
+
+//
+// Section 5 — interactive starfield
+//
+(function() {
+  const canvas = document.getElementById('starCanvas');
+  const histCanvas = document.getElementById('histCanvas');
+  if (!canvas || !histCanvas) return;
+  const ctx = canvas.getContext('2d');
+  const histCtx = histCanvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const bSlider = document.getElementById('bSlider');
+  const aSlider = document.getElementById('aSlider');
+  const wSlider = document.getElementById('wSlider');
+  const pSlider = document.getElementById('pSlider');
+  const warmEl = document.getElementById('warmColor');
+  const coolEl = document.getElementById('coolColor');
+  const countSlider = document.getElementById('countSlider');
+  const freezeChk = document.getElementById('freezeChk');
+  const noPhaseChk = document.getElementById('noPhaseChk');
+  const noAdditiveChk = document.getElementById('noAdditiveChk');
+  const reseedBtn = document.getElementById('reseedBtn');
+
+  const bVal = document.getElementById('bVal');
+  const aVal = document.getElementById('aVal');
+  const wVal = document.getElementById('wVal');
+  const pVal = document.getElementById('pVal');
+  const countVal = document.getElementById('countVal');
+
+  function hexToRgb(hex) {
+    const m = hex.replace('#','');
+    return {
+      r: parseInt(m.substring(0,2), 16),
+      g: parseInt(m.substring(2,4), 16),
+      b: parseInt(m.substring(4,6), 16)
+    };
+  }
+  function mixRgb(c1, c2, t) {
+    return {
+      r: c1.r + (c2.r - c1.r) * t,
+      g: c1.g + (c2.g - c1.g) * t,
+      b: c1.b + (c2.b - c1.b) * t
+    };
+  }
+
+  // Star pool — keep up to 1000 stars precomputed; only draw the first N.
+  const MAX_STARS = 1000;
+  const stars = new Array(MAX_STARS);
+
+  function makeStar() {
+    return {
+      x: Math.random() * W,
+      y: Math.random() * H,
+      // baseTint01 is the underlying uniform random; we apply p^ at draw time
+      baseTint01: Math.random(),
+      phase: Math.random() * Math.PI * 2,
+      size: 1 + Math.random() * 2.5,
+      brightness: 0.5 + Math.random() * 0.5
+    };
+  }
+  function reseed() {
+    for (let i = 0; i < MAX_STARS; i++) stars[i] = makeStar();
+  }
+  reseed();
+  reseedBtn.addEventListener('click', reseed);
+
+  let frozenT = null;
+
+  function readControls() {
+    const b = parseFloat(bSlider.value);
+    const a = parseFloat(aSlider.value);
+    const w = parseFloat(wSlider.value);
+    const p = parseFloat(pSlider.value);
+    const count = parseInt(countSlider.value);
+    bVal.textContent = b.toFixed(2);
+    aVal.textContent = a.toFixed(2);
+    wVal.textContent = w.toFixed(2);
+    pVal.textContent = p.toFixed(2);
+    countVal.textContent = count;
+    return {
+      b, a, w, p, count,
+      warm: hexToRgb(warmEl.value),
+      cool: hexToRgb(coolEl.value),
+      freeze: freezeChk.checked,
+      noPhase: noPhaseChk.checked,
+      noAdditive: noAdditiveChk.checked
+    };
+  }
+
+  function drawHist(p, count) {
+    const HW = histCanvas.width, HH = histCanvas.height;
+    histCtx.fillStyle = '#0a0d12';
+    histCtx.fillRect(0, 0, HW, HH);
+
+    const bins = 40;
+    const hist = new Array(bins).fill(0);
+    for (let i = 0; i < count; i++) {
+      const tint = Math.pow(stars[i].baseTint01, p);
+      const bIdx = Math.min(bins - 1, Math.floor(tint * bins));
+      hist[bIdx]++;
+    }
+    const maxC = Math.max(...hist, 1);
+    const padL = 40, padR = 10, padT = 14, padB = 24;
+    const plotW = HW - padL - padR;
+    const plotH = HH - padT - padB;
+    const barW = plotW / bins;
+
+    histCtx.strokeStyle = 'rgba(150,160,180,0.3)';
+    histCtx.beginPath();
+    histCtx.moveTo(padL, padT + plotH);
+    histCtx.lineTo(padL + plotW, padT + plotH);
+    histCtx.moveTo(padL, padT);
+    histCtx.lineTo(padL, padT + plotH);
+    histCtx.stroke();
+
+    histCtx.fillStyle = '#95a0b3';
+    histCtx.font = '11px sans-serif';
+    histCtx.fillText('0 (warm)', padL - 4, padT + plotH + 14);
+    histCtx.fillText('1 (cool)', padL + plotW - 38, padT + plotH + 14);
+    histCtx.fillText('tint = u^p, p=' + p.toFixed(2), padL + 6, padT + 10);
+
+    for (let b = 0; b < bins; b++) {
+      const t = (b + 0.5) / bins;
+      const c = mixRgb(hexToRgb(warmEl.value), hexToRgb(coolEl.value), t);
+      histCtx.fillStyle = 'rgb(' + Math.round(c.r) + ',' + Math.round(c.g) + ',' + Math.round(c.b) + ')';
+      const h = (hist[b] / maxC) * plotH;
+      histCtx.fillRect(padL + b * barW + 1, padT + plotH - h, barW - 2, h);
+    }
+  }
+
+  function frame(now) {
+    const ctrl = readControls();
+    let t;
+    if (ctrl.freeze) {
+      if (frozenT === null) frozenT = now / 1000;
+      t = frozenT;
+    } else {
+      frozenT = null;
+      t = now / 1000;
+    }
+
+    ctx.fillStyle = '#0a0d12';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = ctrl.noAdditive ? 'source-over' : 'lighter';
+
+    for (let i = 0; i < ctrl.count; i++) {
+      const s = stars[i];
+      const phi = ctrl.noPhase ? 0 : s.phase;
+      const twinkle = ctrl.b + ctrl.a * Math.sin(ctrl.w * t + phi);
+      const tintP = Math.pow(s.baseTint01, ctrl.p);
+      const c = mixRgb(ctrl.warm, ctrl.cool, tintP);
+      const inten = Math.max(0, Math.min(1, twinkle * s.brightness));
+      const r = s.size * (0.7 + 0.6 * s.brightness);
+
+      // Approximate the project's color * intensity output. In additive mode,
+      // alpha = inten; in over-paint mode, alpha is just the twinkle so the
+      // failure mode (occlusion-style overlap) is visible.
+      const alpha = ctrl.noAdditive ? inten * 0.8 : inten;
+
+      // soft glow via radial gradient
+      const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r * 3);
+      grad.addColorStop(0, 'rgba(' + Math.round(c.r) + ',' + Math.round(c.g) + ',' + Math.round(c.b) + ',' + alpha.toFixed(3) + ')');
+      grad.addColorStop(1, 'rgba(' + Math.round(c.r) + ',' + Math.round(c.g) + ',' + Math.round(c.b) + ',0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r * 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+
+    drawHist(ctrl.p, ctrl.count);
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</main>
+</body>
+</html>

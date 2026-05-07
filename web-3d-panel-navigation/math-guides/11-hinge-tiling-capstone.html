@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Guide 11 — Hinge Tiling Capstone</title>
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(', '\\)'], ['$', '$']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']]
+    }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 920px;
+    margin: 2em auto;
+    padding: 0 1.2em;
+    color: #222;
+    line-height: 1.55;
+    background: #fafafa;
+  }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+  h2 { margin-top: 2em; border-bottom: 1px solid #bbb; padding-bottom: 0.15em; }
+  h3 { margin-top: 1.4em; color: #333; }
+  pre {
+    background: #1f2630;
+    color: #e6e9ee;
+    padding: 0.9em 1.1em;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 0.9em;
+    line-height: 1.45;
+  }
+  code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+  p code, li code, td code { background: #ececec; padding: 1px 5px; border-radius: 3px; }
+  .callout {
+    background: #fff8e1;
+    border-left: 4px solid #f0b400;
+    padding: 0.7em 1em;
+    margin: 1.2em 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .note {
+    background: #eef6ff;
+    border-left: 4px solid #3a7bd5;
+    padding: 0.7em 1em;
+    margin: 1.2em 0;
+    border-radius: 0 6px 6px 0;
+  }
+  details {
+    background: #f1f1f1;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 0.6em 1em;
+    margin: 0.7em 0;
+  }
+  summary { cursor: pointer; font-weight: 600; }
+  .widget {
+    background: #ffffff;
+    border: 1px solid #c9c9c9;
+    border-radius: 8px;
+    padding: 1em;
+    margin: 1.2em 0;
+  }
+  .widget canvas {
+    display: block;
+    width: 100%;
+    max-width: 880px;
+    height: auto;
+    background: #0d1117;
+    border: 1px solid #444;
+    border-radius: 4px;
+  }
+  .widget .controls {
+    margin-top: 0.7em;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 0.6em 1.2em;
+    align-items: center;
+    font-size: 0.92em;
+  }
+  .widget .controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15em;
+  }
+  .widget .controls input[type="range"] { width: 100%; }
+  .widget .row {
+    display: flex;
+    gap: 1em;
+    flex-wrap: wrap;
+    align-items: center;
+    margin: 0.5em 0;
+  }
+  .readout {
+    margin-top: 0.8em;
+    padding: 0.6em 0.9em;
+    background: #f6f8fa;
+    border: 1px solid #d0d7de;
+    border-radius: 4px;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85em;
+    line-height: 1.55;
+    white-space: pre-wrap;
+  }
+  table { border-collapse: collapse; margin: 0.8em 0; }
+  th, td { border: 1px solid #bbb; padding: 0.35em 0.7em; text-align: left; }
+  th { background: #eee; }
+  .small { font-size: 0.88em; color: #555; }
+  ol li, ul li { margin: 0.25em 0; }
+  fieldset { border: 1px solid #ccc; border-radius: 4px; padding: 0.4em 0.8em; }
+  legend { padding: 0 0.4em; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>Guide 11 — Hinge Tiling Capstone</h1>
+<p class="small">Capstone for the panel-positioning track. Companion to <code>src/zoom-plane-parser.ts</code>, lines 355–496.</p>
+
+<h2>1. Why this matters</h2>
+<p>
+This guide is the math companion to <code>calculateErgonomicTileOffset</code> and <code>resolveTiledPlane</code> in
+<code>src/zoom-plane-parser.ts</code> (lines 355–496). Together they implement <em>the</em> signature feature of
+<code>web-3d-panel-navigation</code>: an author writes
+<code>data-tile-from-right="center" data-tile-angle="30"</code> on an HTML element, and a tiled panel materialises
+flush against the right edge of the <code>center</code> panel, folded inward by 30°. No camera math, no manual
+position bookkeeping, no quaternion sliders. The author describes the layout in physical terms — "from this side,
+at this fold angle, with this gap and alignment" — and the parser computes an exact world-space position and
+orientation. Every previous guide (vectors, trig, lerp, rotation matrices, quaternions, frames) feeds into this
+single function. This is where the math earns its keep.
+</p>
+
+<h2>2. Building intuition</h2>
+
+<p>
+Open a laptop on your desk. The keyboard is the <em>reference panel</em>: it sits flat, wide and rectangular,
+oriented in some way relative to the world. The screen is the <em>tiled panel</em>: it shares one edge with the
+keyboard, and folds upward by some angle. Three pieces of geometry describe this perfectly:
+</p>
+
+<ol>
+  <li>
+    <b>The hinge</b> is a single point: the center of the shared edge. For a screen attached to the top of a
+    keyboard of width \(W_R\), the hinge sits at the midpoint of the keyboard's top edge.
+  </li>
+  <li>
+    <b>The fold</b> is a rotation. The screen rotates about an axis embedded in the reference panel —
+    specifically, an axis parallel to the shared edge. For a top-tiled panel, that axis is the reference's
+    horizontal (right) direction. The fold angle \(\alpha\) measures how far the screen has lifted from the
+    coplanar position.
+  </li>
+  <li>
+    <b>The center</b> of the tiled panel is recovered by walking from the hinge along the tiled panel's
+    <em>own</em> (post-fold) axis by half its size. If the screen has height \(H_T\), and we just folded it
+    upward, the center sits at the hinge plus \(\hat{\mathbf{u}}_T \cdot H_T/2\), where \(\hat{\mathbf{u}}_T\)
+    is the screen's up direction <em>after</em> folding.
+  </li>
+</ol>
+
+<p>
+The crucial moment is step 3. The displacement from hinge to tiled-panel center is along the
+<em>post-fold</em> axis, not the original axis. That is what guarantees the screen's bottom edge meets the
+keyboard's top edge perfectly: the hinge is on both panels' edges by construction, and the tiled panel's edge
+extends outward symmetrically from its center, so half the size in either direction lands on either edge. The
+hinge is the shared edge.
+</p>
+
+<div class="note">
+This is the same observation that makes a real laptop hinge work. The hinge is on the keyboard edge and on the
+screen edge simultaneously, no matter the fold angle. Open the laptop to 90°, 120°, 180° (flat) — the bottom
+edge of the screen never separates from the top edge of the keyboard.
+</div>
+
+<h2>3. The pipeline</h2>
+
+<p>Symbol conventions for the rest of this guide:</p>
+<table>
+<tr><th>Symbol</th><th>Meaning</th></tr>
+<tr><td>\(\mathbf{c}_R, q_R\)</td><td>Reference panel center and quaternion</td></tr>
+<tr><td>\(\hat{\mathbf{r}}_R, \hat{\mathbf{u}}_R, \hat{\mathbf{n}}_R\)</td><td>Reference right, up, normal (unit vectors in world space)</td></tr>
+<tr><td>\(\mathbf{c}_T, q_T\)</td><td>Tiled panel center and quaternion</td></tr>
+<tr><td>\(\hat{\mathbf{r}}_T, \hat{\mathbf{u}}_T, \hat{\mathbf{n}}_T\)</td><td>Tiled right, up, normal</td></tr>
+<tr><td>\(W_R, H_R, W_T, H_T\)</td><td>Reference and tiled widths and heights (unscaled)</td></tr>
+<tr><td>\(s\)</td><td>Global scale factor (default 0.5)</td></tr>
+<tr><td>\(\alpha\)</td><td>Tile fold angle in radians</td></tr>
+<tr><td>\(\mathbf{o} = (o_x, o_y)\)</td><td>In-frame hinge offset (reference's local right/up)</td></tr>
+<tr><td>\(\mathbf{e} = (e_x, e_y, e_z)\)</td><td>Rotation-offset Euler triple in radians</td></tr>
+</table>
+
+<h3>Step 1 — recover the reference frame</h3>
+<p>
+The reference panel arrives with its position and rotation already resolved (either explicitly authored or
+recursively resolved from <em>its</em> reference). We rebuild its quaternion from its Euler angles in
+<code>'XYZ'</code> order, then rotate the standard basis to get its world-space right and up axes (guide 06):
+</p>
+
+$$ q_R = \operatorname{fromEuler}((r_x^R, r_y^R, r_z^R), \text{XYZ}) $$
+$$ \hat{\mathbf{r}}_R = R_{q_R}\,\hat{\mathbf{x}}, \qquad \hat{\mathbf{u}}_R = R_{q_R}\,\hat{\mathbf{y}} $$
+
+<pre><code>const referenceQuaternion = new THREE.Quaternion().setFromEuler(
+  new THREE.Euler(reference.rotation[0], reference.rotation[1], reference.rotation[2], 'XYZ')
+);
+const referenceRight = new THREE.Vector3(1, 0, 0).applyQuaternion(referenceQuaternion);
+const referenceUp    = new THREE.Vector3(0, 1, 0).applyQuaternion(referenceQuaternion);</code></pre>
+
+<h3>Step 2 — locate the hinge</h3>
+<p>
+The hinge starts at the center of the reference panel's shared edge. Which edge depends on which side the tiled
+panel attaches to. In all cases we walk from \(\mathbf{c}_R\) along \(\pm\hat{\mathbf{r}}_R\) or
+\(\pm\hat{\mathbf{u}}_R\) by half the relevant dimension (scaled):
+</p>
+
+$$
+\mathbf{h}_0 =
+\begin{cases}
+\mathbf{c}_R + \hat{\mathbf{r}}_R \cdot s W_R / 2 & \text{(right)} \\
+\mathbf{c}_R - \hat{\mathbf{r}}_R \cdot s W_R / 2 & \text{(left)} \\
+\mathbf{c}_R + \hat{\mathbf{u}}_R \cdot s H_R / 2 & \text{(top)} \\
+\mathbf{c}_R - \hat{\mathbf{u}}_R \cdot s H_R / 2 & \text{(bottom)}
+\end{cases}
+$$
+
+<p>Then we add the in-frame ergonomic offset (computed in step 4 below):</p>
+
+$$ \mathbf{h} = \mathbf{h}_0 + o_x \hat{\mathbf{r}}_R + o_y \hat{\mathbf{u}}_R $$
+
+<p>
+The offset is added in the reference's local right/up axes — that is what makes <code>data-tile-offset="40, -20"</code>
+"shift the hinge 40 right and 20 down <em>relative to the reference</em>", regardless of how the reference itself is rotated.
+</p>
+
+<h3>Step 3 — the fold quaternion</h3>
+<p>
+The fold is an axis-angle rotation. The project picks a <em>world</em> axis: \((0, 1, 0)\) for left/right tiling
+and \((1, 0, 0)\) for top/bottom tiling. Sign convention by side:
+</p>
+
+$$
+q_{\text{fold}} =
+\begin{cases}
+\operatorname{axisAngle}((0,1,0), -\alpha) & \text{(right)} \\
+\operatorname{axisAngle}((0,1,0), +\alpha) & \text{(left)} \\
+\operatorname{axisAngle}((1,0,0), +\alpha) & \text{(top)} \\
+\operatorname{axisAngle}((1,0,0), -\alpha) & \text{(bottom)}
+\end{cases}
+$$
+
+<p>
+Why these signs? Picture a top-down view of the world (looking down the y-axis). The reference panel is a
+horizontal line through the origin, with normal pointing toward +z. A right-tiled panel folds inward — toward
++z, the side we are facing. A right-handed rotation about \(+\hat{\mathbf{y}}\) by a positive angle would swing
+points on the +x side <em>away</em> from us (toward -z). To fold toward +z we need a negative angle around
+\(+\hat{\mathbf{y}}\) — equivalently, a positive angle about \(-\hat{\mathbf{y}}\). Hence
+\(q_{\text{fold,right}} = \operatorname{axisAngle}((0,1,0), -\alpha)\).
+</p>
+
+<p>
+For a left-tiled panel, the panel sits on the -x side. A positive rotation about \(+\hat{\mathbf{y}}\) swings
+points on -x toward +z (toward us). So left uses \(+\alpha\). This is opposite-handedness from the right side
+because the panel sits on opposite sides of the hinge axis. Top and bottom mirror the same logic, but with the
+fold axis now \(+\hat{\mathbf{x}}\) (looking from the side).
+</p>
+
+<div class="callout">
+The fold axis is the <em>world</em> \((0,1,0)\) or \((1,0,0)\), <strong>not</strong> the reference's local
+\(\hat{\mathbf{u}}_R\) or \(\hat{\mathbf{r}}_R\). That distinction matters: it is what lets us write the
+composition \(q_R \cdot q_{\text{offset}} \cdot q_{\text{fold}}\) cleanly. The fold is expressed in
+"reference-default" coordinates, and \(q_R\) on the outer left rotates the whole result into the reference's
+actual orientation. See step 4.
+</div>
+
+<h3>Step 4 — compose the tiled-panel quaternion</h3>
+
+$$ q_T = q_R \cdot q_{\text{offset}} \cdot q_{\text{fold}}, \qquad q_{\text{offset}} = \operatorname{fromEuler}(\mathbf{e}, \text{XYZ}) $$
+
+<p>
+Quaternion multiplication is non-commutative (guide 05): order matters. To read what each factor does, apply
+\(q_T\) to a vector \(\mathbf{v}\) and unwrap right-to-left:
+</p>
+
+<ol>
+  <li>\(q_{\text{fold}}\,\mathbf{v}\) — rotate \(\mathbf{v}\) about the world fold axis by \(\pm\alpha\). At
+  this point we are pretending the reference is at world-default orientation.</li>
+  <li>\(q_{\text{offset}}\) — apply the user's extra reference-relative tilt. Because we have not yet rotated
+  into the reference's frame, this rotation acts on the "reference-default" vector — which is exactly what
+  "reference-relative" means.</li>
+  <li>\(q_R\) — rotate the whole result into the reference's actual world orientation.</li>
+</ol>
+
+<p>
+Equivalent reading: the fold happens <em>as if</em> the reference were at world-default orientation, then the
+offset perturbs it in that same reference frame, then \(q_R\) carries the entire assembly into the world. This
+is why the fold axis can be \((0,1,0)\) — it is the reference's pre-rotation up axis.
+</p>
+
+<pre><code>const offsetQuaternion = new THREE.Quaternion().setFromEuler(
+  new THREE.Euler(
+    layout.rotationOffset[0],
+    layout.rotationOffset[1],
+    layout.rotationOffset[2],
+    'XYZ'
+  )
+);
+const quaternion = referenceQuaternion.clone()
+  .multiply(offsetQuaternion)
+  .multiply(relativeQuaternion);</code></pre>
+
+<h3>Step 5 — recover the tiled frame</h3>
+$$ \hat{\mathbf{r}}_T = R_{q_T}\,\hat{\mathbf{x}}, \qquad \hat{\mathbf{u}}_T = R_{q_T}\,\hat{\mathbf{y}} $$
+
+<pre><code>const newRight = new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion);
+const newUp    = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion);</code></pre>
+
+<h3>Step 6 — locate the tiled center from the hinge</h3>
+<p>Walk from the hinge along the <em>tiled</em> panel's (post-fold) axis by half its size:</p>
+
+$$
+\mathbf{c}_T =
+\begin{cases}
+\mathbf{h} + \hat{\mathbf{r}}_T \cdot s W_T / 2 & \text{(right)} \\
+\mathbf{h} - \hat{\mathbf{r}}_T \cdot s W_T / 2 & \text{(left)} \\
+\mathbf{h} + \hat{\mathbf{u}}_T \cdot s H_T / 2 & \text{(top)} \\
+\mathbf{h} - \hat{\mathbf{u}}_T \cdot s H_T / 2 & \text{(bottom)}
+\end{cases}
+$$
+
+<p>
+This is the moment that "feels right". The hinge \(\mathbf{h}\) lies on the reference panel's shared edge by
+construction. The displacement from \(\mathbf{h}\) to \(\mathbf{c}_T\) is along the tiled panel's own axis, by
+half its size — so the tiled panel's near edge passes through \(\mathbf{h}\). Both panels' shared edges meet at
+\(\mathbf{h}\), regardless of \(\alpha\). The tests in <code>zoom-plane-parser.test.ts</code> check exactly this
+property:
+</p>
+
+<pre><code>// from zoom-plane-parser.test.ts:205-208
+expectVectorClose(
+  edgeCenter(rightConfig, 'left', scale),
+  edgeCenter(centerConfig, 'right', scale)
+);</code></pre>
+
+<h2>4. Ergonomic offset layers</h2>
+
+<p>
+<code>calculateErgonomicTileOffset</code> builds the in-frame hinge offset \((o_x, o_y)\) from four layers,
+added in this order: <strong>gap → align → align-offset → manual</strong>.
+</p>
+
+<h3>Layer 1 — gap</h3>
+<p>
+Pushes the tiled panel away from the reference edge along the perpendicular-to-the-shared-edge direction
+in-frame. For right/left tiling the shared edge runs vertically, so gap acts along \(\hat{\mathbf{r}}_R\); for
+top/bottom tiling the shared edge runs horizontally, so gap acts along \(\hat{\mathbf{u}}_R\). The sign matches
+the side, so a positive gap always pushes the tiled panel <em>away</em>:
+</p>
+
+<table>
+<tr><th>Side</th><th>Gap contribution</th></tr>
+<tr><td>right</td><td>\(o_x \mathrel{+}= +\text{gap}\)</td></tr>
+<tr><td>left</td><td>\(o_x \mathrel{+}= -\text{gap}\)</td></tr>
+<tr><td>top</td><td>\(o_y \mathrel{+}= +\text{gap}\)</td></tr>
+<tr><td>bottom</td><td>\(o_y \mathrel{+}= -\text{gap}\)</td></tr>
+</table>
+
+<h3>Layer 2 — align</h3>
+<p>
+Compensates for size differences. For right/left tiling, alignment is vertical (top / center / bottom). The
+reference and tiled panels may have different heights; aligning to "top" shifts the tiled panel up so its top
+edge matches the reference's top edge. The shift formula is just "shift so the named edges coincide".
+</p>
+
+<p>
+If the reference height is \(H_R\) and the tiled height is \(H_T\), define
+\(\Delta H = (H_R - H_T) \cdot s\). Center alignment leaves the centers of the two panels' shared-edge
+projections aligned (zero shift). Top alignment requires the tiled center to sit \(\Delta H / 2\) higher than
+the reference center (so the top edges, each \(\pm H/2\) from their respective centers, line up). Bottom is the
+mirror.
+</p>
+
+$$
+\text{align-shift}_y =
+\begin{cases}
++\Delta H / 2 & \text{align = top} \\
+0 & \text{align = center} \\
+-\Delta H / 2 & \text{align = bottom}
+\end{cases}
+$$
+
+<p>For top/bottom tiling the same logic plays out with widths along \(\hat{\mathbf{r}}_R\):</p>
+
+$$
+\Delta W = (W_R - W_T) \cdot s, \qquad
+\text{align-shift}_x =
+\begin{cases}
+-\Delta W / 2 & \text{align = left} \\
+0 & \text{align = center} \\
++\Delta W / 2 & \text{align = right}
+\end{cases}
+$$
+
+<h3>Layer 3 — align offset</h3>
+<p>
+A user-supplied scalar nudge along the <em>same axis</em> as the alignment. For right/left tiling it adds to
+\(o_y\); for top/bottom tiling it adds to \(o_x\). It rides on top of the align shift — so you can say
+"align top, then nudge 12 units further up".
+</p>
+
+<h3>Layer 4 — manual offset (<code>data-tile-offset</code>)</h3>
+<p>
+The literal user-supplied 2D offset \((m_x, m_y)\), added directly to \((o_x, o_y)\) with no further
+interpretation. This is the lowest-level escape hatch.
+</p>
+
+<p>The full formula:</p>
+$$
+(o_x, o_y) = \underbrace{(\text{gap}_x, \text{gap}_y)}_{\text{layer 1}} +
+\underbrace{(\text{align}_x, \text{align}_y)}_{\text{layer 2}} +
+\underbrace{(\text{align-offset}_x, \text{align-offset}_y)}_{\text{layer 3}} +
+\underbrace{(m_x, m_y)}_{\text{layer 4}}
+$$
+
+<h2>5. In this codebase</h2>
+
+<p>The verbatim core, from <code>src/zoom-plane-parser.ts</code> lines 416–429:</p>
+<pre><code>const referenceCenter = new THREE.Vector3(
+  reference.position[0],
+  reference.position[1],
+  reference.position[2]
+);
+const referenceQuaternion = new THREE.Quaternion().setFromEuler(
+  new THREE.Euler(reference.rotation[0], reference.rotation[1], reference.rotation[2], 'XYZ')
+);
+const referenceRight = new THREE.Vector3(1, 0, 0).applyQuaternion(referenceQuaternion);
+const referenceUp = new THREE.Vector3(0, 1, 0).applyQuaternion(referenceQuaternion);
+const finalOffset = calculateErgonomicTileOffset(layout, definition, reference, scale);
+const hingeOffset = referenceRight.clone()
+  .multiplyScalar(finalOffset[0])
+  .add(referenceUp.clone().multiplyScalar(finalOffset[1]));</code></pre>
+
+<p>This is steps 1 and most of 2: rebuild \(q_R\), recover \(\hat{\mathbf{r}}_R\) and \(\hat{\mathbf{u}}_R\), compute \((o_x, o_y)\), and form the in-frame offset vector \(o_x \hat{\mathbf{r}}_R + o_y \hat{\mathbf{u}}_R\).</p>
+
+<p>The side dispatch, lines 437–463 — note the sign pattern in both the hinge displacement and the fold axis:</p>
+<pre><code>if (layout.side === 'right') {
+  hinge = referenceCenter.clone().add(referenceRight.clone().multiplyScalar(reference.width * scale / 2));
+  relativeQuaternion = new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(0, 1, 0),
+    -layout.angle
+  );
+} else if (layout.side === 'left') {
+  hinge = referenceCenter.clone().add(referenceRight.clone().multiplyScalar(-reference.width * scale / 2));
+  relativeQuaternion = new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(0, 1, 0),
+    layout.angle
+  );
+} else if (layout.side === 'top') {
+  hinge = referenceCenter.clone().add(referenceUp.clone().multiplyScalar(reference.height * scale / 2));
+  relativeQuaternion = new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(1, 0, 0),
+    layout.angle
+  );
+} else {
+  hinge = referenceCenter.clone().add(referenceUp.clone().multiplyScalar(-reference.height * scale / 2));
+  relativeQuaternion = new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(1, 0, 0),
+    -layout.angle
+  );
+}
+
+hinge.add(hingeOffset);</code></pre>
+
+<p>The composition (steps 4–6), lines 465–487:</p>
+<pre><code>const offsetQuaternion = new THREE.Quaternion().setFromEuler(
+  new THREE.Euler(
+    layout.rotationOffset[0],
+    layout.rotationOffset[1],
+    layout.rotationOffset[2],
+    'XYZ'
+  )
+);
+const quaternion = referenceQuaternion.clone()
+  .multiply(offsetQuaternion)
+  .multiply(relativeQuaternion);
+const newRight = new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion);
+const newUp = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion);
+
+if (layout.side === 'right') {
+  center = hinge.add(newRight.multiplyScalar(definition.width * scale / 2));
+} else if (layout.side === 'left') {
+  center = hinge.add(newRight.multiplyScalar(-definition.width * scale / 2));
+} else if (layout.side === 'top') {
+  center = hinge.add(newUp.multiplyScalar(definition.height * scale / 2));
+} else {
+  center = hinge.add(newUp.multiplyScalar(-definition.height * scale / 2));
+}</code></pre>
+
+<p>And the offset stack, the entirety of <code>calculateErgonomicTileOffset</code> (lines 355–404):</p>
+<pre><code>function calculateErgonomicTileOffset(
+  layout: TiledPlaneDefinition,
+  definition: PlaneDefinition,
+  reference: ZoomPlaneConfig,
+  scale: number
+): [number, number] {
+  let gapX = 0;
+  let gapY = 0;
+  let alignX = 0;
+  let alignY = 0;
+
+  if (layout.side === 'right' || layout.side === 'left') {
+    // ... validation ...
+    gapX = layout.side === 'right' ? layout.gap : -layout.gap;
+
+    const heightDelta = (reference.height - definition.height) * scale;
+    if (layout.align === 'top') {
+      alignY = heightDelta / 2;
+    } else if (layout.align === 'bottom') {
+      alignY = -heightDelta / 2;
+    }
+    alignY += layout.alignOffset;
+  } else {
+    // ... validation ...
+    gapY = layout.side === 'top' ? layout.gap : -layout.gap;
+
+    const widthDelta = (reference.width - definition.width) * scale;
+    if (layout.align === 'left') {
+      alignX = -widthDelta / 2;
+    } else if (layout.align === 'right') {
+      alignX = widthDelta / 2;
+    }
+    alignX += layout.alignOffset;
+  }
+
+  return [
+    gapX + alignX + layout.offset[0],
+    gapY + alignY + layout.offset[1],
+  ];
+}</code></pre>
+
+<p>And here is what the math <em>should</em> produce, as a unit test from <code>zoom-plane-parser.test.ts</code> lines 510–550:</p>
+
+<pre><code>it('applies tile rotation offset relative to the reference orientation', () => {
+  // reference at position (10,20,30), rotation (10°,45°,5°)
+  // tiled is 800x500, tileFromRight, tileAngle=35°, tileRotationOffset=(0°, 2°, -1°)
+  const referenceQuaternion = quaternionFromConfig(referenceConfig);
+  const offsetQuaternion = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(0, 2 * Math.PI / 180, -Math.PI / 180, 'XYZ')
+  );
+  const foldQuaternion = new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(0, 1, 0),
+    -35 * Math.PI / 180
+  );
+  const expectedQuaternion = referenceQuaternion.clone()
+    .multiply(offsetQuaternion)
+    .multiply(foldQuaternion);
+
+  expectQuaternionClose(quaternionFromConfig(tiledConfig), expectedQuaternion);
+  expectVectorClose(
+    edgeCenter(tiledConfig, 'left', scale),
+    edgeCenter(referenceConfig, 'right', scale)
+  );
+});</code></pre>
+
+<p>
+The last <code>expectVectorClose</code> is the proof: even with a tilted reference and a non-zero rotation
+offset, the tiled panel's <em>left</em> edge center coincides with the reference's <em>right</em> edge center.
+That is the hinge property.
+</p>
+
+<h2>6. Interactive playground</h2>
+
+<div class="widget">
+  <canvas id="cv" width="900" height="620"></canvas>
+  <div class="controls">
+    <fieldset>
+      <legend>Side</legend>
+      <label><input type="radio" name="side" value="right" checked /> right</label>
+      <label><input type="radio" name="side" value="left" /> left</label>
+      <label><input type="radio" name="side" value="top" /> top</label>
+      <label><input type="radio" name="side" value="bottom" /> bottom</label>
+    </fieldset>
+    <fieldset>
+      <legend>Align (right/left only)</legend>
+      <label><input type="radio" name="align" value="top" /> top</label>
+      <label><input type="radio" name="align" value="center" checked /> center</label>
+      <label><input type="radio" name="align" value="bottom" /> bottom</label>
+    </fieldset>
+    <label>tile angle: <span id="angleVal">30</span>°
+      <input type="range" id="angle" min="0" max="180" step="1" value="30" />
+    </label>
+    <label>tile gap: <span id="gapVal">0</span>
+      <input type="range" id="gap" min="0" max="60" step="1" value="0" />
+    </label>
+    <label>align offset: <span id="aoVal">0</span>
+      <input type="range" id="ao" min="-60" max="60" step="1" value="0" />
+    </label>
+    <label>manual offset x: <span id="oxVal">0</span>
+      <input type="range" id="ox" min="-60" max="60" step="1" value="0" />
+    </label>
+    <label>manual offset y: <span id="oyVal">0</span>
+      <input type="range" id="oy" min="-60" max="60" step="1" value="0" />
+    </label>
+    <label>rotation offset x: <span id="rxVal">0</span>°
+      <input type="range" id="rx" min="-30" max="30" step="1" value="0" />
+    </label>
+    <label>rotation offset y: <span id="ryVal">0</span>°
+      <input type="range" id="ry" min="-30" max="30" step="1" value="0" />
+    </label>
+    <label>rotation offset z: <span id="rzVal">0</span>°
+      <input type="range" id="rz" min="-30" max="30" step="1" value="0" />
+    </label>
+    <label>tiled width: <span id="twVal">200</span>
+      <input type="range" id="tw" min="50" max="250" step="1" value="200" />
+    </label>
+    <label>tiled height: <span id="thVal">120</span>
+      <input type="range" id="th" min="50" max="250" step="1" value="120" />
+    </label>
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="showRefRot" /> show reference rotation</label>
+  </div>
+  <div class="controls" id="refRotControls" style="display:none">
+    <label>reference rot x: <span id="rrxVal">0</span>°
+      <input type="range" id="rrx" min="-90" max="90" step="1" value="0" />
+    </label>
+    <label>reference rot y: <span id="rryVal">0</span>°
+      <input type="range" id="rry" min="-90" max="90" step="1" value="0" />
+    </label>
+    <label>reference rot z: <span id="rrzVal">0</span>°
+      <input type="range" id="rrz" min="-90" max="90" step="1" value="0" />
+    </label>
+  </div>
+  <div class="readout" id="readout"></div>
+</div>
+
+<script>
+(function() {
+  // ---- minimal vector / quaternion library (no dependencies) ----
+  const V = (x,y,z) => ({x,y,z});
+  const vAdd = (a,b) => V(a.x+b.x, a.y+b.y, a.z+b.z);
+  const vSub = (a,b) => V(a.x-b.x, a.y-b.y, a.z-b.z);
+  const vScl = (a,k) => V(a.x*k, a.y*k, a.z*k);
+
+  const Q = (x,y,z,w) => ({x,y,z,w});
+  function qMul(a, b) {
+    return Q(
+      a.w*b.x + a.x*b.w + a.y*b.z - a.z*b.y,
+      a.w*b.y - a.x*b.z + a.y*b.w + a.z*b.x,
+      a.w*b.z + a.x*b.y - a.y*b.x + a.z*b.w,
+      a.w*b.w - a.x*b.x - a.y*b.y - a.z*b.z
+    );
+  }
+  function qFromAxisAngle(ax, ay, az, angle) {
+    const half = angle / 2;
+    const s = Math.sin(half);
+    return Q(ax*s, ay*s, az*s, Math.cos(half));
+  }
+  // XYZ Euler (Three.js convention): q = qx * qy * qz
+  function qFromEulerXYZ(ex, ey, ez) {
+    const qx = qFromAxisAngle(1,0,0, ex);
+    const qy = qFromAxisAngle(0,1,0, ey);
+    const qz = qFromAxisAngle(0,0,1, ez);
+    return qMul(qMul(qx, qy), qz);
+  }
+  function qApply(q, v) {
+    // v' = q * v * q^-1, with v as pure quaternion
+    const x=v.x, y=v.y, z=v.z;
+    const qx=q.x, qy=q.y, qz=q.z, qw=q.w;
+    // t = 2 * cross(q.xyz, v)
+    const tx = 2*(qy*z - qz*y);
+    const ty = 2*(qz*x - qx*z);
+    const tz = 2*(qx*y - qy*x);
+    // v' = v + qw*t + cross(q.xyz, t)
+    return V(
+      x + qw*tx + (qy*tz - qz*ty),
+      y + qw*ty + (qz*tx - qx*tz),
+      z + qw*tz + (qx*ty - qy*tx)
+    );
+  }
+  // Extract XYZ Euler angles from quaternion (Three.js convention).
+  function eulerXYZFromQuat(q) {
+    // Build rotation matrix elements we need.
+    // m13 = 2(xz + wy)
+    const m13 = 2*(q.x*q.z + q.w*q.y);
+    const m23 = 2*(q.y*q.z - q.w*q.x);
+    const m33 = 1 - 2*(q.x*q.x + q.y*q.y);
+    const m11 = 1 - 2*(q.y*q.y + q.z*q.z);
+    const m12 = 2*(q.x*q.y - q.w*q.z);
+    const ey = Math.asin(Math.max(-1, Math.min(1, m13)));
+    let ex, ez;
+    if (Math.abs(m13) < 0.9999999) {
+      ex = Math.atan2(-m23, m33);
+      ez = Math.atan2(-m12, m11);
+    } else {
+      ex = Math.atan2(2*(q.y*q.z + q.w*q.x), 1 - 2*(q.x*q.x + q.y*q.y));
+      ez = 0;
+    }
+    return {x: ex, y: ey, z: ez};
+  }
+
+  // ---- 3D -> 2D projection (one-point perspective) ----
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  // Camera looks down -z from (0, 0, +d). World x -> screen x, world y -> screen -y.
+  // Apply slight y-tilt for readability.
+  const camTiltX = -0.30;     // tilt camera down a bit (radians)
+  const camTiltY = 0.45;      // and rotate around y
+  const camDist = 900;
+  const focal = 950;          // perspective focal length in canvas units
+  function project(p) {
+    // Rotate world by inverse camera rotation.
+    // Compose: world point seen from camera = R_y(-camTiltY) * R_x(-camTiltX) * (p - camPos), then perspective divide.
+    // We'll just rotate p (camera at origin looking down -z, scene at -camDist).
+    const cy = Math.cos(-camTiltY), sy = Math.sin(-camTiltY);
+    const cx_ = Math.cos(-camTiltX), sx_ = Math.sin(-camTiltX);
+    // R_y(-camTiltY)
+    let x = cy*p.x + sy*p.z;
+    let y = p.y;
+    let z = -sy*p.x + cy*p.z;
+    // R_x(-camTiltX)
+    let y2 = cx_*y - sx_*z;
+    let z2 = sx_*y + cx_*z;
+    // Translate camera back along +z by camDist
+    z2 -= camDist;
+    // Perspective: project onto z = -focal plane
+    const denom = -z2;
+    const sx = (focal * x) / denom;
+    const sy2 = (focal * y2) / denom;
+    return {x: W/2 + sx, y: H/2 - sy2, depth: -z2};
+  }
+
+  function line3D(a, b, color, width) {
+    const A = project(a), B = project(b);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width || 1.5;
+    ctx.beginPath();
+    ctx.moveTo(A.x, A.y);
+    ctx.lineTo(B.x, B.y);
+    ctx.stroke();
+  }
+  function dot3D(p, color, r) {
+    const P = project(p);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(P.x, P.y, r || 4, 0, Math.PI*2);
+    ctx.fill();
+  }
+  function panelFill3D(corners, color) {
+    const pts = corners.map(project);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  function label3D(p, text, color) {
+    const P = project(p);
+    ctx.fillStyle = color || '#fff';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(text, P.x + 6, P.y - 4);
+  }
+
+  // ---- panel rendering ----
+  function panelCorners(center, qrot, w, h) {
+    const right = qApply(qrot, V(1,0,0));
+    const up    = qApply(qrot, V(0,1,0));
+    const c1 = vAdd(vAdd(center, vScl(right,  w/2)), vScl(up,  h/2));
+    const c2 = vAdd(vAdd(center, vScl(right, -w/2)), vScl(up,  h/2));
+    const c3 = vAdd(vAdd(center, vScl(right, -w/2)), vScl(up, -h/2));
+    const c4 = vAdd(vAdd(center, vScl(right,  w/2)), vScl(up, -h/2));
+    return [c1, c2, c3, c4];
+  }
+
+  function drawPanel(center, qrot, w, h, fill, edge, axisLen) {
+    const corners = panelCorners(center, qrot, w, h);
+    panelFill3D(corners, fill);
+    line3D(corners[0], corners[1], edge, 2);
+    line3D(corners[1], corners[2], edge, 2);
+    line3D(corners[2], corners[3], edge, 2);
+    line3D(corners[3], corners[0], edge, 2);
+    if (axisLen) {
+      const right = qApply(qrot, V(1,0,0));
+      const up    = qApply(qrot, V(0,1,0));
+      const norm  = qApply(qrot, V(0,0,1));
+      line3D(center, vAdd(center, vScl(right, axisLen)), '#ff5252', 2);
+      line3D(center, vAdd(center, vScl(up,    axisLen)), '#66e15a', 2);
+      line3D(center, vAdd(center, vScl(norm,  axisLen)), '#5aa9ff', 2);
+    }
+  }
+
+  function drawWorldAxes() {
+    const o = V(0,0,0);
+    line3D(o, V(120, 0, 0), '#883333', 1);
+    line3D(o, V(0, 120, 0), '#338833', 1);
+    line3D(o, V(0, 0, 120), '#333388', 1);
+  }
+
+  function drawGrid() {
+    ctx.strokeStyle = '#1a2230';
+    ctx.lineWidth = 1;
+    const N = 8, step = 60;
+    for (let i = -N; i <= N; i++) {
+      line3D(V(i*step, -150, -N*step), V(i*step, -150, N*step), '#1a2230', 1);
+      line3D(V(-N*step, -150, i*step), V(N*step,  -150, i*step), '#1a2230', 1);
+    }
+  }
+
+  // ---- the actual hinge-tiling computation ----
+  const REF_W = 200, REF_H = 120, SCALE = 1;
+
+  function computeErgonomicOffset(side, gap, align, alignOffset, mx, my, refW, refH, tW, tH) {
+    let gapX = 0, gapY = 0, alignX = 0, alignY = 0;
+    if (side === 'right' || side === 'left') {
+      gapX = side === 'right' ? gap : -gap;
+      const heightDelta = (refH - tH) * SCALE;
+      if (align === 'top') alignY = heightDelta/2;
+      else if (align === 'bottom') alignY = -heightDelta/2;
+      alignY += alignOffset;
+    } else {
+      gapY = side === 'top' ? gap : -gap;
+      const widthDelta = (refW - tW) * SCALE;
+      if (align === 'left') alignX = -widthDelta/2;
+      else if (align === 'right') alignX = widthDelta/2;
+      alignX += alignOffset;
+    }
+    return [gapX + alignX + mx, gapY + alignY + my];
+  }
+
+  function resolveTiled(params) {
+    const {side, angle, gap, align, alignOffset, mx, my, rx, ry, rz, tW, tH, refRot} = params;
+
+    const referenceCenter = V(0,0,0);
+    const referenceQuaternion = qFromEulerXYZ(refRot.x, refRot.y, refRot.z);
+    const referenceRight = qApply(referenceQuaternion, V(1,0,0));
+    const referenceUp    = qApply(referenceQuaternion, V(0,1,0));
+
+    // For top/bottom tiling, only "center" alignment is meaningful in this widget.
+    const sideAlign = (side === 'right' || side === 'left') ? align : 'center';
+    const finalOffset = computeErgonomicOffset(side, gap, sideAlign, alignOffset, mx, my, REF_W, REF_H, tW, tH);
+    const hingeOffset = vAdd(vScl(referenceRight, finalOffset[0]), vScl(referenceUp, finalOffset[1]));
+
+    let relativeQuaternion, hinge;
+    if (side === 'right') {
+      hinge = vAdd(referenceCenter, vScl(referenceRight, REF_W * SCALE / 2));
+      relativeQuaternion = qFromAxisAngle(0,1,0, -angle);
+    } else if (side === 'left') {
+      hinge = vAdd(referenceCenter, vScl(referenceRight, -REF_W * SCALE / 2));
+      relativeQuaternion = qFromAxisAngle(0,1,0, angle);
+    } else if (side === 'top') {
+      hinge = vAdd(referenceCenter, vScl(referenceUp, REF_H * SCALE / 2));
+      relativeQuaternion = qFromAxisAngle(1,0,0, angle);
+    } else {
+      hinge = vAdd(referenceCenter, vScl(referenceUp, -REF_H * SCALE / 2));
+      relativeQuaternion = qFromAxisAngle(1,0,0, -angle);
+    }
+    hinge = vAdd(hinge, hingeOffset);
+
+    const offsetQuaternion = qFromEulerXYZ(rx, ry, rz);
+    const quaternion = qMul(qMul(referenceQuaternion, offsetQuaternion), relativeQuaternion);
+    const newRight = qApply(quaternion, V(1,0,0));
+    const newUp    = qApply(quaternion, V(0,1,0));
+
+    let center;
+    if (side === 'right')      center = vAdd(hinge, vScl(newRight,  tW*SCALE/2));
+    else if (side === 'left')  center = vAdd(hinge, vScl(newRight, -tW*SCALE/2));
+    else if (side === 'top')   center = vAdd(hinge, vScl(newUp,     tH*SCALE/2));
+    else                       center = vAdd(hinge, vScl(newUp,    -tH*SCALE/2));
+
+    return {center, quaternion, hinge, referenceQuaternion};
+  }
+
+  // ---- UI wiring ----
+  const ids = ['angle','gap','ao','ox','oy','rx','ry','rz','tw','th','rrx','rry','rrz'];
+  const sliders = {};
+  ids.forEach(id => sliders[id] = document.getElementById(id));
+  function getSide() {
+    return document.querySelector('input[name="side"]:checked').value;
+  }
+  function getAlign() {
+    return document.querySelector('input[name="align"]:checked').value;
+  }
+
+  document.getElementById('showRefRot').addEventListener('change', (e) => {
+    document.getElementById('refRotControls').style.display = e.target.checked ? 'grid' : 'none';
+    redraw();
+  });
+
+  function redraw() {
+    document.getElementById('angleVal').textContent = sliders.angle.value;
+    document.getElementById('gapVal').textContent   = sliders.gap.value;
+    document.getElementById('aoVal').textContent    = sliders.ao.value;
+    document.getElementById('oxVal').textContent    = sliders.ox.value;
+    document.getElementById('oyVal').textContent    = sliders.oy.value;
+    document.getElementById('rxVal').textContent    = sliders.rx.value;
+    document.getElementById('ryVal').textContent    = sliders.ry.value;
+    document.getElementById('rzVal').textContent    = sliders.rz.value;
+    document.getElementById('twVal').textContent    = sliders.tw.value;
+    document.getElementById('thVal').textContent    = sliders.th.value;
+    document.getElementById('rrxVal').textContent   = sliders.rrx.value;
+    document.getElementById('rryVal').textContent   = sliders.rry.value;
+    document.getElementById('rrzVal').textContent   = sliders.rrz.value;
+
+    const params = {
+      side: getSide(),
+      angle: parseFloat(sliders.angle.value) * Math.PI / 180,
+      gap:   parseFloat(sliders.gap.value),
+      align: getAlign(),
+      alignOffset: parseFloat(sliders.ao.value),
+      mx: parseFloat(sliders.ox.value),
+      my: parseFloat(sliders.oy.value),
+      rx: parseFloat(sliders.rx.value) * Math.PI / 180,
+      ry: parseFloat(sliders.ry.value) * Math.PI / 180,
+      rz: parseFloat(sliders.rz.value) * Math.PI / 180,
+      tW: parseFloat(sliders.tw.value),
+      tH: parseFloat(sliders.th.value),
+      refRot: document.getElementById('showRefRot').checked
+        ? {x: parseFloat(sliders.rrx.value)*Math.PI/180,
+           y: parseFloat(sliders.rry.value)*Math.PI/180,
+           z: parseFloat(sliders.rrz.value)*Math.PI/180}
+        : {x:0,y:0,z:0}
+    };
+
+    const out = resolveTiled(params);
+
+    // ---- draw ----
+    ctx.fillStyle = '#0d1117';
+    ctx.fillRect(0,0,W,H);
+    drawGrid();
+    drawWorldAxes();
+
+    // Reference panel (slightly translucent so we can see overlap).
+    drawPanel(V(0,0,0), out.referenceQuaternion, REF_W, REF_H, 'rgba(120, 150, 200, 0.35)', '#bbd', 30);
+    label3D(V(0,0,0), 'reference', '#bbd');
+
+    // Tiled panel.
+    drawPanel(out.center, out.quaternion, params.tW, params.tH, 'rgba(220, 180, 120, 0.40)', '#fc6', 30);
+    label3D(out.center, 'tiled', '#fc6');
+
+    // Hinge marker.
+    dot3D(out.hinge, '#ffeb3b', 6);
+    label3D(out.hinge, 'h', '#ffeb3b');
+
+    // Readout.
+    const e = eulerXYZFromQuat(out.quaternion);
+    const deg = (r) => (r * 180 / Math.PI).toFixed(2);
+    const num = (n) => n.toFixed(2);
+    document.getElementById('readout').textContent =
+      'tiled center  c_T  = (' + num(out.center.x) + ', ' + num(out.center.y) + ', ' + num(out.center.z) + ')\n' +
+      'hinge         h    = (' + num(out.hinge.x)  + ', ' + num(out.hinge.y)  + ', ' + num(out.hinge.z)  + ')\n' +
+      'tiled euler   q_T  = (' + deg(e.x) + '°, ' + deg(e.y) + '°, ' + deg(e.z) + '°)   [XYZ order]\n' +
+      'tiled quat         = (' + num(out.quaternion.x) + ', ' + num(out.quaternion.y) + ', ' + num(out.quaternion.z) + ', ' + num(out.quaternion.w) + ')';
+  }
+
+  ids.forEach(id => sliders[id].addEventListener('input', redraw));
+  document.querySelectorAll('input[name="side"]').forEach(el => el.addEventListener('change', redraw));
+  document.querySelectorAll('input[name="align"]').forEach(el => el.addEventListener('change', redraw));
+  redraw();
+})();
+</script>
+
+<div class="note">
+Try: set side = right, angle = 90, and watch the tiled panel fold to a perfect right angle with its left edge
+exactly on the reference's right edge. Then enable "show reference rotation" and rotate the reference 30° around
+y — the tiled panel follows, but its <em>left edge</em> still meets the reference's <em>right edge</em>. That
+is the hinge property guaranteed by step 6.
+</div>
+
+<h2>7. Worked examples</h2>
+
+<h3>Example A — flat reference, right tile, 30°</h3>
+<p>
+Reference: \(\mathbf{c}_R = (0,0,0)\), rotation \((0,0,0)\), \(W_R = 1600\), \(H_R = 900\), \(s = 1\).
+Tiled: \(W_T = 1280\), \(H_T = 720\), <code>tile-from-right="center"</code>, <code>tile-angle="30"</code>,
+all other tile attributes default (gap = 0, align = "center", offset = 0,0, rotation-offset = 0,0,0).
+</p>
+<ol>
+<li>\(q_R = (0,0,0,1)\), \(\hat{\mathbf{r}}_R = (1,0,0)\), \(\hat{\mathbf{u}}_R = (0,1,0)\).</li>
+<li>Hinge base: \(\mathbf{h}_0 = (0,0,0) + (1,0,0) \cdot 1600/2 = (800, 0, 0)\). Ergonomic offset is \((0,0)\) (defaults). So \(\mathbf{h} = (800, 0, 0)\).</li>
+<li>Fold: \(q_{\text{fold}} = \operatorname{axisAngle}((0,1,0), -30°)\). In quaternion form, \(q_{\text{fold}} = (0, \sin(-15°), 0, \cos(-15°)) \approx (0, -0.2588, 0, 0.9659)\).</li>
+<li>\(q_{\text{offset}} = (0,0,0,1)\), so \(q_T = q_R \cdot q_{\text{offset}} \cdot q_{\text{fold}} = q_{\text{fold}}\).</li>
+<li>\(\hat{\mathbf{r}}_T = R_{q_T}(1,0,0) = (\cos(-30°), 0, -\sin(-30°)) = (\cos 30°, 0, \sin 30°) \approx (0.8660, 0, 0.5)\).</li>
+<li>\(\mathbf{c}_T = \mathbf{h} + \hat{\mathbf{r}}_T \cdot 1280/2 = (800, 0, 0) + (0.8660, 0, 0.5) \cdot 640\)
+  \(\;= (800 + 554.26, 0, 320) \approx (1354.26, 0, 320)\).</li>
+</ol>
+<p>The tiled panel sits 554 units further right and 320 units in front of (positive z) the keyboard's right edge — exactly what a 30° fold predicts.</p>
+
+<h3>Example B — flat reference, top tile, 90°</h3>
+<p>
+Reference as in A. Tiled: \(W_T = 1600\), \(H_T = 900\), <code>tile-from-top="center"</code>,
+<code>tile-angle="90"</code>, defaults elsewhere.
+</p>
+<ol>
+<li>Hinge: \(\mathbf{h} = (0,0,0) + (0,1,0) \cdot 900/2 = (0, 450, 0)\).</li>
+<li>Fold: \(q_{\text{fold}} = \operatorname{axisAngle}((1,0,0), +90°)\). Then \(q_T = q_{\text{fold}}\).</li>
+<li>\(\hat{\mathbf{u}}_T = R_{q_T}(0,1,0) = (0, \cos 90°, \sin 90°) = (0, 0, 1)\).</li>
+<li>\(\mathbf{c}_T = (0, 450, 0) + (0, 0, 1) \cdot 900/2 = (0, 450, 450)\).</li>
+</ol>
+<p>A 90° fold makes the tiled panel face forward (+z), with its center 450 units forward of the hinge — half its height, as expected.</p>
+
+<h3>Example C — gap and alignment</h3>
+<p>
+Reference: \(W_R = 1000\), \(H_R = 500\), at origin, no rotation, \(s = 0.5\). Tiled: \(W_T = 800\), \(H_T = 300\),
+<code>tile-from-right</code>, <code>tile-angle="0"</code> (no fold), <code>tile-gap="40"</code>,
+<code>tile-align="top"</code>, defaults elsewhere.
+</p>
+<ol>
+<li>\(\hat{\mathbf{r}}_R = (1,0,0)\), \(\hat{\mathbf{u}}_R = (0,1,0)\).</li>
+<li>Base hinge: \(\mathbf{h}_0 = (0,0,0) + (1,0,0) \cdot 1000 \cdot 0.5 / 2 = (250, 0, 0)\).</li>
+<li>Ergonomic offset:
+  <ul>
+    <li>gap: side=right, so \(o_x = +40\), \(o_y = 0\).</li>
+    <li>align: \(\Delta H = (500 - 300) \cdot 0.5 = 100\). align = top, so \(o_y\mathrel{+}= 100/2 = 50\).</li>
+    <li>align-offset, manual offset: 0.</li>
+  </ul>
+  Total: \((o_x, o_y) = (40, 50)\).</li>
+<li>\(\mathbf{h} = (250, 0, 0) + 40 \cdot (1,0,0) + 50 \cdot (0,1,0) = (290, 50, 0)\).</li>
+<li>Fold angle is 0, so \(q_T = (0,0,0,1)\), \(\hat{\mathbf{r}}_T = (1,0,0)\).</li>
+<li>\(\mathbf{c}_T = (290, 50, 0) + (1,0,0) \cdot 800 \cdot 0.5 / 2 = (290 + 200, 50, 0) = (490, 50, 0)\).</li>
+</ol>
+<p>The tiled panel's center is 50 units up (because the top edges align across a 100-unit height difference, scaled), and 40 units further right than it would be without the gap.</p>
+
+<h2>8. Exercises</h2>
+
+<ol>
+  <li><b>Routine.</b> Reference at origin, rotation \((0,0,0)\), \(W_R = 1000\), \(H_R = 500\), \(s = 1\). Tiled: \(W_T = 600\), \(H_T = 500\), <code>tile-from-left="ref"</code>, <code>tile-angle="60"</code>, defaults elsewhere. Compute \(\mathbf{h}\), \(q_T\) (as Euler XYZ), and \(\mathbf{c}_T\).</li>
+  <li><b>Routine.</b> Same reference. Tiled: \(W_T = 1000\), \(H_T = 800\), <code>tile-from-bottom="ref"</code>, <code>tile-angle="45"</code>, defaults elsewhere. Compute \(\mathbf{h}\) and \(\mathbf{c}_T\).</li>
+  <li><b>Conceptual.</b> Why is the fold axis the world \((0,1,0)\) (or \((1,0,0)\)) rather than the reference's local \(\hat{\mathbf{u}}_R\) (or \(\hat{\mathbf{r}}_R\))? Hint: where in the composition \(q_R \cdot q_{\text{offset}} \cdot q_{\text{fold}}\) does the rotation into the reference's frame happen?</li>
+  <li><b>Project-applied.</b> Predict what happens if the user sets <code>data-tile-angle="180"</code> on a right-tiled panel. What is the world position of \(\mathbf{c}_T\)? Where is the tiled panel relative to the reference visually? Is the hinge property still satisfied?</li>
+  <li><b>Project-applied.</b> Predict what changes if the order of multiplication is swapped from \(q_R \cdot q_{\text{offset}} \cdot q_{\text{fold}}\) to \(q_R \cdot q_{\text{fold}} \cdot q_{\text{offset}}\). Specifically: is the rotation offset still applied in the reference's frame? In what frame would it now act?</li>
+  <li><b>Conceptual.</b> Show, from the formulas in steps 2 and 6, that the tiled panel's near edge passes through \(\mathbf{h}\) regardless of \(\alpha\). (Hint: the tiled panel's near edge midpoint is at \(\mathbf{c}_T\) minus half its size along \(\hat{\mathbf{r}}_T\) or \(\hat{\mathbf{u}}_T\).)</li>
+  <li><b>Extension.</b> Suppose the package added a <code>data-tile-from-front</code> attribute that placed the tiled panel coplanar with, but in front of, the reference. Sketch the corresponding step-2/step-6 formulas. What axis would the fold now rotate around?</li>
+  <li><b>Extension.</b> The current pipeline computes \(q_{\text{offset}}\) as <code>setFromEuler(..., 'XYZ')</code>. If the user instead supplied a quaternion directly, would any other step of the pipeline have to change? Why or why not?</li>
+</ol>
+
+<h2>9. Where to next</h2>
+<p>
+This guide closes out the <em>static</em> panel-positioning track: explicit positions (early guides),
+quaternion composition (guide 05), frames (guide 06), and now the full tiling pipeline. Once every panel has a
+final \((\mathbf{c}, q)\), the <em>other</em> heart of this package takes over: smoothly moving the camera
+between them. Guide 12 covers <strong>adaptive camera transitions</strong> — how the navigator builds
+intermediate camera states on the fly, why it uses slerp (guide 10) rather than Euler interpolation, and how
+the clip-path animation overlaps with the camera arc. Tiling computes <em>where</em> the panels live;
+transitions compute <em>how to look</em> at them.
+</p>
+
+<h2>10. Appendix: Solutions</h2>
+
+<details>
+<summary>Solution 1</summary>
+<p>\(\hat{\mathbf{r}}_R = (1,0,0)\). Hinge: \(\mathbf{h}_0 = (0,0,0) - (1,0,0)\cdot 1000/2 = (-500, 0, 0)\). All ergonomic offsets are 0, so \(\mathbf{h} = (-500,0,0)\).</p>
+<p>Fold for left side: \(q_{\text{fold}} = \operatorname{axisAngle}((0,1,0), +60°)\). \(q_T = q_{\text{fold}}\). Euler XYZ: \((0°, 60°, 0°)\).</p>
+<p>\(\hat{\mathbf{r}}_T = R_{q_T}(1,0,0) = (\cos 60°, 0, -\sin 60°) = (0.5, 0, -0.8660)\).</p>
+<p>\(\mathbf{c}_T = \mathbf{h} - \hat{\mathbf{r}}_T \cdot 600/2 = (-500, 0, 0) - (0.5, 0, -0.8660)\cdot 300 = (-650, 0, 259.81)\).</p>
+</details>
+
+<details>
+<summary>Solution 2</summary>
+<p>\(\hat{\mathbf{u}}_R = (0,1,0)\). Hinge: \(\mathbf{h}_0 = (0,0,0) - (0,1,0)\cdot 500/2 = (0, -250, 0)\). All ergonomic offsets are 0, so \(\mathbf{h} = (0,-250,0)\).</p>
+<p>Fold for bottom side: \(q_{\text{fold}} = \operatorname{axisAngle}((1,0,0), -45°)\). \(q_T = q_{\text{fold}}\). Euler XYZ: \((-45°, 0°, 0°)\).</p>
+<p>\(\hat{\mathbf{u}}_T = R_{q_T}(0,1,0) = (0, \cos(-45°), \sin(-45°)) = (0, 0.7071, -0.7071)\).</p>
+<p>\(\mathbf{c}_T = \mathbf{h} - \hat{\mathbf{u}}_T\cdot 800/2 = (0, -250, 0) - (0, 0.7071, -0.7071)\cdot 400 = (0, -532.84, 282.84)\).</p>
+</details>
+
+<details>
+<summary>Solution 3</summary>
+<p>The composition reads right-to-left when applied to a vector. The fold acts <em>first</em>, before \(q_R\) carries the result into the reference's world orientation. So at fold time, the vector is still in "reference-default" coordinates — coordinates where the reference's right axis is the world \((1,0,0)\) and its up axis is the world \((0,1,0)\). Choosing the fold axis to be world \((0,1,0)\) for left/right tiling is therefore the same as choosing the reference's local up axis, but expressed in the convenient pre-rotation frame. If we used \(\hat{\mathbf{u}}_R\) directly, we would have to right-multiply rather than left-multiply, and the offset rotation would no longer compose cleanly.</p>
+</details>
+
+<details>
+<summary>Solution 4</summary>
+<p>At \(\alpha = 180°\), \(q_{\text{fold,right}} = \operatorname{axisAngle}((0,1,0), -180°)\). Apply to \((1,0,0)\) and you get \((-1, 0, 0)\). So \(\hat{\mathbf{r}}_T = (-1,0,0)\). Then \(\mathbf{c}_T = \mathbf{h} + (-1,0,0)\cdot sW_T/2 = \mathbf{h} - sW_T/2 \,\hat{\mathbf{x}}\). Visually, the tiled panel has folded all the way around and now lies flush <em>behind</em> the reference panel — its center is on the same side as the reference's left edge. The hinge property still holds: the tiled panel's left edge (now in the +x direction, since the panel is flipped) passes through \(\mathbf{h}\). The two panels are coplanar but back-to-back-rotated by 180° about y.</p>
+</details>
+
+<details>
+<summary>Solution 5</summary>
+<p>With \(q_R \cdot q_{\text{fold}} \cdot q_{\text{offset}}\), reading right-to-left: \(q_{\text{offset}}\) acts first on the vector — but at that moment we are in pre-fold, pre-reference coordinates. The "offset" is now applied in <em>world-default</em> coordinates, not in the reference's frame. After folding and then orienting via \(q_R\), the offset's effect is in a different frame than before. Concretely, a positive \(e_y\) (rotation offset around y) used to mean "yaw the tiled panel a bit further around the reference's local up"; in the swapped order, it means "yaw the tiled panel around its own pre-reference axis after folding", which is generally a different physical rotation. The tests in <code>zoom-plane-parser.test.ts:510-545</code> assert the original order specifically.</p>
+</details>
+
+<details>
+<summary>Solution 6</summary>
+<p>For right tiling: the tiled panel's left edge midpoint is \(\mathbf{c}_T - \hat{\mathbf{r}}_T \cdot sW_T/2\). But step 6 sets \(\mathbf{c}_T = \mathbf{h} + \hat{\mathbf{r}}_T \cdot sW_T/2\). Substituting, the left edge midpoint is \(\mathbf{h} + \hat{\mathbf{r}}_T \cdot sW_T/2 - \hat{\mathbf{r}}_T \cdot sW_T/2 = \mathbf{h}\). The cancellation is exact and independent of \(\alpha\). The same argument applies to the other three sides with the obvious sign and axis substitutions.</p>
+</details>
+
+<details>
+<summary>Solution 7</summary>
+<p>"In front" means displaced along \(\hat{\mathbf{n}}_R\). Step 2: \(\mathbf{h}_0 = \mathbf{c}_R + \hat{\mathbf{n}}_R \cdot d\) for some user-supplied distance \(d\). The fold axis would naturally be \(\hat{\mathbf{n}}_R\) — but that produces a rotation in the same plane as the reference, which is degenerate (no fold visible). More useful is no fold at all, or a "tilt" specified differently. Step 6 has no clean analog because the tiled panel is not edge-attached, so the "walk along post-fold axis by half the size" idiom does not apply. This is why the package uses edge-tiling rather than face-stacking — the math is fundamentally cleaner when there is a shared edge.</p>
+</details>
+
+<details>
+<summary>Solution 8</summary>
+<p>No other step changes. The pipeline only ever uses \(q_{\text{offset}}\) as a quaternion in the multiplication \(q_R \cdot q_{\text{offset}} \cdot q_{\text{fold}}\). The Euler-from-XYZ construction is purely a convenient input format. A user-supplied quaternion would slot in directly. (In fact, this is one reason the project's API exposes Euler angles publicly but uses quaternions internally — Euler input is more author-friendly, but quaternions are what the math actually needs.)</p>
+</details>
+
+</body>
+</html>

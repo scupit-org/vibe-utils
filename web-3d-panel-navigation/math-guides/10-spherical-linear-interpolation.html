@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Guide 10 — Spherical Linear Interpolation (slerp)</title>
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(', '\\)'], ['$', '$']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']]
+    }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 880px;
+    margin: 2em auto;
+    padding: 0 1.2em;
+    color: #222;
+    line-height: 1.55;
+    background: #fafafa;
+  }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+  h2 { margin-top: 2em; border-bottom: 1px solid #bbb; padding-bottom: 0.15em; }
+  h3 { margin-top: 1.4em; color: #333; }
+  pre {
+    background: #1f2630;
+    color: #e6e9ee;
+    padding: 0.9em 1.1em;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 0.92em;
+    line-height: 1.45;
+  }
+  code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+  p code, li code { background: #ececec; padding: 1px 5px; border-radius: 3px; }
+  .callout {
+    background: #fff8e1;
+    border-left: 4px solid #f0b400;
+    padding: 0.7em 1em;
+    margin: 1.2em 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .note {
+    background: #eef6ff;
+    border-left: 4px solid #3a7bd5;
+    padding: 0.7em 1em;
+    margin: 1.2em 0;
+    border-radius: 0 6px 6px 0;
+  }
+  details {
+    background: #f1f1f1;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 0.6em 1em;
+    margin: 0.7em 0;
+  }
+  summary { cursor: pointer; font-weight: 600; }
+  .widget {
+    background: #ffffff;
+    border: 1px solid #c9c9c9;
+    border-radius: 8px;
+    padding: 1em;
+    margin: 1.2em 0;
+  }
+  .widget canvas {
+    display: block;
+    width: 100%;
+    max-width: 820px;
+    height: auto;
+    background: #fcfcfc;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+  .widget .controls {
+    margin-top: 0.7em;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8em 1.5em;
+    align-items: center;
+    font-size: 0.95em;
+  }
+  .widget label { display: inline-flex; align-items: center; gap: 0.4em; }
+  .widget input[type="range"] { width: 240px; }
+  ul.legend { list-style: none; padding-left: 0; font-size: 0.92em; }
+  ul.legend li::before {
+    content: "";
+    display: inline-block;
+    width: 14px; height: 14px;
+    margin-right: 6px;
+    vertical-align: -2px;
+    border-radius: 50%;
+  }
+  ul.legend li.red::before    { background: #d23939; }
+  ul.legend li.blue::before   { background: #2a6bd2; }
+  ul.legend li.green::before  { background: #1aaa55; }
+  ul.legend li.orange::before { background: #ee8a26; }
+  ul.legend li.purple::before { background: #8a3fbf; }
+  table.exsol { border-collapse: collapse; margin: 1em 0; }
+  table.exsol td, table.exsol th { border: 1px solid #bbb; padding: 0.4em 0.7em; }
+  .footer { margin-top: 3em; color: #777; font-size: 0.9em; text-align: center; }
+</style>
+</head>
+<body>
+
+<h1>Guide 10 — Spherical Linear Interpolation (slerp)</h1>
+
+<p><em>Tenth in an ordered curriculum. Earlier guides cover vectors and the dot
+product (1), trig and the <code>arccos</code> safety clamp (2), lerp and easings
+(3), and quaternions on the 4-sphere (5).</em></p>
+
+<h2>1. Why this matters</h2>
+
+<p>Open <code>src/camera-transitions.ts</code> and scroll to
+<code>calculateOrbitState</code>, lines <strong>119–162</strong>. Inside the
+<code>else</code> branch on lines <strong>149–157</strong> you will find the
+heart of the orbit camera transition: a hand-rolled <em>slerp</em> on the
+camera-position offset from a midpoint. That call is what makes the camera
+sweep on a smooth curved arc when navigating between two panels facing
+different directions, instead of slicing through the middle of the scene.
+</p>
+
+<p>Why does this matter? When you reorient between two camera states with
+different positions and look-directions, naive componentwise lerp on the
+positions traces a straight chord through 3-space. If the two camera positions
+are roughly the same distance from the focus point but on opposite sides of
+it, the chord <em>passes through (or near) the focus</em> — your camera dives
+toward the scene origin and then climbs back out. Slerp on the offset from a
+shared midpoint instead keeps the camera on a smooth arc <em>around</em> the
+focus at roughly constant distance. The user perceives a turntable / orbital
+sweep instead of an unsettling lunge.</p>
+
+<p>The blend regime in <code>calculateTransitionState</code> (lines
+<strong>41–88</strong>) decides whether to call this orbit branch at all: only
+when the total reorientation angle exceeds about 35°. Below that the camera
+uses Early-Look (a straight-line lerp) instead. Guide 12 will cover the regime
+selector; this guide is about <strong>the math inside the orbit branch</strong>.</p>
+
+<h2>2. Building intuition</h2>
+
+<p>Forget cameras for a moment. Picture two unit vectors $\hat{\mathbf{a}}$
+and $\hat{\mathbf{b}}$ in the plane, both anchored at the origin, both with
+length 1. Their tips sit on the unit circle. There are two natural paths from
+the tip of $\hat{\mathbf{a}}$ to the tip of $\hat{\mathbf{b}}$:</p>
+
+<ul>
+  <li><strong>The chord</strong> — a straight line across the inside of the
+  circle. This is the path traced by the naive average
+  $\operatorname{lerp}(\hat{\mathbf{a}}, \hat{\mathbf{b}}, t) =
+  (1-t)\hat{\mathbf{a}} + t\hat{\mathbf{b}}$.</li>
+  <li><strong>The arc</strong> — the curve that stays on the unit circle the
+  whole way. This is the path traced by slerp.</li>
+</ul>
+
+<p>The chord has two problems. First, its length isn't 1: at $t = 0.5$ with
+$\hat{\mathbf{a}}$ and $\hat{\mathbf{b}}$ separated by 90°, the midpoint is</p>
+
+<p>$$\left\|\tfrac{\hat{\mathbf{a}} + \hat{\mathbf{b}}}{2}\right\|
+= \tfrac{1}{2}\sqrt{(\hat{\mathbf{a}} + \hat{\mathbf{b}})\cdot
+(\hat{\mathbf{a}} + \hat{\mathbf{b}})}
+= \tfrac{1}{2}\sqrt{1 + 2\cos\theta + 1}
+= \tfrac{1}{2}\sqrt{2 + 2\cos 90^\circ}
+= \tfrac{\sqrt{2}}{2} \approx 0.707.$$</p>
+
+<p>The vector dips inward — it's shorter than 1. If you renormalize after
+the lerp you get back onto the circle, but you don't get there at <em>constant
+angular speed</em>: the renormalized point creeps near the endpoints and
+hurries through the middle.</p>
+
+<p>The arc avoids both problems. It stays on the circle (length always 1) and
+it travels at constant angular speed. That second property is the one slerp
+gets right that lerp-then-normalize does not.</p>
+
+<div class="callout">
+<strong>Slogan.</strong> Lerp connects two points by the shortest line.
+Slerp connects two unit-length points by the shortest curve <em>that stays on
+the unit sphere</em>, traversed at constant angular speed.
+</div>
+
+<h2>3. The math</h2>
+
+<h3>3.1 The problem</h3>
+
+<p>Given two unit vectors $\hat{\mathbf{a}}, \hat{\mathbf{b}} \in
+\mathbb{R}^n$, find a parametric path $\mathbf{p}: [0, 1] \to \mathbb{R}^n$ with</p>
+
+<ol>
+  <li>$\mathbf{p}(0) = \hat{\mathbf{a}}$, $\mathbf{p}(1) = \hat{\mathbf{b}}$
+  (matches endpoints),</li>
+  <li>$\|\mathbf{p}(t)\| = 1$ for every $t$ (stays on the unit sphere),</li>
+  <li>the angle $\angle(\hat{\mathbf{a}}, \mathbf{p}(t))$ grows linearly in
+  $t$ (constant angular speed).</li>
+</ol>
+
+<p>Condition (3) is the one that picks out a unique curve from all the
+length-preserving paths.</p>
+
+<h3>3.2 Setup</h3>
+
+<p>Let $\theta = \arccos(\hat{\mathbf{a}} \cdot \hat{\mathbf{b}})$ be the angle
+between the two vectors (recall from guide 1 that for unit vectors, the dot
+product equals the cosine of their angle; recall from guide 2 that we clamp
+the dot product to $[-1, 1]$ before passing it to <code>Math.acos</code> to
+guard against floating-point overshoot).</p>
+
+<p>We will look for $\mathbf{p}(t)$ as a linear combination of just the two
+endpoints,</p>
+
+<p>$$\mathbf{p}(t) = \alpha(t)\hat{\mathbf{a}} + \beta(t)\hat{\mathbf{b}},$$</p>
+
+<p>where $\alpha, \beta : [0, 1] \to \mathbb{R}$ are scalar functions to be
+determined. Why is this the right ansatz? Because the great-circle arc from
+$\hat{\mathbf{a}}$ to $\hat{\mathbf{b}}$ lies entirely in the 2D plane spanned
+by $\hat{\mathbf{a}}$ and $\hat{\mathbf{b}}$, and any vector in that plane
+can be written as a linear combination of those two basis vectors.</p>
+
+<h3>3.3 Derivation</h3>
+
+<p>From condition (3), the angle from $\hat{\mathbf{a}}$ to $\mathbf{p}(t)$
+should be exactly $t\theta$. Project $\mathbf{p}(t)$ onto $\hat{\mathbf{a}}$
+using the dot product. Since both $\hat{\mathbf{a}}$ and $\mathbf{p}(t)$ are
+unit vectors:</p>
+
+<p>$$\hat{\mathbf{a}} \cdot \mathbf{p}(t) = \cos(t\theta). \tag{i}$$</p>
+
+<p>By symmetry, the angle from $\hat{\mathbf{b}}$ to $\mathbf{p}(t)$ is
+$(1 - t)\theta$ (the remaining part of the arc), so</p>
+
+<p>$$\hat{\mathbf{b}} \cdot \mathbf{p}(t) = \cos((1 - t)\theta). \tag{ii}$$</p>
+
+<p>Now expand the left-hand sides using the ansatz
+$\mathbf{p}(t) = \alpha\hat{\mathbf{a}} + \beta\hat{\mathbf{b}}$ and the
+identities $\hat{\mathbf{a}} \cdot \hat{\mathbf{a}} = 1$, $\hat{\mathbf{b}}
+\cdot \hat{\mathbf{b}} = 1$, $\hat{\mathbf{a}} \cdot \hat{\mathbf{b}} =
+\cos\theta$:</p>
+
+<p>$$\hat{\mathbf{a}} \cdot \mathbf{p}(t)
+= \alpha \cdot 1 + \beta \cos\theta = \cos(t\theta),$$</p>
+<p>$$\hat{\mathbf{b}} \cdot \mathbf{p}(t)
+= \alpha \cos\theta + \beta \cdot 1 = \cos((1-t)\theta).$$</p>
+
+<p>That is a 2×2 linear system in $(\alpha, \beta)$:</p>
+
+<p>$$\begin{pmatrix} 1 &amp; \cos\theta \\ \cos\theta &amp; 1 \end{pmatrix}
+\begin{pmatrix} \alpha \\ \beta \end{pmatrix}
+= \begin{pmatrix} \cos(t\theta) \\ \cos((1-t)\theta) \end{pmatrix}.$$</p>
+
+<p>The determinant is $1 - \cos^2\theta = \sin^2\theta$, which is nonzero
+whenever $\theta \notin \{0, \pi\}$. Solving via Cramer's rule:</p>
+
+<p>$$\alpha = \frac{\cos(t\theta) - \cos\theta\cos((1-t)\theta)}{\sin^2\theta}, \qquad
+\beta = \frac{\cos((1-t)\theta) - \cos\theta\cos(t\theta)}{\sin^2\theta}.$$</p>
+
+<p>Both numerators simplify with the product-to-sum identity
+$\cos A \cos B = \tfrac{1}{2}[\cos(A - B) + \cos(A + B)]$. For $\alpha$:</p>
+
+<p>$$\cos(t\theta) - \cos\theta\cos((1-t)\theta)
+= \cos(t\theta) - \tfrac{1}{2}[\cos(t\theta) + \cos((2 - t)\theta - \theta)]$$</p>
+
+<p>which after carefully bookkeeping the angles collapses to $\sin\theta
+\sin((1-t)\theta)$. (A more direct route is to <em>guess</em>
+$\alpha = \sin((1-t)\theta)/\sin\theta$ and verify by substitution; that
+verification is the cleanest path and we walk through it next.)</p>
+
+<p>The simplified solution is</p>
+
+<p>$$\boxed{\;\alpha(t) = \frac{\sin((1-t)\theta)}{\sin\theta}, \qquad
+\beta(t) = \frac{\sin(t\theta)}{\sin\theta}.\;}$$</p>
+
+<h3>3.4 The slerp formula</h3>
+
+<p>$$\operatorname{slerp}(\hat{\mathbf{a}}, \hat{\mathbf{b}}, t)
+= \frac{\sin((1-t)\theta)}{\sin\theta}\, \hat{\mathbf{a}}
++ \frac{\sin(t\theta)}{\sin\theta}\, \hat{\mathbf{b}}.$$</p>
+
+<p>And in the project's TypeScript (lines <strong>150–156</strong>):</p>
+
+<pre><code>const sinTheta = Math.sin(theta);
+const a = Math.sin((1 - t) * theta) / sinTheta;
+const b = Math.sin(t * theta) / sinTheta;
+const slerpedDir = new THREE.Vector3()
+  .addScaledVector(fromDir, a)
+  .addScaledVector(toDir, b)
+  .normalize();</code></pre>
+
+<p>Each TS line corresponds to one piece of the formula. The trailing
+<code>.normalize()</code> is a paranoia step against floating-point drift —
+mathematically the result is already unit-length.</p>
+
+<h3>3.5 Verify the formula</h3>
+
+<p><strong>Endpoint at $t = 0$:</strong>
+$\sin((1 - 0)\theta) = \sin\theta$ and $\sin(0 \cdot \theta) = 0$, so
+$\alpha(0) = 1$, $\beta(0) = 0$, giving
+$\operatorname{slerp}(\cdot, \cdot, 0) = \hat{\mathbf{a}}$. Good.</p>
+
+<p><strong>Endpoint at $t = 1$:</strong> $\sin(0) = 0$ and $\sin\theta /
+\sin\theta = 1$, giving $\hat{\mathbf{b}}$. Good.</p>
+
+<p><strong>Midpoint at $t = 0.5$ with $\theta = 90°$:</strong>
+$\sin(0.5 \cdot 90°) = \sin(45°) = \tfrac{\sqrt{2}}{2}$ and $\sin(90°) = 1$,
+so $\alpha = \beta = \tfrac{\sqrt{2}}{2}$, and</p>
+
+<p>$$\operatorname{slerp} = \tfrac{\sqrt{2}}{2}(\hat{\mathbf{a}} +
+\hat{\mathbf{b}}).$$</p>
+
+<p>That's exactly what you'd get from
+$\operatorname{lerp}(\hat{\mathbf{a}}, \hat{\mathbf{b}}, 0.5)$ <em>followed by
+normalization</em> in the special case $t = 0.5$ — the two methods agree at
+the midpoint when the angle is 90°. They <em>disagree</em> at every other
+$t$, which we'll see in the widget.</p>
+
+<h3>3.6 Constant angular speed</h3>
+
+<p>The point of construction was that
+$\hat{\mathbf{a}} \cdot \mathbf{p}(t) = \cos(t\theta)$. So the angle from
+$\hat{\mathbf{a}}$ to $\mathbf{p}(t)$ is</p>
+
+<p>$$\arccos(\hat{\mathbf{a}} \cdot \mathbf{p}(t))
+= \arccos(\cos(t\theta)) = t\theta.$$</p>
+
+<p>That is <em>linear</em> in $t$. When $t$ moves from 0 to 0.1 the angular
+position moves $0.1\theta$, and when it moves from 0.5 to 0.6 it again moves
+$0.1\theta$. Equal slices of $t$ produce equal slices of arc.</p>
+
+<p>By contrast, lerp-then-normalize sends $t = 0.1$ to a renormalized chord
+point whose angle from $\hat{\mathbf{a}}$ is <em>not</em> $0.1\theta$ — it
+lags near the endpoints and races through the middle. The widget below makes
+this visible by tick spacing.</p>
+
+<h3>3.7 The parallel-vector fallback</h3>
+
+<p>If $\hat{\mathbf{a}}$ and $\hat{\mathbf{b}}$ are parallel (or nearly so),
+$\theta \to 0$ and $\sin\theta \to 0$, so the slerp formula becomes $0/0$.
+The project guards against this on line <strong>146</strong>:</p>
+
+<pre><code>let position: THREE.Vector3;
+if (theta &lt; 0.001) {
+  // Nearly parallel — fall back to lerp
+  position = new THREE.Vector3().lerpVectors(from.position, to.position, t);
+} else {
+  // ... slerp branch ...
+}</code></pre>
+
+<p>Why is plain lerp acceptable here? Because when the angle is tiny, the
+chord and the arc are nearly identical: they share the same endpoints, and
+the maximum chord-to-arc deviation grows like $\theta^2$. With $\theta &lt;
+0.001$ rad, the chord deviation is below $5 \times 10^{-7}$ — sub-pixel for
+any realistic camera distance. Geometrically, lerp <em>is</em> the first-order
+Taylor expansion of slerp in $\theta$, so the fallback is the correct linear
+approximation rather than a hack.</p>
+
+<div class="note">
+<strong>Antipodal case ($\theta = \pi$).</strong> If $\hat{\mathbf{a}} =
+-\hat{\mathbf{b}}$ then $\sin\theta = \sin\pi = 0$ again — and now the
+two vectors don't define a unique arc (any great circle through them works).
+Three.js's <code>Quaternion.slerp</code> handles antipodal quaternions by
+flipping the sign of one operand to take the short way. The vector slerp in
+<code>camera-transitions.ts</code> doesn't bother because in panel
+navigation the camera's offset from the midpoint is never exactly opposite
+between two panel views — you don't end up looking at the same target from
+exactly the back of where you started.
+</div>
+
+<h3>3.8 Slerp on quaternions vs. slerp on vectors</h3>
+
+<p>The slerp in <code>camera-transitions.ts</code> operates on
+<em>direction vectors</em> in $\mathbb{R}^3$, not on quaternions. The math is
+literally the same formula: it just lives on a different sphere. Direction
+vectors live on the unit 2-sphere $S^2 \subset \mathbb{R}^3$; unit
+quaternions live on the unit 3-sphere $S^3 \subset \mathbb{R}^4$ (covered in
+guide 5). The slerp formula doesn't care about ambient dimension — it only
+cares that the two operands are unit-length and that their dot product gives
+$\cos\theta$.</p>
+
+<p>One thing to flag: the orbit branch slerps the camera's position-offset
+direction, but the camera's <strong>up vector</strong> is interpolated
+separately by <code>lerpUpAndFov</code> (line <strong>15</strong>) using
+plain lerp followed by normalize. For typical small up-vector tilts (the up
+vector usually doesn't change much between panels) the chord deviation is
+negligible, so the cheaper lerp+normalize is fine. If the project ever
+needed to rotate up by large angles, that line would want to become a slerp
+too.</p>
+
+<h2>4. In this codebase</h2>
+
+<p>Let's now read <code>calculateOrbitState</code> end-to-end with the math
+we have. Lines 119–162:</p>
+
+<pre><code>function calculateOrbitState(
+  from: CameraState,
+  to: CameraState,
+  rawT: number
+): CameraState {
+  const t = easeInOutCubic(rawT);
+
+  // Linearly interpolate the look-at target
+  const target = new THREE.Vector3().lerpVectors(from.target, to.target, t);
+
+  // For position: slerp around the midpoint of the two targets
+  const midTarget = new THREE.Vector3().lerpVectors(from.target, to.target, 0.5);
+  const fromOffset = new THREE.Vector3().subVectors(from.position, midTarget);
+  const toOffset = new THREE.Vector3().subVectors(to.position, midTarget);
+
+  // Interpolate radius
+  const fromLen = fromOffset.length();
+  const toLen = toOffset.length();
+  const currentLen = fromLen + (toLen - fromLen) * t;
+
+  // Slerp direction
+  const fromDir = fromOffset.clone().normalize();
+  const toDir = toOffset.clone().normalize();
+  const dot = THREE.MathUtils.clamp(fromDir.dot(toDir), -1, 1);
+  const theta = Math.acos(dot);
+
+  let position: THREE.Vector3;
+  if (theta &lt; 0.001) {
+    // Nearly parallel — fall back to lerp
+    position = new THREE.Vector3().lerpVectors(from.position, to.position, t);
+  } else {
+    const sinTheta = Math.sin(theta);
+    const a = Math.sin((1 - t) * theta) / sinTheta;
+    const b = Math.sin(t * theta) / sinTheta;
+    const slerpedDir = new THREE.Vector3()
+      .addScaledVector(fromDir, a)
+      .addScaledVector(toDir, b)
+      .normalize();
+    position = midTarget.clone().add(slerpedDir.multiplyScalar(currentLen));
+  }
+
+  const { up, fov } = lerpUpAndFov(from, to, t);
+  return { position, target, up, fov };
+}</code></pre>
+
+<h3>4.1 The midpoint trick</h3>
+
+<p>Slerp acts on a unit sphere centered at the origin. But the camera's
+positions aren't unit-length and aren't centered at the origin — they're
+scattered in world-space. The fix is to <em>change frame</em>: pick a center
+$\mathbf{m}$ (here, the midpoint of <code>from.target</code> and
+<code>to.target</code>), measure both camera positions <em>relative to
+$\mathbf{m}$</em> as offsets, slerp those offsets as direction vectors, then
+add $\mathbf{m}$ back at the end.</p>
+
+<p>$$\mathbf{m} = \tfrac{1}{2}(\mathbf{t}_\text{from} + \mathbf{t}_\text{to}),$$</p>
+<p>$$\mathbf{o}_\text{from} = \mathbf{p}_\text{from} - \mathbf{m},\qquad
+\mathbf{o}_\text{to} = \mathbf{p}_\text{to} - \mathbf{m}.$$</p>
+
+<p>The midpoint of the two look-at targets is a sensible pivot because it
+sits roughly "in front of" both cameras — the camera is going to stay
+oriented around scene content there, so a sphere centered at $\mathbf{m}$
+captures the geometry that matters.</p>
+
+<h3>4.2 Splitting direction from radius</h3>
+
+<p>The two offsets generally don't have the same length:
+<code>fromLen</code> and <code>toLen</code> may differ. So the path can't
+simply lie on a single sphere. The code splits the problem:</p>
+
+<ul>
+  <li><strong>Direction</strong> — slerped, so the unit-length direction
+  travels at constant angular speed along the great-circle arc.</li>
+  <li><strong>Radius</strong> — lerped scalar-wise:
+  $r(t) = r_\text{from} + (r_\text{to} - r_\text{from}) \cdot t$.</li>
+</ul>
+
+<p>The code:</p>
+
+<pre><code>const fromLen = fromOffset.length();
+const toLen   = toOffset.length();
+const currentLen = fromLen + (toLen - fromLen) * t;
+// ...
+position = midTarget.clone().add(slerpedDir.multiplyScalar(currentLen));</code></pre>
+
+<p>Mathematically:</p>
+
+<p>$$\mathbf{p}(t) = \mathbf{m} + r(t) \cdot \operatorname{slerp}\!\left(
+\hat{\mathbf{o}}_\text{from}, \hat{\mathbf{o}}_\text{to}, t\right).$$</p>
+
+<p>The result is a position that orbits $\mathbf{m}$ at constant angular
+speed while smoothly approaching or receding in radius. It's a logarithmic
+spiral on a cone if $r_\text{from} \ne r_\text{to}$, and a perfect circular
+arc if they're equal.</p>
+
+<h3>4.3 The $t$ that gets passed in is already eased</h3>
+
+<p>Note line <strong>124</strong>: <code>const t = easeInOutCubic(rawT);</code>.
+The slerp's $t$ is the <em>eased</em> animation parameter, not the linear
+animation clock. So the camera doesn't traverse the arc at constant angular
+speed in <em>wall-clock time</em> — it eases in and out. Constant-angular-speed
+in $t$ plus an ease-in-out curve in $t(\text{wall time})$ gives a result that
+slows down at both ends, which is what feels right for a UI transition.</p>
+
+<h2>5. Interactive playground</h2>
+
+<p>Drag the red and blue arrowheads around the unit circle to change the two
+end-vectors. Drag the slider to change $t$. Toggle the angular-tick overlay
+to see at a glance that slerp's spacing is uniform along the arc while
+lerp-then-normalize's spacing is bunched near the endpoints.</p>
+
+<div class="widget">
+  <canvas id="slerpCanvas" width="820" height="440"></canvas>
+  <div class="controls">
+    <label>$t$ <input type="range" id="tSlider" min="0" max="1" step="0.001" value="0.5"></label>
+    <label><input type="checkbox" id="ticksToggle"> show angular position ticks</label>
+    <label>angle $\theta$: <span id="thetaReadout">—</span></label>
+    <label>$t$: <span id="tReadout">0.500</span></label>
+  </div>
+  <ul class="legend">
+    <li class="red"><strong>$\hat{\mathbf{a}}$</strong> — red endpoint, drag it</li>
+    <li class="blue"><strong>$\hat{\mathbf{b}}$</strong> — blue endpoint, drag it</li>
+    <li class="green"><strong>slerp</strong> — green dot, on the arc</li>
+    <li class="orange"><strong>lerp + normalize</strong> — orange dot, on the
+    circle but not at constant angular speed</li>
+    <li class="purple"><strong>lerp</strong> — purple dot, on the chord, length less than 1</li>
+  </ul>
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('slerpCanvas');
+  const ctx = canvas.getContext('2d');
+  const tSlider = document.getElementById('tSlider');
+  const ticksToggle = document.getElementById('ticksToggle');
+  const thetaReadout = document.getElementById('thetaReadout');
+  const tReadout = document.getElementById('tReadout');
+
+  // Center of the circle in pixel space, radius of the circle.
+  const cx = 220, cy = 220, R = 150;
+
+  // Two unit endpoints, in math-coords (y up). We'll start at 30° and 150°.
+  let aAng = (30 * Math.PI) / 180;
+  let bAng = (150 * Math.PI) / 180;
+
+  function angToVec(angle) {
+    return { x: Math.cos(angle), y: Math.sin(angle) };
+  }
+  function vecToScreen(v) {
+    return { x: cx + v.x * R, y: cy - v.y * R };
+  }
+  function screenToVecRaw(px, py) {
+    return { x: (px - cx) / R, y: -(py - cy) / R };
+  }
+
+  let dragging = null;
+
+  canvas.addEventListener('mousedown', function (ev) {
+    const rect = canvas.getBoundingClientRect();
+    const sx = (ev.clientX - rect.left) * (canvas.width / rect.width);
+    const sy = (ev.clientY - rect.top) * (canvas.height / rect.height);
+    const aS = vecToScreen(angToVec(aAng));
+    const bS = vecToScreen(angToVec(bAng));
+    const da = Math.hypot(sx - aS.x, sy - aS.y);
+    const db = Math.hypot(sx - bS.x, sy - bS.y);
+    if (da < 18 && da <= db) dragging = 'a';
+    else if (db < 18) dragging = 'b';
+  });
+  window.addEventListener('mouseup', function () { dragging = null; });
+  window.addEventListener('mousemove', function (ev) {
+    if (!dragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const sx = (ev.clientX - rect.left) * (canvas.width / rect.width);
+    const sy = (ev.clientY - rect.top) * (canvas.height / rect.height);
+    const v = screenToVecRaw(sx, sy);
+    const ang = Math.atan2(v.y, v.x);
+    if (dragging === 'a') aAng = ang;
+    else                  bAng = ang;
+    draw();
+  });
+  tSlider.addEventListener('input', draw);
+  ticksToggle.addEventListener('change', draw);
+
+  function slerp(a, b, t, theta) {
+    const s = Math.sin(theta);
+    if (theta < 0.001) {
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
+    const wa = Math.sin((1 - t) * theta) / s;
+    const wb = Math.sin(t * theta) / s;
+    return { x: wa * a.x + wb * b.x, y: wa * a.y + wb * b.y };
+  }
+  function lerp(a, b, t) {
+    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+  }
+  function normalize(v) {
+    const m = Math.hypot(v.x, v.y) || 1;
+    return { x: v.x / m, y: v.y / m };
+  }
+
+  function drawArrow(from, to, color, lw) {
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = lw || 2;
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+    // arrowhead
+    const ang = Math.atan2(to.y - from.y, to.x - from.x);
+    const ah = 9;
+    ctx.beginPath();
+    ctx.moveTo(to.x, to.y);
+    ctx.lineTo(to.x - ah * Math.cos(ang - 0.4), to.y - ah * Math.sin(ang - 0.4));
+    ctx.lineTo(to.x - ah * Math.cos(ang + 0.4), to.y - ah * Math.sin(ang + 0.4));
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function dot2(a, b) { return a.x * b.x + a.y * b.y; }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // ----- LEFT PANEL: 2D circle visualization -----
+    // Background panel
+    ctx.fillStyle = '#fcfcfc';
+    ctx.fillRect(0, 0, 440, canvas.height);
+
+    // Axes
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - R - 30, cy); ctx.lineTo(cx + R + 30, cy);
+    ctx.moveTo(cx, cy - R - 30); ctx.lineTo(cx, cy + R + 30);
+    ctx.stroke();
+
+    // Unit circle
+    ctx.strokeStyle = '#aaa';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    const a = angToVec(aAng);
+    const b = angToVec(bAng);
+    const aS = vecToScreen(a);
+    const bS = vecToScreen(b);
+
+    const dotAB = Math.max(-1, Math.min(1, dot2(a, b)));
+    const theta = Math.acos(dotAB);
+
+    // Chord (lerp path) — dashed
+    ctx.strokeStyle = '#8a3fbf';
+    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(aS.x, aS.y);
+    ctx.lineTo(bS.x, bS.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arc (slerp path) — solid thin curve along the great-circle (here just an arc on the unit circle)
+    // We sample slerp at 60 steps for visual smoothness.
+    ctx.strokeStyle = '#1aaa55';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 60; i++) {
+      const tt = i / 60;
+      const p = slerp(a, b, tt, theta);
+      const ps = vecToScreen(p);
+      if (i === 0) ctx.moveTo(ps.x, ps.y);
+      else         ctx.lineTo(ps.x, ps.y);
+    }
+    ctx.stroke();
+
+    // Optional tick overlays
+    if (ticksToggle.checked) {
+      // Slerp ticks: every t = 0.1 along the arc → equally spaced angularly.
+      ctx.fillStyle = '#1aaa55';
+      for (let i = 0; i <= 10; i++) {
+        const tt = i / 10;
+        const p = slerp(a, b, tt, theta);
+        const ps = vecToScreen(p);
+        ctx.beginPath();
+        ctx.arc(ps.x, ps.y, 3.2, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      // Lerp+normalize ticks: every t = 0.1 along the chord, then normalized.
+      ctx.fillStyle = '#ee8a26';
+      for (let i = 0; i <= 10; i++) {
+        const tt = i / 10;
+        const p = normalize(lerp(a, b, tt));
+        const ps = vecToScreen(p);
+        ctx.beginPath();
+        ctx.arc(ps.x, ps.y, 3.2, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      // Lerp ticks (purple), every t = 0.1 along the chord (NOT normalized).
+      ctx.fillStyle = '#8a3fbf';
+      for (let i = 0; i <= 10; i++) {
+        const tt = i / 10;
+        const p = lerp(a, b, tt);
+        const ps = vecToScreen(p);
+        ctx.beginPath();
+        ctx.arc(ps.x, ps.y, 2.4, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
+
+    // Endpoints (red and blue)
+    drawArrow({ x: cx, y: cy }, aS, '#d23939', 2.5);
+    drawArrow({ x: cx, y: cy }, bS, '#2a6bd2', 2.5);
+
+    // Moving dots
+    const t = parseFloat(tSlider.value);
+    const slerpP = slerp(a, b, t, theta);
+    const lerpP = lerp(a, b, t);
+    const lnP = normalize(lerpP);
+
+    const slerpS = vecToScreen(slerpP);
+    const lerpS = vecToScreen(lerpP);
+    const lnS = vecToScreen(lnP);
+
+    ctx.fillStyle = '#1aaa55';
+    ctx.beginPath(); ctx.arc(slerpS.x, slerpS.y, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#ee8a26';
+    ctx.beginPath(); ctx.arc(lnS.x, lnS.y, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#8a3fbf';
+    ctx.beginPath(); ctx.arc(lerpS.x, lerpS.y, 6, 0, 2 * Math.PI); ctx.fill();
+
+    // Labels for endpoints
+    ctx.fillStyle = '#000';
+    ctx.font = '14px sans-serif';
+    ctx.fillText('â', aS.x + 8, aS.y - 8);
+    ctx.fillText('b̂', bS.x + 8, bS.y - 8);
+
+    // ----- RIGHT PANEL: numeric readouts -----
+    const px = 470, py0 = 40, lh = 22;
+    ctx.fillStyle = '#222';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('Numeric readouts', px, py0);
+    ctx.font = '13.5px monospace';
+
+    function row(i, label, color) {
+      ctx.fillStyle = color || '#222';
+      ctx.fillText(label, px, py0 + (i + 1) * lh);
+    }
+
+    const lerpLen = Math.hypot(lerpP.x, lerpP.y);
+    function fmt(v) { return v.toFixed(3); }
+
+    row(0,  'theta = ' + (theta * 180 / Math.PI).toFixed(2) + ' deg', '#222');
+    row(1,  't     = ' + t.toFixed(3),                                '#222');
+    row(2,  '',                                                       '#222');
+    row(3,  'slerp  = (' + fmt(slerpP.x) + ', ' + fmt(slerpP.y) + ')', '#1aaa55');
+    row(4,  '  |slerp|  = ' + fmt(Math.hypot(slerpP.x, slerpP.y)),    '#1aaa55');
+    row(5,  '',                                                       '#222');
+    row(6,  'lerp+norm = (' + fmt(lnP.x) + ', ' + fmt(lnP.y) + ')',   '#ee8a26');
+    row(7,  '  |lerp+norm| = ' + fmt(Math.hypot(lnP.x, lnP.y)),       '#ee8a26');
+    row(8,  '',                                                       '#222');
+    row(9,  'lerp   = (' + fmt(lerpP.x) + ', ' + fmt(lerpP.y) + ')',  '#8a3fbf');
+    row(10, '  |lerp|   = ' + fmt(lerpLen),                           '#8a3fbf');
+    row(11, '',                                                       '#222');
+
+    // Angle-from-a readouts: shows the constant-angular-speed property.
+    const slerpAng = Math.acos(Math.max(-1, Math.min(1, dot2(a, slerpP) / Math.hypot(slerpP.x, slerpP.y) || 1)));
+    const lnAng = Math.acos(Math.max(-1, Math.min(1, dot2(a, lnP))));
+    row(12, 'angle(a, slerp)     = ' + (slerpAng * 180 / Math.PI).toFixed(2) + ' deg', '#1aaa55');
+    row(13, 'angle(a, lerp+norm) = ' + (lnAng    * 180 / Math.PI).toFixed(2) + ' deg', '#ee8a26');
+    row(14, 'predicted t*theta   = ' + (t * theta * 180 / Math.PI).toFixed(2) + ' deg', '#444');
+
+    // External readouts
+    thetaReadout.textContent = (theta * 180 / Math.PI).toFixed(2) + '°';
+    tReadout.textContent = t.toFixed(3);
+  }
+
+  draw();
+})();
+</script>
+
+<p>Things to try:</p>
+<ul>
+  <li>Set $t = 0.5$ and turn on the tick overlay. The green ticks (slerp)
+  are evenly spaced along the arc; the orange ticks (lerp+normalize) bunch
+  near the endpoints. The purple ticks (bare lerp) march along the chord at
+  fixed pixel spacing — but their distance from the origin shrinks as you
+  approach the middle, then grows again.</li>
+  <li>Drag the two endpoints close together. As $\theta \to 0$, the green
+  arc and the purple chord visually merge. This is the regime where the
+  project's <code>theta &lt; 0.001</code> fallback kicks in.</li>
+  <li>Drag them to opposite poles (180° apart). Slerp's denominator
+  $\sin\theta$ collapses to 0 — the curve becomes ill-defined. The widget
+  shows numerical noise here; this is the antipodal degeneracy.</li>
+  <li>Compare <code>angle(a, slerp)</code> vs. the predicted
+  <code>t·theta</code>. They should agree to two decimals. Then compare
+  against <code>angle(a, lerp+norm)</code>: it lags or leads.</li>
+</ul>
+
+<h2>6. Worked examples</h2>
+
+<h3>Example A — orthogonal vectors at $t = 0.5$</h3>
+
+<p>Let $\hat{\mathbf{a}} = (1, 0, 0)$ and $\hat{\mathbf{b}} = (0, 1, 0)$.
+Then $\hat{\mathbf{a}} \cdot \hat{\mathbf{b}} = 0$, so $\theta = 90° =
+\pi/2$. At $t = 0.5$:</p>
+
+<p>$$\alpha = \frac{\sin(0.5 \cdot \pi/2)}{\sin(\pi/2)}
+= \frac{\sin(\pi/4)}{1} = \frac{\sqrt{2}}{2}, \qquad
+\beta = \frac{\sin(0.5 \cdot \pi/2)}{\sin(\pi/2)} = \frac{\sqrt{2}}{2}.$$</p>
+
+<p>$$\operatorname{slerp} = \tfrac{\sqrt{2}}{2}(1, 0, 0)
++ \tfrac{\sqrt{2}}{2}(0, 1, 0) = \left(\tfrac{\sqrt{2}}{2},
+\tfrac{\sqrt{2}}{2}, 0\right) \approx (0.707, 0.707, 0).$$</p>
+
+<p>Magnitude: $\sqrt{0.5 + 0.5} = 1$. Good. Compare to lerp:
+$\operatorname{lerp}(\hat{\mathbf{a}}, \hat{\mathbf{b}}, 0.5) = (0.5, 0.5, 0)$,
+magnitude $\sqrt{0.5} \approx 0.707$. Lerp-then-normalize gives back the same
+$(\tfrac{\sqrt{2}}{2}, \tfrac{\sqrt{2}}{2}, 0)$ — agreeing with slerp at the
+midpoint when the angle is 90°.</p>
+
+<h3>Example B — orthogonal vectors at $t = 0.25$ (where they disagree)</h3>
+
+<p>Same $\hat{\mathbf{a}}, \hat{\mathbf{b}}, \theta$ as above. At $t = 0.25$:</p>
+
+<p>$\alpha = \sin(0.75 \cdot \pi/2) / 1 = \sin(67.5°) \approx 0.9239.$<br>
+$\beta = \sin(0.25 \cdot \pi/2) / 1 = \sin(22.5°) \approx 0.3827.$</p>
+
+<p>$$\operatorname{slerp} \approx (0.9239, 0.3827, 0).$$</p>
+
+<p>Magnitude: $\sqrt{0.9239^2 + 0.3827^2} = \sqrt{0.8536 + 0.1464} = 1$. Good.
+Angle from $\hat{\mathbf{a}}$: $\arccos(0.9239) = 22.5°$. That is exactly
+$0.25 \cdot 90°$. Constant angular speed confirmed.</p>
+
+<p>Now compare to lerp+normalize. Bare lerp: $(0.75, 0.25, 0)$, magnitude
+$\sqrt{0.625} \approx 0.7906$. Normalize: $(0.9487, 0.3162, 0)$. Angle
+from $\hat{\mathbf{a}}$: $\arccos(0.9487) \approx 18.43°$. Not 22.5° —
+it lags by about 4°. That lag is what would show up as a non-uniform
+camera-orbit speed if the project used lerp+normalize instead of slerp.</p>
+
+<h3>Example C — orbit-style use</h3>
+
+<p>Suppose <code>from.position = (5, 0, 0)</code>,
+<code>from.target = (0, 0, 0)</code>, and
+<code>to.position = (0, 0, 5)</code>, <code>to.target = (0, 0, 0)</code>
+(so both look at the origin from 5 units out). The midpoint of the targets is
+$\mathbf{m} = (0, 0, 0)$. The two offsets are
+$\mathbf{o}_\text{from} = (5, 0, 0)$ and $\mathbf{o}_\text{to} = (0, 0, 5)$,
+both of length 5.</p>
+
+<p>Normalized: $\hat{\mathbf{o}}_\text{from} = (1, 0, 0)$,
+$\hat{\mathbf{o}}_\text{to} = (0, 0, 1)$. Their dot product is 0, so $\theta
+= 90°$.</p>
+
+<p>Radius: $r(t) = 5 + (5 - 5) t = 5$ — constant at 5.</p>
+
+<p>At $t = 0.5$:
+$\operatorname{slerp}(\hat{\mathbf{o}}_\text{from},
+\hat{\mathbf{o}}_\text{to}, 0.5)
+= (\tfrac{\sqrt{2}}{2}, 0, \tfrac{\sqrt{2}}{2})$.
+The camera position is</p>
+
+<p>$$\mathbf{p}(0.5) = \mathbf{m} + 5 \cdot
+(\tfrac{\sqrt{2}}{2}, 0, \tfrac{\sqrt{2}}{2})
+\approx (3.54, 0, 3.54).$$</p>
+
+<p>Distance from origin: 5. The camera traced a quarter-circle in the
+$xz$-plane at constant radius. Compare to plain lerp on positions:
+$\operatorname{lerp}((5, 0, 0), (0, 0, 5), 0.5) = (2.5, 0, 2.5)$, distance
+$\sqrt{12.5} \approx 3.54$. The plain-lerp midpoint is much closer to the
+origin — it would dive halfway into the scene.</p>
+
+<h2>7. Exercises</h2>
+
+<p><strong>Routine.</strong></p>
+<ol>
+  <li>Compute $\operatorname{slerp}((1, 0), (0, 1), 0.25)$ in 2D. Verify
+  the result has magnitude 1 and angle from $(1, 0)$ equal to 22.5°.</li>
+  <li>Compute $\operatorname{slerp}((1, 0), (-\tfrac{1}{2},
+  \tfrac{\sqrt{3}}{2}), 0.5)$. (Hint: angle is 120°.) What is the magnitude?
+  What is the angle from $(1, 0)$?</li>
+  <li>Two unit offsets in 3D have dot product $0.9$. What is $\theta$?
+  Should the project's slerp branch run, or the parallel-vector fallback?</li>
+  <li>For $\theta = 60°$ and $t = \tfrac{1}{3}$, evaluate $\alpha(t)$ and
+  $\beta(t)$ to four decimals.</li>
+  <li>Show by direct substitution that the slerp formula satisfies
+  $\hat{\mathbf{a}} \cdot \mathbf{p}(t) = \cos(t\theta)$, using only
+  $\hat{\mathbf{a}} \cdot \hat{\mathbf{a}} = 1$ and $\hat{\mathbf{a}} \cdot
+  \hat{\mathbf{b}} = \cos\theta$ together with the angle-subtraction identity
+  $\sin(A - B) = \sin A \cos B - \cos A \sin B$.</li>
+</ol>
+
+<p><strong>Conceptual.</strong></p>
+<ol start="6">
+  <li>Why doesn't lerp-then-normalize give the same result as slerp at
+  $t = 0.25$, even though they agree at $t = 0$, $t = 1$, and (when $\theta
+  = 90°$) $t = 0.5$? Describe the geometric reason in one sentence.</li>
+</ol>
+
+<p><strong>Project-applied.</strong></p>
+<ol start="7">
+  <li>Suppose someone replaces the slerp branch in
+  <code>calculateOrbitState</code> with plain
+  <code>lerpVectors(from.position, to.position, t)</code> for camera
+  position. Describe the visual artifact a user would see during a 180°
+  orbit between two panels facing opposite directions, with the look-at
+  midpoint at the scene center.</li>
+</ol>
+
+<p><strong>Extension challenges.</strong></p>
+<ol start="8">
+  <li>Show that the chord-to-arc deviation in 2D is bounded by
+  $\theta^2 / 8$ for small $\theta$. Use this to justify the
+  <code>theta &lt; 0.001</code> threshold: estimate the worst-case position
+  error in world units for a camera offset of length 10.</li>
+  <li>The orbit branch lerps the radius linearly. Suppose instead it eased
+  the radius with a smoothstep curve. Write down the modified position
+  formula, and explain qualitatively how the camera path would differ when
+  $r_\text{from} = 2$, $r_\text{to} = 8$, $\theta = 90°$.</li>
+</ol>
+
+<h2>8. Where to next</h2>
+
+<ul>
+  <li><strong>Guide 11 — Tiling capstone.</strong> The hinge tiling pipeline
+  combines lerp on positions, quaternion composition (guide 5), and small
+  relative rotations to produce the page-flip effect. It does not use slerp
+  directly; the tiling rotations are short and the whole pipeline is in
+  quaternion-land already.</li>
+  <li><strong>Guide 12 — Adaptive transitions.</strong> Returns to
+  <code>camera-transitions.ts</code> and explains the regime selector at
+  lines 41–88: how the forward angle and up angle are summed, fed through
+  <code>smoothstep</code>, and used to decide whether to call Early-Look
+  (straight) or Orbit (this slerp branch). The Orbit branch is exactly the
+  math from this guide.</li>
+</ul>
+
+<h2>9. Appendix: Solutions</h2>
+
+<details>
+<summary>Solution 1.</summary>
+<p>$\theta = \pi/2$. $\alpha = \sin(0.75 \pi/2) = \sin(67.5°) \approx
+0.9239$. $\beta = \sin(0.25\pi/2) = \sin(22.5°) \approx 0.3827$. Result
+$(0.9239, 0.3827)$. Magnitude $\sqrt{0.9239^2 + 0.3827^2} = 1$. Angle from
+$(1, 0)$: $\arccos(0.9239) = 22.5°$.</p>
+</details>
+
+<details>
+<summary>Solution 2.</summary>
+<p>$\hat{\mathbf{a}} = (1, 0)$, $\hat{\mathbf{b}} = (-\tfrac{1}{2},
+\tfrac{\sqrt 3}{2})$, $\hat{\mathbf{a}} \cdot \hat{\mathbf{b}} = -1/2$, so
+$\theta = 120°$. At $t = 0.5$: $\alpha = \beta = \sin(60°)/\sin(120°) =
+(\sqrt 3/2)/(\sqrt 3/2) = 1$. So slerp $= \hat{\mathbf{a}} +
+\hat{\mathbf{b}} = (\tfrac{1}{2}, \tfrac{\sqrt 3}{2})$. Magnitude
+$\sqrt{1/4 + 3/4} = 1$. Angle from $(1, 0)$: $\arccos(1/2) = 60° = 0.5
+\theta$.</p>
+</details>
+
+<details>
+<summary>Solution 3.</summary>
+<p>$\theta = \arccos(0.9) \approx 0.4510$ rad $\approx 25.84°$. That is far
+above the $0.001$ rad threshold, so the slerp branch runs.</p>
+</details>
+
+<details>
+<summary>Solution 4.</summary>
+<p>$\theta = \pi/3$. $\alpha = \sin((1 - 1/3)\pi/3) / \sin(\pi/3)
+= \sin(40°)/\sin(60°) \approx 0.6428 / 0.8660 \approx 0.7422$.
+$\beta = \sin((1/3)\pi/3)/\sin(\pi/3) = \sin(20°)/\sin(60°)
+\approx 0.3420/0.8660 \approx 0.3949$.</p>
+</details>
+
+<details>
+<summary>Solution 5.</summary>
+<p>$\hat{\mathbf{a}} \cdot \mathbf{p}(t)
+= \alpha(t) \hat{\mathbf{a}} \cdot \hat{\mathbf{a}}
++ \beta(t) \hat{\mathbf{a}} \cdot \hat{\mathbf{b}}
+= \alpha(t) + \beta(t) \cos\theta$. Substitute $\alpha, \beta$:</p>
+<p>$\hat{\mathbf{a}} \cdot \mathbf{p}(t) = \frac{\sin((1-t)\theta) +
+\sin(t\theta)\cos\theta}{\sin\theta}$. Expand $\sin((1-t)\theta)
+= \sin\theta \cos(t\theta) - \cos\theta \sin(t\theta)$. So the numerator
+becomes $\sin\theta \cos(t\theta) - \cos\theta \sin(t\theta) + \sin(t\theta)
+\cos\theta = \sin\theta \cos(t\theta)$. Divide by $\sin\theta$:
+$\cos(t\theta)$. Done.</p>
+</details>
+
+<details>
+<summary>Solution 6.</summary>
+<p>Lerp+normalize spaces points uniformly along the <em>chord</em> and then
+projects them outward to the circle. Equal chord-distance does not produce
+equal arc-distance: the chord parameterization is denser near the endpoints
+(when projected back to the circle) and sparser in the middle. Slerp is
+defined by equal arc-distance directly. They only coincide at $t = 0$,
+$t = 1$, and at $t = 0.5$ when the chord midpoint already lies on the
+perpendicular bisector that hits the arc midpoint — which happens
+automatically by symmetry whenever you sample the midpoint of any
+symmetric configuration.</p>
+</details>
+
+<details>
+<summary>Solution 7.</summary>
+<p>The two camera positions are roughly equidistant from the look-at
+midpoint but opposite each other. Plain lerp traces the chord between them,
+which passes <em>through or very near the look-at midpoint</em> — the scene
+center. So at $t \approx 0.5$ the camera would be sitting on top of the
+focus point: the user would see the camera dive into the scene, the field
+of view fill with extreme close-ups or clip through geometry, then climb
+back out to the destination. The slerp branch keeps the camera at constant
+radius (since both offsets are the same length) and sweeps it around, which
+is what the user expects for an orbit.</p>
+</details>
+
+<details>
+<summary>Solution 8.</summary>
+<p>For a chord subtending angle $\theta$ on a unit circle, the sagitta
+(maximum perpendicular distance from the chord to the arc) is
+$1 - \cos(\theta/2) \approx \theta^2/8$ for small $\theta$. With
+$\theta = 0.001$, the deviation is about $1.25 \times 10^{-7}$ on a unit
+circle. Scaling to a camera offset of length 10 gives about
+$1.25 \times 10^{-6}$ world units — far below sub-pixel for any realistic
+projection.</p>
+</details>
+
+<details>
+<summary>Solution 9.</summary>
+<p>Replace $r(t) = r_\text{from} + (r_\text{to} - r_\text{from}) t$ with
+$r(t) = r_\text{from} + (r_\text{to} - r_\text{from})\, S(t)$ where
+$S(t) = t^2(3 - 2t)$ is smoothstep. Position becomes
+$\mathbf{p}(t) = \mathbf{m} + r(t)\,\operatorname{slerp}(\hat{\mathbf{o}}_\text{from},
+\hat{\mathbf{o}}_\text{to}, t)$. Qualitatively: the camera would dwell at
+$r = 2$ near the start of the orbit, accelerate outward through the middle,
+and dwell at $r = 8$ near the end. The angular sweep would still be
+constant-speed in $t$, but the radial expansion would feel "held" at both
+endpoints. Whether that feels nicer or worse depends on context — one
+issue: the radius-easing and the eased animation $t = \texttt{easeInOutCubic}(\texttt{rawT})$
+already in line 124 would compose, possibly over-easing.</p>
+</details>
+
+<p class="footer">Guide 10 of the web-3d-panel-navigation math curriculum.</p>
+
+</body>
+</html>

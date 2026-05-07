@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Guide 15: Uniform Sphere Sampling</title>
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(','\\)'], ['$', '$']],
+      displayMath: [['$$','$$'], ['\\[','\\]']]
+    }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 880px;
+    margin: 2em auto;
+    padding: 0 1.2em;
+    color: #1d2230;
+    line-height: 1.6;
+    background: #fafbfd;
+  }
+  h1 {
+    border-bottom: 2px solid #444a5e;
+    padding-bottom: 0.3em;
+  }
+  h2 {
+    margin-top: 1.8em;
+    border-bottom: 1px solid #c9cfdb;
+    padding-bottom: 0.15em;
+  }
+  h3 { margin-top: 1.3em; }
+  pre {
+    background: #1f2330;
+    color: #e8ecf5;
+    padding: 0.9em 1em;
+    border-radius: 5px;
+    overflow-x: auto;
+    font-size: 0.9em;
+  }
+  code { font-family: "JetBrains Mono", Consolas, monospace; }
+  p code, li code {
+    background: #eaecf3;
+    color: #2a2f3d;
+    padding: 0.06em 0.32em;
+    border-radius: 3px;
+    font-size: 0.92em;
+  }
+  .callout {
+    background: #fff5e2;
+    border-left: 4px solid #ddae3d;
+    padding: 0.7em 1em;
+    border-radius: 4px;
+    margin: 1em 0;
+  }
+  .note {
+    background: #e9f1ff;
+    border-left: 4px solid #4a78d6;
+    padding: 0.7em 1em;
+    border-radius: 4px;
+    margin: 1em 0;
+  }
+  .playground {
+    border: 1px solid #c9cfdb;
+    border-radius: 6px;
+    background: #ffffff;
+    padding: 1em;
+    margin: 1.2em 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7em 1.4em;
+    align-items: center;
+    margin-bottom: 0.8em;
+  }
+  .controls label { font-size: 0.95em; }
+  .readout {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 0.85em;
+    background: #f1f3f9;
+    padding: 0.5em 0.7em;
+    border-radius: 4px;
+    margin-top: 0.6em;
+    white-space: pre;
+  }
+  canvas {
+    background: #0d101a;
+    display: block;
+    width: 100%;
+    max-width: 760px;
+    border-radius: 4px;
+  }
+  details {
+    margin: 1em 0;
+    background: #f1f3f9;
+    border-radius: 5px;
+    padding: 0.6em 1em;
+  }
+  details > summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+  ol.exercises > li, ol.examples > li { margin-bottom: 0.7em; }
+  table.histogram {
+    border-collapse: collapse;
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 0.88em;
+  }
+  table.histogram td, table.histogram th {
+    border: 1px solid #c9cfdb;
+    padding: 0.25em 0.6em;
+    text-align: right;
+  }
+  table.histogram th { background: #eaecf3; }
+  button {
+    padding: 0.45em 1em;
+    border-radius: 4px;
+    border: 1px solid #444a5e;
+    background: #444a5e;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.95em;
+  }
+  button:hover { background: #2c3142; }
+  input[type="number"] {
+    width: 5em;
+    padding: 0.25em 0.4em;
+    border-radius: 3px;
+    border: 1px solid #c9cfdb;
+  }
+</style>
+</head>
+<body>
+
+<h1>Guide 15: Uniform Sphere Sampling</h1>
+<p><em>Curriculum entry 15 of the <code>web-3d-panel-navigation</code> math notes.</em></p>
+
+<h2>1. Why this matters</h2>
+
+<p>
+Open <code>src/skybox/starfield-skybox.ts</code> and look at lines 64-71. That is
+the entire engine that decides where every star in the project's starfield
+skybox lives:
+</p>
+
+<pre><code>function samplePointOnUnitSphere(out: THREE.Vector3): void {
+  const u = Math.random();
+  const v = Math.random();
+  const z = 2 * u - 1;
+  const phi = 2 * Math.PI * v;
+  const r = Math.sqrt(Math.max(0, 1 - z * z));
+  out.set(r * Math.cos(phi), r * Math.sin(phi), z);
+}</code></pre>
+
+<p>
+A few lines below (lines 80-90), <code>buildStarGeometry</code> calls this
+function once per star and scales the result by <code>STAR_RADIUS = 0.95</code>.
+Eight lines of arithmetic produce 2,500 points that <em>look</em> uniformly
+scattered across a sphere — no clusters, no thin spots, nothing the eye
+notices.
+</p>
+
+<p>
+Here is the trap: putting points uniformly on a sphere <em>seems</em> like a
+trivial problem. There are at least two intuitive recipes you can write down
+in thirty seconds, and <strong>both of them produce visibly biased
+distributions</strong>. The naive approaches:
+</p>
+
+<ol>
+  <li>Sample $(x, y, z)$ uniformly in the cube $[-1, 1]^3$, then normalize to length 1.</li>
+  <li>Sample the polar angle $\theta$ uniformly in $[0, \pi]$ and the azimuth $\phi$ uniformly in $[0, 2\pi)$, then convert to Cartesian.</li>
+</ol>
+
+<p>
+Recipe (1) clusters stars along the eight cube-corner directions. Recipe (2)
+piles stars into dense caps at the north and south poles. If we used either,
+the starfield would have a "directionality" you'd notice the first time you
+spun the camera. The project's recipe — eight lines, no rejection, no
+trigonometry beyond <code>cos</code> and <code>sin</code> — gives a truly
+uniform sphere. This guide is about why.
+</p>
+
+<h2>2. Building intuition</h2>
+
+<p>
+Before any math, three pictures. Each shows a sphere covered with samples from
+a different recipe. (You can reproduce all three live in the playground below.)
+</p>
+
+<h3>Picture A: cube-then-normalize, no rejection</h3>
+
+<p>
+Start with $(x, y, z)$ each drawn uniformly from $[-1, 1]$. Then divide by
+$\sqrt{x^2+y^2+z^2}$ to push each point onto the unit sphere. It looks
+plausible — you are using all the points, each ending up at length 1 — but
+the cube has corners that stick farther from the origin than its faces. A
+random point near a corner gets normalized into <em>the same direction</em> as
+many other corner-region points. Visually, you see eight bright clumps
+pointing toward $(\pm 1, \pm 1, \pm 1)/\sqrt 3$, plus thinner regions toward
+$(\pm 1, 0, 0)$, $(0, \pm 1, 0)$, $(0, 0, \pm 1)$.
+</p>
+
+<p>
+A quick numerical sanity check: bucket the resulting unit vectors by which of
+the 26 "compass directions" they are closest to (axes, face-diagonals,
+corner-diagonals). The corners get roughly $\sqrt 3 \approx 1.73$ times the
+density they should.
+</p>
+
+<h3>Picture B: uniform $(\theta, \phi)$</h3>
+
+<p>
+Now try the textbook spherical-to-Cartesian conversion with both angles drawn
+uniformly: $\theta \sim \mathcal{U}[0, \pi]$, $\phi \sim \mathcal{U}[0, 2\pi)$,
+then $(\sin\theta\cos\phi, \sin\theta\sin\phi, \cos\theta)$. Now you see the
+opposite failure mode: a tight crown of stars at the north pole, another at
+the south, and the equator looking sparse. The reason is that an angular
+"slice" of width $d\theta$ near a pole wraps a tiny circle, while the same
+slice at the equator wraps a great circle. Equal angular slices have unequal
+areas.
+</p>
+
+<h3>Picture C: the project's recipe</h3>
+
+<p>
+The third picture is the boring one — and that is exactly the point. No
+clumps, no poles, no axis preference. Stars look isotropic. The widget below
+will make this obvious: switch between the strategies and the difference
+jumps out instantly.
+</p>
+
+<h2>3. The math</h2>
+
+<h3>3.1 What "uniform on the sphere" means</h3>
+
+<p>
+Let $S^2$ denote the unit sphere — the surface only, not the interior ball.
+A probability density $f(\mathbf p)$ on $S^2$ is <em>uniform</em> if it is
+constant per unit <strong>surface area</strong>. The total surface area of the
+unit sphere is $4\pi$, so the uniform density is
+</p>
+
+\[
+f(\mathbf p) \;=\; \frac{1}{4\pi}, \qquad \mathbf p \in S^2.
+\]
+
+<p>
+"Uniform" here is not "uniform in some parameterization" — it is uniform with
+respect to area on the sphere itself. Both naive recipes get this wrong by
+sampling uniformly in the <em>wrong</em> measure.
+</p>
+
+<h3>3.2 The surface element</h3>
+
+<p>
+Parameterize a point on the unit sphere by polar angle $\theta \in [0, \pi]$
+(measured from the north pole, $z = \cos\theta$) and azimuth $\phi \in [0, 2\pi)$:
+</p>
+
+\[
+\mathbf p(\theta, \phi) \;=\; \big(\sin\theta\cos\phi,\; \sin\theta\sin\phi,\; \cos\theta\big).
+\]
+
+<p>
+A small angular rectangle $d\theta \times d\phi$ does <em>not</em> map to a
+fixed amount of surface area. The surface element is
+</p>
+
+\[
+dA \;=\; \sin\theta \; d\theta \; d\phi.
+\]
+
+<p>
+You can read the $\sin\theta$ factor off the geometry: a horizontal "ring" at
+polar angle $\theta$ is a circle of radius $\sin\theta$ (because the ring sits
+distance $\sin\theta$ from the $z$-axis). Its circumference is $2\pi\sin\theta$,
+so the band between $\theta$ and $\theta + d\theta$ has area $2\pi\sin\theta \cdot
+d\theta$. Splitting the band into azimuthal slices of width $d\phi$ gives
+$dA = \sin\theta \, d\theta \, d\phi$. At the equator $\theta = \pi/2$ and
+$\sin\theta = 1$; at a pole $\sin\theta = 0$.
+</p>
+
+<h3>3.3 Why the naive uniform-$(\theta, \phi)$ fails</h3>
+
+<p>
+If we draw $\theta$ uniformly on $[0, \pi]$ and $\phi$ uniformly on $[0, 2\pi)$,
+the joint density in $(\theta, \phi)$ space is constant: $f_{\theta,\phi}(\theta,\phi)
+= \frac{1}{2\pi^2}$. To compute the induced density on the sphere we have to
+divide by the area Jacobian $\sin\theta$ (since one unit of $(\theta, \phi)$-space
+covers $\sin\theta$ units of sphere area). The resulting density on $S^2$ is
+</p>
+
+\[
+f_{S^2}(\theta, \phi) \;=\; \frac{f_{\theta,\phi}(\theta,\phi)}{\sin\theta}
+\;=\; \frac{1}{2\pi^2 \sin\theta}.
+\]
+
+<p>
+Near a pole, $\sin\theta \to 0$, so $f_{S^2} \to \infty$. That is the
+mathematical fingerprint of the visual pole-clustering you saw in Picture B.
+</p>
+
+<h3>3.4 The fix: change variables to $z = \cos\theta$</h3>
+
+<p>
+The $\sin\theta$ factor is annoying because it depends on $\theta$. Can we
+absorb it into a clean uniform sample? Yes — by changing the polar variable
+from $\theta$ to $z = \cos\theta$.
+</p>
+
+<p>
+Compute the differential: $z = \cos\theta$, so $dz = -\sin\theta \, d\theta$,
+and $|dz| = \sin\theta \, d\theta$. Substituting into the surface element:
+</p>
+
+\[
+dA \;=\; \sin\theta \, d\theta \, d\phi \;=\; |dz| \, d\phi \;=\; dz \, d\phi
+\quad (\text{after fixing the sign with the } z \text{ range}).
+\]
+
+<p>
+This is the key result. <em>In the variables $(z, \phi)$, the surface element
+is just $dz \, d\phi$.</em> Equal rectangles in $(z, \phi)$-space cover equal
+amounts of sphere area. As $\theta$ runs from $0$ to $\pi$, $z$ runs from
+$+1$ to $-1$, so the parameter ranges are $z \in [-1, 1]$ and $\phi \in [0, 2\pi)$.
+</p>
+
+<p>
+Sampling uniformly in $(z, \phi)$-space is therefore the same as sampling
+uniformly in surface area. Concretely: draw
+</p>
+
+\[
+z \sim \mathcal{U}[-1, 1], \qquad \phi \sim \mathcal{U}[0, 2\pi),
+\]
+
+<p>
+then recover the Cartesian coordinates. Since $\sin\theta = +\sqrt{1 - \cos^2\theta} = \sqrt{1 - z^2}$
+(positive because $\theta \in [0, \pi]$), the point is
+</p>
+
+\[
+\mathbf p \;=\; \Big(\sqrt{1 - z^2}\,\cos\phi, \;\;\sqrt{1 - z^2}\,\sin\phi, \;\;z\Big).
+\]
+
+<h3>3.5 The project's recipe, line by line</h3>
+
+<p>The implementation in <code>starfield-skybox.ts</code> turns this into eight lines of code:</p>
+
+<pre><code>const u = Math.random();              // u ~ U[0, 1)
+const v = Math.random();              // v ~ U[0, 1)
+const z = 2 * u - 1;                  // z = 2u - 1   ~ U[-1, 1)
+const phi = 2 * Math.PI * v;          // phi = 2*pi*v ~ U[0, 2*pi)
+const r = Math.sqrt(Math.max(0, 1 - z * z));   // r = sqrt(1 - z^2) = sin(theta)
+out.set(r * Math.cos(phi), r * Math.sin(phi), z);</code></pre>
+
+<p>
+Two notes on the code:
+</p>
+
+<ul>
+  <li>
+    <strong>The shifts and scales</strong>. <code>2 * u - 1</code> turns
+    $\mathcal{U}[0, 1)$ into $\mathcal{U}[-1, 1)$. <code>2 * Math.PI * v</code>
+    turns $\mathcal{U}[0, 1)$ into $\mathcal{U}[0, 2\pi)$. Both are
+    inverse-CDF sampling for the uniform distributions on those intervals.
+  </li>
+  <li>
+    <strong>The defensive <code>Math.max(0, ...)</code></strong>. Algebraically
+    $1 - z^2 \ge 0$ for $z \in [-1, 1]$. But <code>Math.random()</code>
+    occasionally returns values like <code>0.9999999998</code>, and
+    floating-point arithmetic rounds <code>1 - z*z</code> below zero by an
+    epsilon. Without the clamp, the subsequent <code>Math.sqrt</code> returns
+    <code>NaN</code> and the star ends up at $(\text{NaN}, \text{NaN}, \pm 1)$,
+    which on a GPU buffer means an invisible or garbage star. Cheap insurance.
+  </li>
+</ul>
+
+<h3>3.6 The general principle: inverse-transform sampling</h3>
+
+<p>
+Guide 14 introduced inverse-transform sampling for the warm/cool tint power
+law: to draw from a distribution with CDF $F$, evaluate $F^{-1}$ at a uniform
+random number. Here we are using the same idea twice in a row.
+</p>
+
+<p>
+For the azimuth: the CDF of $\mathcal{U}[0, 2\pi)$ is $F_\phi(\phi) = \phi /
+(2\pi)$, so $F_\phi^{-1}(v) = 2\pi v$. That is exactly <code>2 * Math.PI * v</code>.
+</p>
+
+<p>
+For the cosine of the polar angle: the marginal density of $z$ that gives
+uniform area is $f_z(z) = 1/2$ on $[-1, 1]$. Its CDF is $F_z(z) = (z + 1)/2$,
+so $F_z^{-1}(u) = 2u - 1$. That is exactly <code>2 * u - 1</code>.
+</p>
+
+<p>
+The unified story: each call to <code>Math.random()</code> is a uniform
+$\mathcal{U}[0, 1)$ sample, and we apply the inverse CDF of the target
+distribution to it. The cleverness is in step 3.4 — recognizing that the
+<em>right</em> coordinate to make uniform is $z = \cos\theta$, not $\theta$
+itself.
+</p>
+
+<h3>3.7 Comparison with rejection sampling</h3>
+
+<p>
+There is a third correct recipe, conceptually simpler than ours: cube-then-reject-then-normalize.
+</p>
+
+<pre><code>// Correct, but wasteful.
+do {
+  x = 2 * Math.random() - 1;
+  y = 2 * Math.random() - 1;
+  z = 2 * Math.random() - 1;
+} while (x*x + y*y + z*z &gt; 1 || x*x + y*y + z*z &lt; 1e-12);
+const inv = 1 / Math.sqrt(x*x + y*y + z*z);
+out.set(x * inv, y * inv, z * inv);</code></pre>
+
+<p>
+Rejecting points outside the inscribed sphere fixes the corner-clumping
+problem (because surviving points are uniform inside the ball, and projecting
+a uniformly-distributed ball point to the surface is unbiased). It is correct,
+but every point has only a $\frac{4}{3}\pi / 8 = \pi/6 \approx 0.524$ chance
+of being inside the sphere. So roughly $1 - \pi/6 \approx 47.6\%$ of generated
+triples are thrown away.
+</p>
+
+<p>
+The inverse-transform recipe never throws anything out: every $(u, v)$ pair
+becomes a star. For a starfield with thousands of points, the savings are not
+dramatic (rejection finishes in milliseconds anyway), but the rejection-free
+recipe is also branch-free and trivially vectorizable. That is why production
+graphics code overwhelmingly uses it.
+</p>
+
+<h2>4. In this codebase</h2>
+
+<p>
+Here is the function in full, with no edits, plus the loop that calls it. From
+<code>src/skybox/starfield-skybox.ts</code>:
+</p>
+
+<pre><code>// Lines 64-71
+function samplePointOnUnitSphere(out: THREE.Vector3): void {
+  const u = Math.random();
+  const v = Math.random();
+  const z = 2 * u - 1;
+  const phi = 2 * Math.PI * v;
+  const r = Math.sqrt(Math.max(0, 1 - z * z));
+  out.set(r * Math.cos(phi), r * Math.sin(phi), z);
+}
+
+// Lines 73-98 (inside buildStarGeometry)
+const positions = new Float32Array(count * 3);
+const scratch = new THREE.Vector3();
+
+for (let i = 0; i &lt; count; i++) {
+  samplePointOnUnitSphere(scratch);
+  positions[i * 3 + 0] = scratch.x * STAR_RADIUS;
+  positions[i * 3 + 1] = scratch.y * STAR_RADIUS;
+  positions[i * 3 + 2] = scratch.z * STAR_RADIUS;
+  // ... per-star phase, brightness, tint also generated here.
+}</code></pre>
+
+<p>
+Three things to notice:
+</p>
+
+<ul>
+  <li>The function fills an out-parameter (<code>THREE.Vector3</code>) instead of returning a fresh object. This avoids allocating 2,500 temporary vectors per skybox build — micro-optimization, but standard Three.js style.</li>
+  <li>After sampling, every component is scaled by <code>STAR_RADIUS = 0.95</code>. Stars sit on a sphere of radius $0.95$, just inside the gradient skybox shell. Sampling on the unit sphere first and scaling later is conceptually cleaner than baking the radius into the sampler.</li>
+  <li>The same <code>scratch</code> vector is reused for every star.</li>
+</ul>
+
+<p>
+There is no rejection loop, no <code>while</code>, no normalization step. The
+2,500 stars are fully placed in 2,500 deterministic-cost iterations.
+</p>
+
+<h2>5. Interactive playground</h2>
+
+<div class="playground">
+  <p style="margin-top:0">
+    Compare the four sampling strategies. The left half shows the unit sphere
+    in orthographic projection (you are looking down the $+y$ axis, so
+    $(x, z)$ become screen coordinates and $y$ becomes a darkness cue for
+    far-side points). The right half is an equirectangular flat map: the
+    horizontal axis is $\phi$ (longitude), and the vertical axis is the
+    polar angle $\theta$ (latitude from the north pole, top = $\theta = 0$).
+    On a uniform sphere, the equirectangular plot has visibly more density at
+    the top and bottom — that is fine, because the equirectangular map itself
+    distorts area; the <em>sphere</em> on the left is what should look
+    uniform.
+  </p>
+
+  <div class="controls">
+    <label><input type="radio" name="strategy" value="thetaPhi"> Naive uniform $(\theta, \phi)$</label>
+    <label><input type="radio" name="strategy" value="cubeNoReject"> Cube then normalize (no reject)</label>
+    <label><input type="radio" name="strategy" value="cubeReject"> Cube with rejection</label>
+    <label><input type="radio" name="strategy" value="project" checked> Project's inverse-transform</label>
+  </div>
+
+  <div class="controls">
+    <label>Samples N: <input type="number" id="nInput" min="200" max="10000" step="200" value="2000"></label>
+    <button id="resampleBtn">Resample</button>
+  </div>
+
+  <canvas id="sphereCanvas" width="760" height="420"></canvas>
+  <div class="readout" id="readout">(loading)</div>
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('sphereCanvas');
+  const ctx = canvas.getContext('2d');
+  const readout = document.getElementById('readout');
+  const nInput = document.getElementById('nInput');
+  const resampleBtn = document.getElementById('resampleBtn');
+  const strategyRadios = document.querySelectorAll('input[name="strategy"]');
+
+  // Equal-area cells for the variance metric: split sphere into 12 latitude
+  // bands times 24 azimuth bins, but use z-bands of equal height (since
+  // equal-z bands have equal area). 12 * 24 = 288 bins, each with area
+  // 4*pi/288 ~ 0.0436.
+  const Z_BINS = 12;
+  const PHI_BINS = 24;
+  const TOTAL_BINS = Z_BINS * PHI_BINS;
+
+  function sampleProject() {
+    const u = Math.random(), v = Math.random();
+    const z = 2 * u - 1;
+    const phi = 2 * Math.PI * v;
+    const r = Math.sqrt(Math.max(0, 1 - z * z));
+    return { x: r * Math.cos(phi), y: r * Math.sin(phi), z, accepted: true };
+  }
+
+  function sampleThetaPhi() {
+    const theta = Math.random() * Math.PI;
+    const phi = Math.random() * 2 * Math.PI;
+    const s = Math.sin(theta);
+    return { x: s * Math.cos(phi), y: s * Math.sin(phi), z: Math.cos(theta), accepted: true };
+  }
+
+  function sampleCubeNoReject() {
+    const x = 2 * Math.random() - 1;
+    const y = 2 * Math.random() - 1;
+    const z = 2 * Math.random() - 1;
+    const len = Math.sqrt(x*x + y*y + z*z) || 1;
+    return { x: x/len, y: y/len, z: z/len, accepted: true };
+  }
+
+  function sampleCubeReject() {
+    let tries = 0;
+    while (tries < 32) {
+      const x = 2 * Math.random() - 1;
+      const y = 2 * Math.random() - 1;
+      const z = 2 * Math.random() - 1;
+      const sq = x*x + y*y + z*z;
+      if (sq <= 1 && sq > 1e-12) {
+        const len = Math.sqrt(sq);
+        return { x: x/len, y: y/len, z: z/len, accepted: true, tries: tries + 1 };
+      }
+      tries++;
+    }
+    return { x: 0, y: 0, z: 1, accepted: false, tries: tries };
+  }
+
+  function sample(strategy) {
+    if (strategy === 'thetaPhi') return sampleThetaPhi();
+    if (strategy === 'cubeNoReject') return sampleCubeNoReject();
+    if (strategy === 'cubeReject') return sampleCubeReject();
+    return sampleProject();
+  }
+
+  // For "cube with rejection", we want to count attempted draws to report
+  // an accept rate. We generate by attempt count: keep drawing raw cube
+  // points until we have N accepted (each cube draw is one attempt).
+  function generateBatch(strategy, n) {
+    const points = [];
+    let attempts = 0;
+    let accepted = 0;
+    if (strategy === 'cubeReject') {
+      while (accepted < n && attempts < n * 50) {
+        attempts++;
+        const x = 2 * Math.random() - 1;
+        const y = 2 * Math.random() - 1;
+        const z = 2 * Math.random() - 1;
+        const sq = x*x + y*y + z*z;
+        if (sq <= 1 && sq > 1e-12) {
+          const len = Math.sqrt(sq);
+          points.push({ x: x/len, y: y/len, z: z/len });
+          accepted++;
+        }
+      }
+      return { points, attempts, accepted };
+    }
+    for (let i = 0; i < n; i++) {
+      const p = sample(strategy);
+      points.push({ x: p.x, y: p.y, z: p.z });
+      attempts++; accepted++;
+    }
+    return { points, attempts, accepted };
+  }
+
+  function variance(arr) {
+    const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+    let v = 0;
+    for (const x of arr) v += (x - mean) * (x - mean);
+    return v / arr.length;
+  }
+
+  function computeBinVariance(points) {
+    const counts = new Array(TOTAL_BINS).fill(0);
+    for (const p of points) {
+      const zClamped = Math.max(-1, Math.min(1, p.z));
+      let zi = Math.floor((zClamped + 1) * 0.5 * Z_BINS);
+      if (zi >= Z_BINS) zi = Z_BINS - 1;
+      let phi = Math.atan2(p.y, p.x);
+      if (phi < 0) phi += 2 * Math.PI;
+      let pi = Math.floor(phi / (2 * Math.PI) * PHI_BINS);
+      if (pi >= PHI_BINS) pi = PHI_BINS - 1;
+      counts[zi * PHI_BINS + pi]++;
+    }
+    return { variance: variance(counts), mean: points.length / TOTAL_BINS, counts };
+  }
+
+  function drawSphere(points) {
+    const w = canvas.width, h = canvas.height;
+    ctx.fillStyle = '#0d101a';
+    ctx.fillRect(0, 0, w, h);
+
+    // Left half: orthographic sphere (xz-plane on screen, y is depth).
+    const leftW = w / 2;
+    const cx = leftW / 2;
+    const cy = h / 2;
+    const radius = Math.min(leftW, h) * 0.42;
+
+    // Sphere outline.
+    ctx.strokeStyle = '#2c3142';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    // Equator.
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, radius, radius * 0.06, 0, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    for (const p of points) {
+      // y is depth (into screen). Front-of-sphere: y > 0 brighter; back: dimmer.
+      const sx = cx + p.x * radius;
+      const sy = cy - p.z * radius;
+      const depth = (p.y + 1) / 2; // 0 (back) .. 1 (front)
+      const alpha = 0.25 + 0.75 * depth;
+      const size = 1 + 1.5 * depth;
+      ctx.fillStyle = 'rgba(255, 230, 200, ' + alpha.toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.arc(sx, sy, size, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    // Right half: equirectangular map.
+    const rightX = w / 2 + 14;
+    const rightW = w / 2 - 28;
+    const rightY = 14;
+    const rightH = h - 28;
+
+    ctx.strokeStyle = '#2c3142';
+    ctx.strokeRect(rightX, rightY, rightW, rightH);
+
+    // Latitude lines at theta = pi/4, pi/2, 3pi/4.
+    ctx.beginPath();
+    for (const frac of [0.25, 0.5, 0.75]) {
+      const py = rightY + frac * rightH;
+      ctx.moveTo(rightX, py);
+      ctx.lineTo(rightX + rightW, py);
+    }
+    ctx.stroke();
+
+    for (const p of points) {
+      let phi = Math.atan2(p.y, p.x);
+      if (phi < 0) phi += 2 * Math.PI;
+      const theta = Math.acos(Math.max(-1, Math.min(1, p.z)));
+      const sx = rightX + (phi / (2 * Math.PI)) * rightW;
+      const sy = rightY + (theta / Math.PI) * rightH;
+      ctx.fillStyle = 'rgba(180, 200, 255, 0.55)';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 1.1, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    // Labels.
+    ctx.fillStyle = '#9aa3b8';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillText('orthographic sphere (xz screen, y depth)', 8, 14);
+    ctx.fillText('equirectangular flat map (phi, theta)', rightX, 12);
+  }
+
+  let currentBatch = null;
+
+  function regenerate() {
+    let strategy = 'project';
+    for (const r of strategyRadios) if (r.checked) strategy = r.value;
+    let n = parseInt(nInput.value, 10);
+    if (!Number.isFinite(n) || n < 200) n = 200;
+    if (n > 10000) n = 10000;
+    nInput.value = n;
+
+    const batch = generateBatch(strategy, n);
+    currentBatch = batch;
+
+    drawSphere(batch.points);
+
+    const stats = computeBinVariance(batch.points);
+    const idealMean = batch.points.length / TOTAL_BINS;
+    const acceptRate = batch.accepted / batch.attempts;
+    const acceptStr = strategy === 'cubeReject'
+      ? batch.attempts + ' draws, ' + batch.accepted + ' kept (' + (acceptRate * 100).toFixed(1) + '%)'
+      : batch.attempts + ' draws, ' + batch.accepted + ' kept (100% — no rejection)';
+
+    readout.textContent =
+      'strategy:        ' + strategy + '\n' +
+      'samples shown:   ' + batch.points.length + '\n' +
+      'attempts:        ' + acceptStr + '\n' +
+      'equal-area bins: ' + TOTAL_BINS + ' (' + Z_BINS + ' z-bands x ' + PHI_BINS + ' phi-bins)\n' +
+      'ideal count/bin: ' + idealMean.toFixed(2) + '\n' +
+      'observed var:    ' + stats.variance.toFixed(3) + '   (lower = more uniform)';
+  }
+
+  for (const r of strategyRadios) r.addEventListener('change', regenerate);
+  resampleBtn.addEventListener('click', regenerate);
+  nInput.addEventListener('change', regenerate);
+
+  regenerate();
+})();
+</script>
+
+<p>
+Watch the variance number as you switch strategies. With $N = 2000$ and 288
+bins (mean 6.94 per bin), the project's recipe gives a variance close to the
+Poisson expectation of ~6.94. The naive $(\theta, \phi)$ recipe will give a
+much higher variance — its bins near the poles fill up while bins near the
+equator stay sparse. The cube-no-reject recipe is somewhere in between.
+</p>
+
+<h2>6. Worked examples</h2>
+
+<ol class="examples">
+  <li>
+    <strong>Compute one sample.</strong> Suppose <code>Math.random()</code>
+    returns $u = 0.7$ and then $v = 0.25$. Apply the recipe.
+    <ul>
+      <li>$z = 2(0.7) - 1 = 0.4$.</li>
+      <li>$\phi = 2\pi(0.25) = \pi/2 \approx 1.5708$.</li>
+      <li>$r = \sqrt{1 - 0.4^2} = \sqrt{0.84} \approx 0.9165$.</li>
+      <li>$x = r\cos\phi \approx 0.9165 \cdot 0 = 0$.</li>
+      <li>$y = r\sin\phi \approx 0.9165 \cdot 1 = 0.9165$.</li>
+      <li>$\mathbf p \approx (0, 0.9165, 0.4)$. Sanity: $|\mathbf p|^2 = 0 + 0.84 + 0.16 = 1$. Good.</li>
+    </ul>
+  </li>
+
+  <li>
+    <strong>A near-pole edge case.</strong> Suppose <code>Math.random()</code>
+    returns $u = 0.9999999998$, $v = 0.0$.
+    <ul>
+      <li>$z = 2u - 1 = 0.9999999996$.</li>
+      <li>$\phi = 0$.</li>
+      <li>$1 - z^2 \approx 8 \times 10^{-10}$ algebraically, but rounded to a Float64 it can come out negative (e.g. $-1.1 \times 10^{-16}$).</li>
+      <li>Without <code>Math.max(0, ...)</code>: <code>Math.sqrt(-1.1e-16)</code> is <code>NaN</code>, the star is at $(\text{NaN}, \text{NaN}, z)$, GPU drops or scrambles it.</li>
+      <li>With the clamp: $r = 0$, point is $(0, 0, z) \approx$ north pole, which is correct.</li>
+    </ul>
+  </li>
+
+  <li>
+    <strong>Bucket the $z$-distribution by hand.</strong> With $N = 1000$
+    samples drawn from the project's recipe and 10 buckets of width $0.2$ on
+    $z \in [-1, 1]$, what should the histogram look like? Since $z$ is
+    uniform on $[-1, 1]$, each bucket has probability $0.1$ and expected
+    count $100$. The Poisson standard deviation is $\sqrt{100} = 10$, so a
+    typical run gives bin counts in the range $80\text{–}120$. Compare with
+    the naive uniform-$(\theta, \phi)$ recipe: $z = \cos\theta$ with $\theta$
+    uniform on $[0, \pi]$, so $z$ has density $\frac{1}{\pi\sqrt{1-z^2}}$,
+    which goes to infinity at $z = \pm 1$. Bins at the ends of the $z$-axis
+    overflow; the middle bin near $z = 0$ is short. That is the pole-clumping
+    in numbers.
+    <p>Sketch (project recipe vs naive uniform-$\theta$, $N = 1000$):</p>
+    <table class="histogram">
+      <tr><th>$z$ bin</th><th>project (expected)</th><th>uniform-$\theta$ (expected)</th></tr>
+      <tr><td>[-1.0,-0.8]</td><td>~100</td><td>~205</td></tr>
+      <tr><td>[-0.8,-0.6]</td><td>~100</td><td>~110</td></tr>
+      <tr><td>[-0.6,-0.4]</td><td>~100</td><td>~85</td></tr>
+      <tr><td>[-0.4,-0.2]</td><td>~100</td><td>~75</td></tr>
+      <tr><td>[-0.2, 0.0]</td><td>~100</td><td>~70</td></tr>
+      <tr><td>[ 0.0, 0.2]</td><td>~100</td><td>~70</td></tr>
+      <tr><td>[ 0.2, 0.4]</td><td>~100</td><td>~75</td></tr>
+      <tr><td>[ 0.4, 0.6]</td><td>~100</td><td>~85</td></tr>
+      <tr><td>[ 0.6, 0.8]</td><td>~100</td><td>~110</td></tr>
+      <tr><td>[ 0.8, 1.0]</td><td>~100</td><td>~205</td></tr>
+    </table>
+  </li>
+</ol>
+
+<h2>7. Exercises</h2>
+
+<ol class="exercises">
+  <li><strong>(routine)</strong> Apply the project's recipe with $u = 0.5$, $v = 0.5$. What are $z$, $\phi$, $r$, and the resulting $(x, y, z)$?</li>
+  <li><strong>(routine)</strong> Apply the recipe with $u = 0.0$, $v = 0.75$. Where on the sphere does this land? Describe the location in words (north pole / equator / etc.).</li>
+  <li><strong>(conceptual)</strong> Why must the polar variable be uniform on $[-1, 1]$ measured as $z = \cos\theta$, not uniform on $[0, \pi]$ measured as $\theta$? Frame your answer in terms of the surface element $dA = \sin\theta \, d\theta \, d\phi$.</li>
+  <li><strong>(conceptual)</strong> The cube-with-rejection recipe rejects roughly $47.6\%$ of draws. Where does the number $\pi/6$ come from?</li>
+  <li><strong>(project-applied)</strong> A developer changes the line <code>const z = 2 * u - 1;</code> to just <code>const z = u;</code>. Predict what the starfield looks like after this change, and which "half" of the sphere is affected.</li>
+  <li><strong>(extension)</strong> Extend the recipe to sample uniformly inside the unit <em>ball</em>, not on its surface. Hint: now the volume element matters; pick a third uniform $w$ and figure out what function of $w$ should give the radius. (You should not get $r = w$.)</li>
+  <li><strong>(extension)</strong> Suppose you want stars to cluster near the equator instead — say, with density proportional to $\sin^k\theta$ for some $k > 0$. Modify the inverse-CDF formula for $z$. (Hint: integrate the marginal density of $z$ to get its CDF and invert.)</li>
+</ol>
+
+<h2>8. Where to next</h2>
+
+<p>
+Guide 16 covers <strong>equirectangular mapping</strong> — the coordinate
+system the playground used for its right-hand panel. Equirectangular images
+are how panorama textures get baked: a 2:1 image where pixel column maps to
+$\phi$ and pixel row maps to $\theta$. It is a different parameterization of
+the same sphere we sampled here. As you saw in the playground, "uniform in
+equirectangular pixel space" is exactly the bad uniform-$(\theta, \phi)$
+distribution from this guide. Guide 16 turns this from a bug (when sampling)
+into a feature (when rendering an image).
+</p>
+
+<h2>9. Appendix: Solutions</h2>
+
+<details>
+<summary>Solutions to exercises</summary>
+
+<ol>
+  <li>
+    $u = 0.5$, $v = 0.5$. Then $z = 2(0.5) - 1 = 0$, $\phi = 2\pi(0.5) = \pi$,
+    $r = \sqrt{1 - 0} = 1$. So $x = \cos\pi = -1$, $y = \sin\pi = 0$, and
+    $\mathbf p = (-1, 0, 0)$. The point lies on the equator, on the negative
+    $x$-axis.
+  </li>
+
+  <li>
+    $u = 0.0$, $v = 0.75$. Then $z = 2(0) - 1 = -1$, so this is the
+    <em>south pole</em>. $\phi = 2\pi(0.75) = 3\pi/2$, but it does not matter
+    — at the pole, $r = \sqrt{1 - 1} = 0$, so $x = y = 0$ regardless of
+    $\phi$. Final point: $(0, 0, -1)$.
+  </li>
+
+  <li>
+    The surface element $dA = \sin\theta \, d\theta \, d\phi$ contains a
+    $\sin\theta$ factor that varies with $\theta$. If you make $\theta$
+    uniform, then $\theta$-density is constant, but the actual area-density
+    on the sphere is $\frac{1}{\sin\theta}$ times that — infinite at the
+    poles, smaller at the equator. Switching to $z = \cos\theta$ absorbs the
+    $\sin\theta$ into $|dz| = \sin\theta \, d\theta$, leaving $dA = dz \, d\phi$.
+    Now uniform-in-$z$ is uniform-in-area.
+  </li>
+
+  <li>
+    The cube $[-1, 1]^3$ has volume $2^3 = 8$. The unit ball has volume
+    $\frac{4}{3}\pi$. The probability that a uniform cube point falls inside
+    the ball is $\frac{4\pi/3}{8} = \frac{\pi}{6} \approx 0.5236$, so the
+    rejection rate is $1 - \pi/6 \approx 0.4764$.
+  </li>
+
+  <li>
+    With <code>z = u</code>, $z$ is uniform on $[0, 1)$ — only the northern
+    hemisphere. Computing $r = \sqrt{1 - z^2}$ still works for those $z$, and
+    $\phi$ is unchanged. The visible result: every star sits in the upper
+    half of the sky. Looking down the $-z$ axis you see no stars at all.
+    The sky is half-empty in a very specific orientation.
+  </li>
+
+  <li>
+    For uniform sampling inside the unit ball, the volume element in spherical
+    coordinates is $dV = r^2 \sin\theta \, dr \, d\theta \, d\phi$. Integrate
+    over angles to get the marginal density of $r$: $f_r(r) \propto r^2$ on
+    $[0, 1]$. The CDF is $F_r(r) = r^3$, so $F_r^{-1}(w) = w^{1/3}$. Recipe:
+    sample direction by the surface method, then radius as
+    <code>Math.cbrt(Math.random())</code>. Naive $r = w$ would over-cluster
+    points near the origin.
+  </li>
+
+  <li>
+    With density proportional to $\sin^k\theta$ on the surface, the marginal
+    density of $\theta$ on the sphere becomes $\propto \sin^{k+1}\theta$
+    (extra $\sin\theta$ from $dA$). Substitute $z = \cos\theta$:
+    $\sin^{k+1}\theta \, d\theta = (1 - z^2)^{k/2} \cdot |dz|$, so the marginal
+    density of $z$ is $f_z(z) \propto (1 - z^2)^{k/2}$. The CDF has no
+    closed form for general $k$; you would invert it numerically. For the
+    special case $k = 2$, $f_z(z) \propto (1 - z^2)$, $F_z(z) = \frac{3}{4}(z - z^3/3) + \frac{1}{2}$
+    on $[-1, 1]$ (after normalizing), and you can solve the cubic for the
+    inverse.
+  </li>
+</ol>
+
+</details>
+
+</body>
+</html>
