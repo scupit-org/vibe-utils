@@ -55,7 +55,7 @@ body {
   position: relative;
   visibility: visible;
   box-shadow: var(--w3dpn-plane-inset-shadow), var(--w3dpn-plane-shadow);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.3s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .zoom-plane:hover {
@@ -101,11 +101,25 @@ body {
   overflow: hidden;
   clip-path: inset(50% 50% 50% 50%);
   opacity: 0;
+  pointer-events: none;
+  transform-origin: top left;
+  will-change: transform, opacity;
+}
+
+#page-content-container.visible {
+  pointer-events: auto;
 }
 
 #page-content-container.fully-visible {
   clip-path: none;
+  transform: none;
   overflow-y: auto;
+}
+
+.w3dpn-content-transform-inner {
+  min-height: 100%;
+  transform-origin: top left;
+  will-change: transform;
 }
 
 .page-section {

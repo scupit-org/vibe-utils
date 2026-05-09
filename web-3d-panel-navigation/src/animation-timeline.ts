@@ -1,5 +1,5 @@
 /**
- * AnimationTimeline - Unified requestAnimationFrame driver
+ * AnimationTimeline - On-demand requestAnimationFrame driver
  *
  * Instead of multiple independent rAF loops (one for camera, one for clip),
  * this provides a single rAF loop that all animations subscribe to.
@@ -7,7 +7,7 @@
  * Features:
  * - Persistent subscribers (e.g., scene rendering every frame)
  * - Timed sequences with progress callbacks and cancellation
- * - Single rAF loop eliminates dead frames between animation phases
+ * - rAF loop starts only while there is work and stops again when idle
  */
 
 /** Callback invoked every frame for persistent subscribers */
@@ -35,6 +35,9 @@ export class AnimationTimeline {
    */
   subscribe(key: string, callback: TickCallback): void {
     this.subscribers.set(key, callback);
+    if (this.running && this.frameId === null) {
+      this.scheduleNextFrame();
+    }
   }
 
   /**
@@ -74,6 +77,7 @@ export class AnimationTimeline {
     };
 
     this.sequences.push(sequence);
+    this.start();
 
     return {
       promise,
@@ -88,9 +92,10 @@ export class AnimationTimeline {
    */
   start(): void {
     if (this.running) return;
+    if (!this.hasFrameWork()) return;
     this.running = true;
     this.lastTime = performance.now();
-    this.tick();
+    this.scheduleNextFrame();
   }
 
   /**
@@ -114,7 +119,7 @@ export class AnimationTimeline {
 
   private tick = (): void => {
     if (!this.running) return;
-    this.frameId = requestAnimationFrame(this.tick);
+    this.frameId = null;
 
     const now = performance.now();
     const dt = now - this.lastTime;
@@ -149,7 +154,22 @@ export class AnimationTimeline {
         this.completeSequence(seq);
       }
     }
+
+    if (this.hasFrameWork()) {
+      this.scheduleNextFrame();
+    } else {
+      this.running = false;
+    }
   };
+
+  private scheduleNextFrame(): void {
+    if (this.frameId !== null) return;
+    this.frameId = requestAnimationFrame(this.tick);
+  }
+
+  private hasFrameWork(): boolean {
+    return this.subscribers.size > 0 || this.sequences.length > 0;
+  }
 
   private completeSequence(sequence: ActiveSequence): void {
     if (sequence.settled) return;

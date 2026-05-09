@@ -72,6 +72,28 @@ export type NavigationState =
   | 'zooming-out';    // Clip shrinking + camera returning
 
 /**
+ * Content reveal strategy.
+ *
+ * transform-mask keeps the content reveal on transform/opacity updates.
+ * clip-path preserves the original clip-path reveal behavior as a fallback.
+ */
+export type RevealMode =
+  | 'transform-mask'
+  | 'clip-path';
+
+/**
+ * Plane scaling strategy.
+ *
+ * css-transform preserves the original behavior: each CSS3D object gets a
+ * Three.js scale transform. baked-layout writes the scaled dimensions into the
+ * DOM element and leaves the object transform unscaled, reducing one layer of
+ * transform work on large DOM/SVG panels.
+ */
+export type PlaneScaleMode =
+  | 'css-transform'
+  | 'baked-layout';
+
+/**
  * Screen-space rectangle representing inset distances from viewport edges.
  * Used for clip-path calculations.
  */
@@ -118,6 +140,12 @@ export interface NavigationConfig {
   /** Scale factor applied to zoom planes (default: 0.5) */
   scale: number;
 
+  /** Content reveal strategy (default: transform-mask) */
+  revealMode: RevealMode;
+
+  /** Plane scaling strategy (default: css-transform) */
+  planeScaleMode: PlaneScaleMode;
+
   /** Field of view for overview camera in degrees (default: 50) */
   overviewFov: number;
 
@@ -161,6 +189,8 @@ export interface NavigationConfig {
  */
 export const DEFAULT_CONFIG: NavigationConfig = {
   scale: 0.5,
+  revealMode: 'transform-mask',
+  planeScaleMode: 'css-transform',
   overviewFov: 50,
   detailFov: 50,
   fillPercentage: 0.8,

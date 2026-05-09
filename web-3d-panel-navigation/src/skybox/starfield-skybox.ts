@@ -9,6 +9,7 @@ export interface StarfieldSkyboxOptions {
   colorCool?: string;
   baseSize?: number;
   twinkleFreq?: number;
+  pixelRatio?: number;
   gradient?: GradientMeshOptions;
 }
 
@@ -101,6 +102,7 @@ export function createStarfieldSkybox(options: StarfieldSkyboxOptions = {}): Sky
   const starCount = options.starCount ?? DEFAULT_STAR_COUNT;
   const baseSize = options.baseSize ?? DEFAULT_BASE_SIZE;
   const twinkleFreq = options.twinkleFreq ?? DEFAULT_TWINKLE_FREQ;
+  const pixelRatio = options.pixelRatio ?? Math.min(window.devicePixelRatio, 1.5);
 
   const gradient = createGradientMesh(options.gradient);
 
@@ -128,7 +130,7 @@ export function createStarfieldSkybox(options: StarfieldSkyboxOptions = {}): Sky
       uTime: { value: 0 },
       uTwinkleFreq: { value: twinkleFreq },
       uBaseSize: { value: baseSize },
-      uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+      uPixelRatio: { value: pixelRatio },
     },
   });
 
@@ -148,6 +150,9 @@ export function createStarfieldSkybox(options: StarfieldSkyboxOptions = {}): Sky
       elapsed += dt;
       starMaterial.uniforms.uTime.value = elapsed * 0.001;
       group.position.copy(camera.position);
+    },
+    setPixelRatio(nextPixelRatio) {
+      starMaterial.uniforms.uPixelRatio.value = nextPixelRatio;
     },
     refresh() {
       gradient.refresh();

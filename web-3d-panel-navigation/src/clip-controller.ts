@@ -1,24 +1,31 @@
-import type { ScreenRect } from './types';
+import type { RevealMode, ScreenRect } from './types';
 import { screenRectToClipPath } from './projection';
 
 /**
- * ClipController - Manages clip-path state and page section visibility.
+ * ClipController - Manages content reveal state and page section visibility.
  *
  * Pure state manager - no animation loops. The animation timeline drives
  * state changes by calling setClipRect/setOpacity each frame.
  *
  * Controls:
- * - The clip-path on the page content container
+ * - The reveal rect on the page content container
  * - Which page section is visible
  * - Container opacity
  * - Container visibility classes
  */
 export class ClipController {
   private container: HTMLElement;
+  private transformInner: HTMLElement | null;
+  private revealMode: RevealMode;
   private sections = new Map<string, HTMLElement>();
 
-  constructor(contentContainer: HTMLElement) {
+  constructor(contentContainer: HTMLElement, revealMode: RevealMode = 'transform-mask') {
     this.container = contentContainer;
+    this.revealMode = revealMode;
+    this.container.style.pointerEvents = this.container.classList.contains('visible') ? 'auto' : 'none';
+    this.transformInner = revealMode === 'transform-mask'
+      ? this.ensureTransformInner(contentContainer)
+      : null;
 
     const sectionElements = contentContainer.querySelectorAll('.page-section');
     sectionElements.forEach(el => {
@@ -34,28 +41,40 @@ export class ClipController {
   }
 
   /**
-   * Set the clip-path from a screen-space rectangle.
+   * Set the visible content rect from a screen-space rectangle.
    */
   setClipRect(rect: ScreenRect): void {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    this.container.style.clipPath = screenRectToClipPath(rect, viewportWidth, viewportHeight);
+
+    if (this.revealMode === 'clip-path') {
+      this.container.style.clipPath = screenRectToClipPath(rect, viewportWidth, viewportHeight);
+      return;
+    }
+
+    this.applyTransformReveal(rect, viewportWidth, viewportHeight);
   }
 
   /**
-   * Remove the clip-path (show full content).
+   * Remove the reveal constraint (show full content).
    */
   removeClip(): void {
     this.container.style.clipPath = 'none';
+    this.resetTransformReveal();
     this.container.classList.add('fully-visible');
   }
 
   /**
-   * Reset to fully clipped state (invisible).
+   * Reset to fully concealed state (invisible).
    */
   resetClip(): void {
     this.container.classList.remove('fully-visible');
-    this.container.style.clipPath = 'inset(50% 50% 50% 50%)';
+    if (this.revealMode === 'clip-path') {
+      this.container.style.clipPath = 'inset(50% 50% 50% 50%)';
+    } else {
+      this.container.style.clipPath = 'none';
+      this.resetTransformReveal();
+    }
   }
 
   /**
@@ -106,8 +125,10 @@ export class ClipController {
   setVisible(visible: boolean): void {
     if (visible) {
       this.container.classList.add('visible');
+      this.container.style.pointerEvents = 'auto';
     } else {
       this.container.classList.remove('visible');
+      this.container.style.pointerEvents = 'none';
     }
   }
 
@@ -133,11 +154,16 @@ export class ClipController {
 
   /**
    * Prepare for zoom-out transition.
-   * Re-enables clip at full viewport.
+   * Re-enables the reveal constraint at full viewport.
    */
   prepareForZoomOut(): void {
     this.container.classList.remove('fully-visible');
-    this.container.style.clipPath = 'inset(0% 0% 0% 0%)';
+    if (this.revealMode === 'clip-path') {
+      this.container.style.clipPath = 'inset(0% 0% 0% 0%)';
+    } else {
+      this.container.style.clipPath = 'none';
+      this.resetTransformReveal();
+    }
     this.setOpacity(1);
   }
 
@@ -151,5 +177,66 @@ export class ClipController {
     this.resetClip();
     this.resetScroll();
     this.setOpacity(0);
+  }
+
+  private ensureTransformInner(contentContainer: HTMLElement): HTMLElement {
+    for (const child of Array.from(contentContainer.children)) {
+      if (child.classList.contains('w3dpn-content-transform-inner')) {
+        return child as HTMLElement;
+      }
+    }
+
+    const inner = document.createElement('div');
+    inner.className = 'w3dpn-content-transform-inner';
+    while (contentContainer.firstChild) {
+      inner.appendChild(contentContainer.firstChild);
+    }
+    contentContainer.appendChild(inner);
+    return inner;
+  }
+
+  private applyTransformReveal(
+    rect: ScreenRect,
+    viewportWidth: number,
+    viewportHeight: number
+  ): void {
+    const safeViewportWidth = Math.max(viewportWidth, 1);
+    const safeViewportHeight = Math.max(viewportHeight, 1);
+    const left = this.clamp(rect.left, 0, safeViewportWidth);
+    const right = this.clamp(rect.right, 0, safeViewportWidth);
+    const top = this.clamp(rect.top, 0, safeViewportHeight);
+    const bottom = this.clamp(rect.bottom, 0, safeViewportHeight);
+    const width = Math.max(safeViewportWidth - left - right, 1);
+    const height = Math.max(safeViewportHeight - top - bottom, 1);
+    const scaleX = width / safeViewportWidth;
+    const scaleY = height / safeViewportHeight;
+    const inverseScaleX = 1 / scaleX;
+    const inverseScaleY = 1 / scaleY;
+
+    this.container.style.clipPath = 'none';
+    this.container.style.transformOrigin = 'top left';
+    this.container.style.transform = `matrix(${scaleX}, 0, 0, ${scaleY}, ${left}, ${top})`;
+
+    if (this.transformInner) {
+      this.transformInner.style.transformOrigin = 'top left';
+      this.transformInner.style.width = `${safeViewportWidth}px`;
+      this.transformInner.style.minHeight = `${safeViewportHeight}px`;
+      this.transformInner.style.transform =
+        `matrix(${inverseScaleX}, 0, 0, ${inverseScaleY}, ${-left * inverseScaleX}, ${-top * inverseScaleY})`;
+    }
+  }
+
+  private resetTransformReveal(): void {
+    this.container.style.transform = '';
+
+    if (this.transformInner) {
+      this.transformInner.style.transform = '';
+      this.transformInner.style.width = '';
+      this.transformInner.style.minHeight = '';
+    }
+  }
+
+  private clamp(value: number, min: number, max: number): number {
+    return Math.min(Math.max(value, min), max);
   }
 }

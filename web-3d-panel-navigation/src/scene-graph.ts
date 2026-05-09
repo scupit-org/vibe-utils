@@ -21,6 +21,7 @@ export class SceneGraph {
   public renderer: CSS3DRenderer;
 
   private zoomPlanes = new Map<string, CSS3DObjectRef>();
+  private planeOpacities = new Map<string, string>();
   private planeConfigs: ZoomPlaneConfig[] = [];
   private config: NavigationConfig;
   private rasterRefreshFrameIds: number[] = [];
@@ -60,10 +61,13 @@ export class SceneGraph {
   private createZoomPlaneObjects(): void {
     for (const config of this.planeConfigs) {
       const element = config.element;
+      const isBakedScale = this.config.planeScaleMode === 'baked-layout';
+      const elementScale = isBakedScale ? this.config.scale : 1;
+      const objectScale = isBakedScale ? 1 : this.config.scale;
 
       // Set dimensions on element
-      element.style.width = `${config.width}px`;
-      element.style.height = `${config.height}px`;
+      element.style.width = `${config.width * elementScale}px`;
+      element.style.height = `${config.height * elementScale}px`;
 
       // Create CSS3DObject
       const object = new CSS3DObject(element);
@@ -77,7 +81,7 @@ export class SceneGraph {
         config.rotation[1],
         config.rotation[2]
       );
-      object.scale.set(this.config.scale, this.config.scale, this.config.scale);
+      object.scale.set(objectScale, objectScale, objectScale);
 
       this.scene.add(object);
       this.zoomPlanes.set(config.id, { object, element });
@@ -148,7 +152,12 @@ export class SceneGraph {
   setPlaneOpacity(id: string, opacity: number): void {
     const plane = this.zoomPlanes.get(id);
     if (plane) {
-      plane.element.style.opacity = String(opacity);
+      const next = String(opacity);
+      if (this.planeOpacities.get(id) === next) {
+        return;
+      }
+      this.planeOpacities.set(id, next);
+      plane.element.style.opacity = next;
     }
   }
 

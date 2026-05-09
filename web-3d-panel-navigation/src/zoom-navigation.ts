@@ -36,6 +36,8 @@ export class ZoomPlaneNavigator {
   private config: NavigationConfig;
   private overviewState: CameraState;
   private activeCancel: (() => void) | null = null;
+  private renderFrameId: number | null = null;
+  private sceneVisibilityToken = 0;
 
   private eventListeners = new Map<NavigationEventType, Set<NavigationEventHandler>>();
   private planeClickHandlers = new Map<string, EventListener>();
@@ -51,7 +53,7 @@ export class ZoomPlaneNavigator {
 
     const planeConfigs = parseAllZoomPlanes(refs.planesSource, { scale: this.config.scale });
 
-    this.clipController = new ClipController(refs.contentContainer);
+    this.clipController = new ClipController(refs.contentContainer, this.config.revealMode);
     this.validatePlaneSections(planeConfigs);
 
     this.sceneGraph = new SceneGraph(refs.sceneContainer, planeConfigs, this.config);
@@ -70,10 +72,10 @@ export class ZoomPlaneNavigator {
       this.config
     );
     this.cameraController.setToState(this.overviewState);
+    this.sceneGraph.render();
 
     this.timeline = new AnimationTimeline();
-    this.timeline.subscribe('render', () => this.sceneGraph.render());
-    this.timeline.start();
+    this.updateMotionClass();
 
     this.setupPlaneClickHandlers();
 
@@ -137,6 +139,7 @@ export class ZoomPlaneNavigator {
 
     if (this._state === 'overview') {
       this.cameraController.setToState(this.overviewState);
+      this.requestRender();
     }
   }
 
@@ -164,6 +167,18 @@ export class ZoomPlaneNavigator {
     }
   }
 
+  private setState(state: NavigationState): void {
+    this._state = state;
+    this.updateMotionClass();
+  }
+
+  private updateMotionClass(): void {
+    document.documentElement.classList.toggle(
+      'w3dpn-is-moving',
+      this._state === 'zooming-in' || this._state === 'zooming-out'
+    );
+  }
+
   async zoomInto(planeId: string): Promise<void> {
     if (this._state !== 'overview') {
       console.warn(`Cannot zoom in: currently in ${this._state} state`);
@@ -176,7 +191,7 @@ export class ZoomPlaneNavigator {
       return;
     }
 
-    this._state = 'zooming-in';
+    this.setState('zooming-in');
     this._activePlaneId = planeId;
     this.emit('stateChange', this._state);
     this.emit('zoomStart', planeId);
@@ -215,6 +230,8 @@ export class ZoomPlaneNavigator {
         const fadeT = remap(progress, clipStart, planeFadeEnd);
         this.sceneGraph.setPlaneOpacity(planeId, 1 - fadeT);
       }
+
+      this.sceneGraph.render();
     });
 
     this.activeCancel = cancel;
@@ -237,7 +254,7 @@ export class ZoomPlaneNavigator {
 
     document.body.style.overflow = 'auto';
 
-    this._state = 'section';
+    this.setState('section');
     this.emit('stateChange', this._state);
     this.emit('zoomComplete', this._activePlaneId!);
   }
@@ -286,7 +303,7 @@ export class ZoomPlaneNavigator {
       return;
     }
 
-    this._state = 'zooming-out';
+    this.setState('zooming-out');
     this.emit('stateChange', this._state);
     this.emit('returnStart');
 
@@ -348,6 +365,8 @@ export class ZoomPlaneNavigator {
           calculateTransitionState(overviewState, startCameraState, 1 - rawCameraT)
         );
       }
+
+      this.sceneGraph.render();
     });
 
     this.activeCancel = cancel;
@@ -369,7 +388,7 @@ export class ZoomPlaneNavigator {
       this.sceneGraph.setPlaneOpacity(planeId, 1);
     }
 
-    this._state = 'zooming-out';
+    this.setState('zooming-out');
     this.emit('stateChange', this._state);
 
     const startCameraState = this.cameraController.getCurrentState();
@@ -381,6 +400,7 @@ export class ZoomPlaneNavigator {
         this.cameraController.setToState(
           calculateTransitionState(overviewState, startCameraState, 1 - progress)
         );
+        this.sceneGraph.render();
       }
     );
 
@@ -401,10 +421,11 @@ export class ZoomPlaneNavigator {
       this.sceneGraph.setPlaneOpacity(config.id, 1);
     }
 
-    this._state = 'overview';
+    this.setState('overview');
     this._activePlaneId = null;
     this.emit('stateChange', this._state);
     this.emit('returnComplete');
+    this.requestRender();
   }
 
   private precomputePlaneRect(
@@ -418,7 +439,6 @@ export class ZoomPlaneNavigator {
     left: number;
   } {
     this.cameraController.setToState(targetCameraState);
-    this.sceneGraph.render();
 
     const rect = getCenteredPlaneRect(
       planeConfig,
@@ -429,7 +449,6 @@ export class ZoomPlaneNavigator {
     );
 
     this.cameraController.setToState(restoreState);
-    this.sceneGraph.render();
 
     return rect;
   }
@@ -465,6 +484,17 @@ export class ZoomPlaneNavigator {
     return window.innerWidth / window.innerHeight;
   }
 
+  private requestRender(): void {
+    if (this.renderFrameId !== null) {
+      return;
+    }
+
+    this.renderFrameId = window.requestAnimationFrame(() => {
+      this.renderFrameId = null;
+      this.sceneGraph.render();
+    });
+  }
+
   private handleResize(): void {
     const width = window.innerWidth;
     const height = window.innerHeight;
@@ -489,14 +519,22 @@ export class ZoomPlaneNavigator {
         this.cameraController.setToState(perpState);
       }
     }
+
+    this.requestRender();
   }
 
   private hideSceneContainer(): void {
     const el = this.refs.sceneContainer;
+    const token = ++this.sceneVisibilityToken;
     el.classList.add('hidden');
-    const onEnd = () => {
+    el.style.pointerEvents = 'none';
+
+    const onEnd = (event: TransitionEvent) => {
+      if (event.target !== el || event.propertyName !== 'opacity') {
+        return;
+      }
       el.removeEventListener('transitionend', onEnd);
-      if (el.classList.contains('hidden')) {
+      if (token === this.sceneVisibilityToken && el.classList.contains('hidden')) {
         el.classList.add('fully-hidden');
       }
     };
@@ -504,7 +542,11 @@ export class ZoomPlaneNavigator {
   }
 
   private showSceneContainer(): void {
+    this.sceneVisibilityToken++;
     this.refs.sceneContainer.classList.remove('hidden', 'fully-hidden');
+    this.refs.sceneContainer.style.pointerEvents = 'auto';
+    this.sceneGraph.schedulePostLoadRasterRefresh();
+    this.requestRender();
   }
 
   destroy(): void {
@@ -512,6 +554,11 @@ export class ZoomPlaneNavigator {
     this.urlSync = null;
 
     this.timeline.stop();
+    if (this.renderFrameId !== null) {
+      window.cancelAnimationFrame(this.renderFrameId);
+      this.renderFrameId = null;
+    }
+    document.documentElement.classList.remove('w3dpn-is-moving');
 
     for (const [planeId, handler] of this.planeClickHandlers) {
       this.sceneGraph.getZoomPlane(planeId)?.element.removeEventListener('click', handler);

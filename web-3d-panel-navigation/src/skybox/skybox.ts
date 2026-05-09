@@ -6,6 +6,7 @@ export interface Skybox {
   attach?(scene: THREE.Scene): void;
   detach?(scene: THREE.Scene): void;
   update?(dt: number, camera: THREE.PerspectiveCamera): void;
+  setPixelRatio?(pixelRatio: number): void;
   refresh?(): void;
   dispose(): void;
 }

@@ -8,6 +8,8 @@ export type {
   NavigationConfig,
   NavigationEventType,
   NavigationState,
+  PlaneScaleMode,
+  RevealMode,
   ScreenRect,
   ZoomPlaneConfig,
 } from './types';
