@@ -477,8 +477,10 @@ Drag the green dot in the left panel (top-down XZ view) to move a world point re
     <label>FOV (deg): <input id="fov" type="range" min="20" max="90" value="50" step="1" /><span id="fovVal" class="muted">50</span></label>
     <label>Viewport W: <input id="vw" type="range" min="320" max="1920" value="1280" step="10" /><span id="vwVal" class="muted">1280</span></label>
     <label>Viewport H: <input id="vh" type="range" min="240" max="1080" value="720" step="10" /><span id="vhVal" class="muted">720</span></label>
+    <label>World Y: <input id="wy" type="range" min="-3" max="3" value="0" step="0.05" /><span id="wyVal" class="muted">0.00</span></label>
   </div>
   <div class="readout" id="readout">x_ndc = ... y_ndc = ... x_screen = ... y_screen = ...</div>
+  <div class="muted" style="margin-top:6px; font-size:12px;">Drag <em>World Y</em> up and watch <em>y_screen</em> go <strong>down</strong> — that's the Y-flip from <code>(1 − ndc.y)/2 · H</code>.</div>
 </div>
 
 <script>
@@ -579,6 +581,8 @@ Drag the green dot in the left panel (top-down XZ view) to move a world point re
   const fovVal = document.getElementById('fovVal');
   const vwVal = document.getElementById('vwVal');
   const vhVal = document.getElementById('vhVal');
+  const wyInput = document.getElementById('wy');
+  const wyVal = document.getElementById('wyVal');
   const readout = document.getElementById('readout');
 
   // World-space point (in scene units). Camera at origin looking down -z.
@@ -716,7 +720,7 @@ Drag the green dot in the left panel (top-down XZ view) to move a world point re
     ctx.fillStyle = '#e6e8ee';
     ctx.font = '12px sans-serif';
     ctx.fillText('point (drag me)', wp.x + 10, wp.y - 8);
-    ctx.fillText('(' + worldX.toFixed(2) + ', y=0, ' + worldZ.toFixed(2) + ')', wp.x + 10, wp.y + 14);
+    ctx.fillText('(' + worldX.toFixed(2) + ', y=' + (+wyInput.value).toFixed(2) + ', ' + worldZ.toFixed(2) + ')', wp.x + 10, wp.y + 14);
 
     // Ray from camera through point
     ctx.strokeStyle = inFront ? 'rgba(123, 232, 130, 0.55)' : 'rgba(255, 122, 122, 0.55)';
@@ -754,8 +758,10 @@ Drag the green dot in the left panel (top-down XZ view) to move a world point re
     ctx.moveTo(ndcCx, ndcTop); ctx.lineTo(ndcCx, ndcTop + ndcSize);
     ctx.stroke();
 
-    // Compute projection. Use worldY = 0 in this widget (top-down view).
-    const proj = project(worldX, 0, worldZ, fovDeg, vw, vh);
+    // Compute projection. worldY is driven by the slider so the Y-flip is visible in the readout.
+    const worldY = +wyInput.value;
+    wyVal.textContent = worldY.toFixed(2);
+    const proj = project(worldX, worldY, worldZ, fovDeg, vw, vh);
 
     // Plot in NDC square
     let plotX = ndcCx + proj.xNdc * (ndcSize / 2);
@@ -870,6 +876,7 @@ Drag the green dot in the left panel (top-down XZ view) to move a world point re
   fovInput.addEventListener('input', draw);
   vwInput.addEventListener('input', draw);
   vhInput.addEventListener('input', draw);
+  wyInput.addEventListener('input', draw);
 
   draw();
 })();

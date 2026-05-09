@@ -122,9 +122,9 @@ length. That stretch is the equirectangular projection:
   \node[red, below] at (2,0) {\small entire row $=$ S pole};
   % Axis labels
   \node[below] at (2,-0.4) {$u = \phi/(2\pi) \in [0,1)$};
-  \node[left, rotate=90, anchor=center] at (-0.4,1) {$v = \theta/\pi \in [0,1]$};
-  \draw[->] (-0.05,2.05) -- (0.4,2.05) node[above] {\small $u$};
-  \draw[->] (-0.05,2.05) -- (-0.05,1.6) node[left] {\small $v$};
+  \node[left, rotate=90, anchor=center] at (-0.4,1) {$v = 1 - \theta/\pi \in [0,1]$};
+  \draw[->] (-0.05,-0.05) -- (0.4,-0.05) node[above] {\small $u$};
+  \draw[->] (-0.05,-0.05) -- (-0.05,0.4) node[left] {\small $v$};
 \end{tikzpicture}
 \end{center}
 
@@ -163,14 +163,23 @@ pinch.
 \subsection{Spherical coordinates}
 
 A point on the unit sphere is parameterised by polar angle
-$\theta \in [0, \pi]$ measured from the north pole and azimuth
-$\phi \in [0, 2\pi)$ measured around the vertical axis:
+$\theta \in [0, \pi]$ measured from the up axis (the north pole) and azimuth
+$\phi \in [0, 2\pi)$ measured around that up axis. We adopt Three.js's
+$y$-up convention throughout, so the up axis is $+y$ and the equator lies in
+the $xz$-plane:
 \begin{equation}
-  \mathbf{p}(\theta, \phi) = \begin{pmatrix} \sin\theta\,\cos\phi \\ \sin\theta\,\sin\phi \\ \cos\theta \end{pmatrix}.
+  \mathbf{p}(\theta, \phi) = \begin{pmatrix} \sin\theta\,\cos\phi \\ \cos\theta \\ \sin\theta\,\sin\phi \end{pmatrix}.
 \end{equation}
-At $\theta = 0$ the point is the north pole $(0, 0, 1)$ regardless of $\phi$;
-at $\theta = \pi$ it is the south pole $(0, 0, -1)$. The equator is the
+$\theta$ is the polar angle from $+y$ (so $\theta=0$ is the zenith);
+$\phi$ is the longitude in the $xz$-plane, measured from $+x$ toward $+z$.
+At $\theta = 0$ the point is the north pole $(0, 1, 0)$ regardless of $\phi$;
+at $\theta = \pi$ it is the south pole $(0, -1, 0)$. The equator is the
 circle at $\theta = \pi/2$.
+
+Some math texts measure $\theta$ from the equator instead of from the pole
+(latitude vs.\ colatitude). Both are valid; this guide uses colatitude from
+$+y$ so that $\theta = 0$ is the zenith --- this matches Three.js's actual
+shader code (\S3.5).
 
 To match geographic conventions you sometimes see latitude
 $\beta = \pi/2 - \theta$ and longitude $\lambda = \phi$, but Three.js's
@@ -179,16 +188,26 @@ so we will stick with $(\theta, \phi)$.
 
 \subsection{The equirectangular projection}
 
-Define texture coordinates $(u, v)$ with $u$ horizontal, $v$ vertical, and the
-image-standard convention that $v = 0$ is the top of the image. The
-equirectangular map is the simplest possible:
+Define texture coordinates $(u, v)$ with $u$ horizontal, $v$ vertical, in
+the OpenGL/WebGL UV convention: $v = 0$ at the bottom of the texture and
+$v = 1$ at the top. This is what Three.js and the GPU sampler use natively.
+With Three.js's default \texttt{flipY = true} on textures, $v = 1$ corresponds
+to the \emph{top row of pixels} in the source image, so $v = 1$ ends up at
+the north pole for a standard panorama photograph. The equirectangular map
+is then:
 \begin{equation}
-  (\theta, \phi) \longmapsto (u, v) = \left( \frac{\phi}{2\pi}, \; \frac{\theta}{\pi} \right),
+  (\theta, \phi) \longmapsto (u, v) = \left( \frac{\phi}{2\pi}, \; 1 - \frac{\theta}{\pi} \right),
   \qquad u \in [0, 1), \; v \in [0, 1].
 \end{equation}
-Its inverse:
+Equivalently, in terms of the world direction $\hat{\mathbf{d}} = (x, y, z)$:
+\[
+  v = \frac{\arcsin(y)}{\pi} + \frac{1}{2},
+\]
+which is the literal formula Three.js's GLSL evaluates per fragment. North
+pole ($y = +1$) gives $v = 1$; equator ($y = 0$) gives $v = 0.5$; south pole
+($y = -1$) gives $v = 0$. Its inverse:
 \begin{equation}
-  (u, v) \longmapsto (\theta, \phi) = (\pi v, \; 2\pi u).
+  (u, v) \longmapsto (\theta, \phi) = (\pi (1 - v), \; 2\pi u).
 \end{equation}
 The image domain has width $2\pi$ (one full loop around) and height $\pi$ (north
 pole to south pole). The aspect ratio is exactly 2:1 --- this is why
@@ -247,13 +266,13 @@ loaded.colorSpace = THREE.SRGBColorSpace;
 
 \subsection{The pole singularity}
 
-The map $(u, v) \to (\theta, \phi) = (\pi v, 2\pi u)$ is one-to-one on the
+The map $(u, v) \to (\theta, \phi) = (\pi(1-v), 2\pi u)$ is one-to-one on the
 open square $(0, 1) \times (0, 1)$ but is degenerate at $v = 0$ and $v = 1$.
-At $v = 0$ every $u$ produces the same point $(0, 1, 0)$, the north pole;
-at $v = 1$ every $u$ produces the south pole. The flat image stores $W$
-distinct pixels along the top edge that all represent one sphere point. This
-causes filtering artifacts at the poles in low-quality panoramas: blurring,
-banding, sometimes a visible ``swirl.''
+At $v = 1$ every $u$ produces the same point $(0, 1, 0)$, the north pole;
+at $v = 0$ every $u$ produces the south pole. The flat image stores $W$
+distinct pixels along each pole edge that all represent one sphere point.
+This causes filtering artifacts at the poles in low-quality panoramas:
+blurring, banding, sometimes a visible ``swirl.''
 
 If you need to avoid this, you switch projection. Cubemaps split the sphere
 into six square faces with no polar singularity. The project supports them
@@ -381,27 +400,32 @@ This is the equator: good.
 \]
 Then
 \[
-  u = \frac{\phi}{2\pi} = \frac{1}{8} = 0.125, \qquad v = \frac{\theta}{\pi} = \frac{1}{2} = 0.5.
+  u = \frac{\phi}{2\pi} = \frac{1}{8} = 0.125, \qquad v = 1 - \frac{\theta}{\pi} = 1 - \frac{1}{2} = 0.5.
 \]
 The fragment samples the panorama at $(0.125, 0.5)$: one-eighth of the way
-across, halfway down. On a 4096$\times$2048 image that is pixel $(512, 1024)$.
+across, halfway up. On a 4096$\times$2048 image that is pixel $(512, 1024)$
+(measuring pixel rows top-down, the equator is the middle row).
 
 \subsection*{Example 3: from UV back to direction}
 
 Suppose a star-twinkle effect (guide 14) wants to read what colour the sky is
 at $(u, v) = (0.75, 0.25)$.
 \[
-  \theta = \pi v = \tfrac{\pi}{4}, \qquad \phi = 2\pi u = \tfrac{3\pi}{2}.
+  \theta = \pi(1 - v) = \tfrac{3\pi}{4}, \qquad \phi = 2\pi u = \tfrac{3\pi}{2}.
 \]
+With $\sin(3\pi/4) = \tfrac{\sqrt{2}}{2}$, $\cos(3\pi/4) = -\tfrac{\sqrt{2}}{2}$,
+$\cos(3\pi/2) = 0$, $\sin(3\pi/2) = -1$:
 \[
   \hat{\mathbf{d}} = (\sin\theta \cos\phi, \cos\theta, \sin\theta \sin\phi)
-                   = \!\left(\tfrac{\sqrt{2}}{2} \cdot 0, \; \tfrac{\sqrt{2}}{2}, \; \tfrac{\sqrt{2}}{2} \cdot (-1)\right)
-                   = (0, \tfrac{\sqrt{2}}{2}, -\tfrac{\sqrt{2}}{2}).
+                   = \!\left(\tfrac{\sqrt{2}}{2} \cdot 0, \; -\tfrac{\sqrt{2}}{2}, \; \tfrac{\sqrt{2}}{2} \cdot (-1)\right)
+                   = (0, -\tfrac{\sqrt{2}}{2}, -\tfrac{\sqrt{2}}{2}).
 \]
-That is a direction pointing up and behind, 45$^\circ$ above the horizon. Note
-the swap: with $y$-up Three.js, $\theta$ measures from $y$, so the second
-component is $\cos\theta$, and the horizontal $\phi$ rotation lives in the
-$x$-$z$ plane.
+That is a direction pointing down and behind, 45$^\circ$ below the horizon
+($v = 0.25$ is in the lower quarter of the image, which is the south side
+of the sphere under the new $v = 1 - \theta/\pi$ convention). Note the
+component layout: with $y$-up Three.js, $\theta$ measures from $+y$, so the
+second component is $\cos\theta$, and the horizontal $\phi$ rotation lives
+in the $x$-$z$ plane.
 
 \section{Exercises}
 
@@ -499,26 +523,28 @@ the math vocabulary of this library. Use it.
 
 \subsection*{Exercise 1}
 $\hat{\mathbf{d}} = (0, 1, 0)$ is the north pole. $\theta = \arccos(1) = 0$,
-so $v = 0$. But $\phi = \mathrm{atan2}(0, 0)$ is undefined --- $u$ has no
-unique value. This is exactly the pole singularity: every $u$ row at $v = 0$
-maps back to this same direction, so the inverse problem has no unique
-answer. In practice the GPU just samples whatever pixel is at the texture
-coordinate it gets and moves on; visual artifacts there come from filtering.
+so $v = 1 - 0/\pi = 1$. But $\phi = \mathrm{atan2}(0, 0)$ is undefined --- $u$
+has no unique value. This is exactly the pole singularity: every $u$ along
+the row at $v = 1$ maps back to this same direction, so the inverse problem
+has no unique answer. In practice the GPU just samples whatever pixel is at
+the texture coordinate it gets and moves on; visual artifacts there come
+from filtering across that all-equivalent row.
 
 \subsection*{Exercise 2}
 $\theta = \arccos(0) = \pi/2$, $\phi = \mathrm{atan2}(0, -1) = \pi$. So
-$u = \pi / (2\pi) = 0.5$, $v = (\pi/2)/\pi = 0.5$. On a 4096$\times$2048
-image: pixel $(2048, 1024)$, the dead centre.
+$u = \pi / (2\pi) = 0.5$, $v = 1 - (\pi/2)/\pi = 0.5$. On a 4096$\times$2048
+image: pixel $(2048, 1024)$, the dead centre. (Equator is symmetric, so the
+$v$ flip leaves this unchanged.)
 
 \subsection*{Exercise 3}
-$\theta = \pi \cdot 0.75 = 3\pi/4$, $\phi = 2\pi \cdot 0.5 = \pi$.
-$\sin(3\pi/4) = \sqrt{2}/2$, $\cos(3\pi/4) = -\sqrt{2}/2$, $\cos\pi = -1$,
+$\theta = \pi (1 - 0.75) = \pi/4$, $\phi = 2\pi \cdot 0.5 = \pi$.
+$\sin(\pi/4) = \sqrt{2}/2$, $\cos(\pi/4) = \sqrt{2}/2$, $\cos\pi = -1$,
 $\sin\pi = 0$. So
 \[
   \hat{\mathbf{d}} = (\sin\theta\cos\phi, \, \cos\theta, \, \sin\theta\sin\phi)
-                   = \!\left(-\tfrac{\sqrt{2}}{2}, \, -\tfrac{\sqrt{2}}{2}, \, 0\right).
+                   = \!\left(-\tfrac{\sqrt{2}}{2}, \, \tfrac{\sqrt{2}}{2}, \, 0\right).
 \]
-Below the horizon, pointing in $-x$.
+Above the horizon, pointing in $-x$.
 
 \subsection*{Exercise 4}
 $\phi$ ranges over $[0, 2\pi)$, length $2\pi$. $\theta$ ranges over
@@ -554,11 +580,13 @@ which is azimuth rotation. The student's confusion comes from confusing
 Texel area at polar angle $\theta$ is proportional to $\sin\theta$. The
 threshold ``less than 10\% of an equator texel'' is $\sin\theta < 0.1$,
 i.e.\ $\theta < \arcsin(0.1) \approx 0.1003$ rad, which is about $5.74^\circ$.
-On a 2048-row image, the rows where $\theta < 0.1003$ rad occupy
-$v < 0.1003/\pi \approx 0.0319$, which is about $0.0319 \cdot 2048 \approx 65$
-rows. By symmetry, another 65 rows at the south pole. Total: about $2 \cdot 65 \cdot 4096 \approx 5.3 \times 10^5$ texels are
-``wasted'' in this sense, out of $4096 \cdot 2048 \approx 8.4 \times 10^6$
-total --- around 6\%.
+On a 2048-row image, the rows where $\theta < 0.1003$ rad (near the north
+pole) occupy $v > 1 - 0.1003/\pi \approx 0.9681$, which is about
+$0.0319 \cdot 2048 \approx 65$ rows at the top of the image. By symmetry,
+another 65 rows at the south pole ($v < 0.0319$). Total: about
+$2 \cdot 65 \cdot 4096 \approx 5.3 \times 10^5$ texels are ``wasted'' in
+this sense, out of $4096 \cdot 2048 \approx 8.4 \times 10^6$ total ---
+around 6\%.
 
 \subsection*{Extension E2}
 With $v = \tfrac{1}{2}(1 - \cos\theta)$, $dv = \tfrac{1}{2}\sin\theta \, d\theta$.

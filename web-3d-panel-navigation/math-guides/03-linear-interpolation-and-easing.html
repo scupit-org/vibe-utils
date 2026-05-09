@@ -922,9 +922,8 @@ tiled-panel layouts.
     Conditions: \(f(0) = 0\), \(f(1) = 1\), \(f'(0) = 0\), \(f'(1) = 3\). The natural candidate
     is \(f(t) = t^3\). Check: \(0^3 = 0\), \(1^3 = 1\), derivative \(3t^2\) gives \(0\) at the
     start and \(3\) at the end. All four conditions hold. Reflecting <code>easeOutCubic</code>
-    via the standard "inverse easing" identity \(g(t) = 1 - f(1 - t)\) yields
-    \(g(t) = 1 - (1 - (1 - (1 - t))^3) \cdot (\ldots)\) — but more cleanly:
-    \(\mathrm{easeOutCubic}(t) = 1 - (1 - t)^3\), and the in/out reflection is
+    via the standard "inverse easing" identity \(g(t) = 1 - f(1 - t)\):
+    with \(\mathrm{easeOutCubic}(t) = 1 - (1 - t)^3\), the in/out reflection is
     \(\mathrm{easeInCubic}(t) = 1 - \mathrm{easeOutCubic}(1 - t) = 1 - (1 - (1 - (1 - t))^3) = 1 - (1 - t^3) = t^3\). Same answer.
   </p>
 </details>

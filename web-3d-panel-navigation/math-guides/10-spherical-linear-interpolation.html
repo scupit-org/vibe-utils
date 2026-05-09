@@ -346,11 +346,12 @@ if (theta &lt; 0.001) {
 
 <p>Why is plain lerp acceptable here? Because when the angle is tiny, the
 chord and the arc are nearly identical: they share the same endpoints, and
-the maximum chord-to-arc deviation grows like $\theta^2$. With $\theta &lt;
-0.001$ rad, the chord deviation is below $5 \times 10^{-7}$ — sub-pixel for
-any realistic camera distance. Geometrically, lerp <em>is</em> the first-order
-Taylor expansion of slerp in $\theta$, so the fallback is the correct linear
-approximation rather than a hack.</p>
+the maximum chord-to-arc deviation (the sagitta, $1 - \cos(\theta/2) \approx
+\theta^2/8$) grows like $\theta^2$. With $\theta &lt; 0.001$ rad, the chord
+deviation is below $1.25 \times 10^{-7}$ on a unit sphere — comfortably
+sub-pixel for any realistic camera distance. Geometrically, lerp <em>is</em>
+the first-order Taylor expansion of slerp in $\theta$, so the fallback is
+the correct linear approximation rather than a hack.</p>
 
 <div class="note">
 <strong>Antipodal case ($\theta = \pi$).</strong> If $\hat{\mathbf{a}} =
@@ -374,6 +375,21 @@ quaternions live on the unit 3-sphere $S^3 \subset \mathbb{R}^4$ (covered in
 guide 5). The slerp formula doesn't care about ambient dimension — it only
 cares that the two operands are unit-length and that their dot product gives
 $\cos\theta$.</p>
+
+<div class="note">
+<strong>Caveat for quaternions.</strong> When you slerp two unit
+<em>quaternions</em>, the operands' dot product is $\cos(\theta/2)$, not
+$\cos\theta$, where $\theta$ is the rotation angle the quaternions
+represent. (This is the half-angle convention from guide 5: a unit
+quaternion $q = [\cos(\theta/2), \sin(\theta/2)\,\hat{\mathbf{n}}]$ encodes
+a $\theta$-rotation about $\hat{\mathbf{n}}$.) The slerp formula itself
+still works unchanged — but if you read the "angle" out of the dot product
+expecting the rotation angle, double it. Three.js's
+<code>Quaternion.slerp</code> handles this internally and additionally
+flips the sign of one operand if the dot is negative, taking the short
+path around the 720° double-cover. Guide 5 derives why $q$ and $-q$
+represent the same rotation.
+</div>
 
 <p>One thing to flag: the orbit branch slerps the camera's position-offset
 direction, but the camera's <strong>up vector</strong> is interpolated
@@ -480,9 +496,10 @@ position = midTarget.clone().add(slerpedDir.multiplyScalar(currentLen));</code><
 \hat{\mathbf{o}}_\text{from}, \hat{\mathbf{o}}_\text{to}, t\right).$$</p>
 
 <p>The result is a position that orbits $\mathbf{m}$ at constant angular
-speed while smoothly approaching or receding in radius. It's a logarithmic
-spiral on a cone if $r_\text{from} \ne r_\text{to}$, and a perfect circular
-arc if they're equal.</p>
+speed while smoothly approaching or receding in radius. It's an Archimedean
+spiral arc on a cone if $r_\text{from} \ne r_\text{to}$ (angle linear in
+$t$, radius linear in $t$ — both arithmetic, not exponential), and a
+perfect circular arc if they're equal.</p>
 
 <h3>4.3 The $t$ that gets passed in is already eased</h3>
 
@@ -755,8 +772,8 @@ lerp-then-normalize's spacing is bunched near the endpoints.</p>
     row(11, '',                                                       '#222');
 
     // Angle-from-a readouts: shows the constant-angular-speed property.
-    const slerpAng = Math.acos(Math.max(-1, Math.min(1, dot2(a, slerpP) / Math.hypot(slerpP.x, slerpP.y) || 1)));
-    const lnAng = Math.acos(Math.max(-1, Math.min(1, dot2(a, lnP))));
+    const slerpAng = Math.acos(Math.max(-1, Math.min(1, dot2(a, slerpP) / (Math.hypot(slerpP.x, slerpP.y) || 1))));
+    const lnAng = Math.acos(Math.max(-1, Math.min(1, dot2(a, lnP) / (Math.hypot(lnP.x, lnP.y) || 1))));
     row(12, 'angle(a, slerp)     = ' + (slerpAng * 180 / Math.PI).toFixed(2) + ' deg', '#1aaa55');
     row(13, 'angle(a, lerp+norm) = ' + (lnAng    * 180 / Math.PI).toFixed(2) + ' deg', '#ee8a26');
     row(14, 'predicted t*theta   = ' + (t * theta * 180 / Math.PI).toFixed(2) + ' deg', '#444');

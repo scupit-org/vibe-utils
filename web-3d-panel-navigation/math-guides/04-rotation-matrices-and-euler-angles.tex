@@ -545,14 +545,34 @@ length 1, \lstinline|.applyEuler| leaves them with length 1, and
 point it can correct tiny drift but is otherwise redundant.
 
 \textbf{Exercise 8.} Take $(e_x, e_y, e_z) = (\theta, \pi/2, \phi)$ for any
-$\theta, \phi$. With $e_y = \pi/2$, $R_y$ swings the body's $X$ axis onto
-the world $-Z$ axis (and the body's $Z$ axis onto the world $X$ axis), so
-the subsequent $R_x(\theta)$ rotates about an axis that's now world-$-Z$.
-Meanwhile $R_z(\phi)$, applied first, rotates about world $Z$. Both end up
-generating rotations about the world $Z$-axis, just with opposite signs:
-shifting $e_x$ by $\delta$ and $e_z$ by $\delta$ produces equal-and-opposite
-contributions, so the net rotation is unchanged. Two parameters are
-controlling one degree of freedom --- gimbal lock.
+$\theta, \phi$. The intuition: with $e_y = \pi/2$, $R_y$ swings the body's
+$X$ axis onto the world $-Z$ axis, so the subsequent $R_x$ rotation, which
+acts about the body's $X$-axis, ends up rotating about world-$-Z$.
+Meanwhile $R_z$, applied first, rotates about world $Z$. Both end up
+generating rotations about the same world axis, just with opposite signs.
+
+To verify directly, multiply $R = R_x(e_x)\,R_y(\pi/2)\,R_z(e_z)$. With
+$c_z = \cos e_z$, $s_z = \sin e_z$, $c_x = \cos e_x$, $s_x = \sin e_x$:
+\[
+  R_y(\pi/2)\,R_z(e_z) = \begin{pmatrix} 0 & 0 & 1 \\ 0 & 1 & 0 \\ -1 & 0 & 0 \end{pmatrix}
+                          \begin{pmatrix} c_z & -s_z & 0 \\ s_z & c_z & 0 \\ 0 & 0 & 1 \end{pmatrix}
+                        = \begin{pmatrix} 0 & 0 & 1 \\ s_z & c_z & 0 \\ -c_z & s_z & 0 \end{pmatrix}.
+\]
+Left-multiplying by $R_x(e_x) = \begin{pmatrix} 1 & 0 & 0 \\ 0 & c_x & -s_x \\ 0 & s_x & c_x \end{pmatrix}$
+and using the angle-sum identities $c_x c_z - s_x s_z = \cos(e_x + e_z)$ and
+$c_x s_z + s_x c_z = \sin(e_x + e_z)$:
+\[
+  R = \begin{pmatrix} 0 & 0 & 1 \\
+                      \sin(e_x + e_z) & \cos(e_x + e_z) & 0 \\
+                      -\cos(e_x + e_z) & \sin(e_x + e_z) & 0 \end{pmatrix}.
+\]
+$R$ depends on $e_x$ and $e_z$ \emph{only through the sum} $e_x + e_z$.
+Shifting $e_x$ by $\delta$ and $e_z$ by $-\delta$ keeps $e_x + e_z$
+unchanged, so $R$ is unchanged: two parameters control one degree of freedom
+--- gimbal lock. (You can verify this in the browser console with
+\lstinline|new THREE.Euler(0.1, Math.PI/2, 0.0).toMatrix4()| versus
+\lstinline|new THREE.Euler(0.2, Math.PI/2, -0.1).toMatrix4()|; both produce
+the same matrix up to floating-point noise.)
 
 \textbf{Exercise 9.} \lstinline|setFromQuaternion(quaternion, 'XYZ')| asks
 ``what XYZ-order Euler triple represents the same rotation as this

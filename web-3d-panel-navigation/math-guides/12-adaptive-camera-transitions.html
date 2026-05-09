@@ -622,7 +622,7 @@ $$
   // meaning theta_up = 0 unless toggled.
   const upA_default = { x: 0, y: -1 };
   const upB_default = { x: 0, y: -1 };
-  // When includeUp is on, force a 25-degree disagreement so total angle has a healthy tilt component.
+  // When includeUp is on, force a 50-degree disagreement (each up tilted 25° from north in opposite directions) so total angle has a healthy tilt component.
   function getUps() {
     if (!includeUp.checked) return { upA: upA_default, upB: upB_default };
     const a = -25 * Math.PI / 180;
@@ -965,7 +965,7 @@ $$
 
 <p>$\hat{\mathbf{f}}_A = (0,0,-1)$. $\mathbf{t}_B - \mathbf{p}_B = (-50, 0, -1490)$, length $\approx 1490.84$, so $\hat{\mathbf{f}}_B \approx (-0.0335, 0, -0.9994)$. Dot $\approx 0.9994$, so $\theta_{\text{fwd}} \approx \arccos(0.9994) \approx 1.93°$. Up angle $0°$. Total $\approx 1.93°$, well below $\theta_0 = 30°$, so $\text{blend} = 0$ → pure Early Look.</p>
 
-<p>Position at $t = 0.5$: $\operatorname{easeInOutCubic}(0.5) = 0.5$, so $\mathbf{p}(0.5) = (50, 0, 1495)$. Target at $t = 0.5$: $\tau = \min(0.5/0.7, 1) = 0.714$, $\operatorname{easeOutCubic}(0.714) = 1 - (1 - 0.714)^3 = 1 - 0.0234 = 0.977$, so $\mathbf{t}(0.5) = \operatorname{lerp}((0,0,0), (50,0,0), 0.977) = (48.84, 0, 0)$. The target is essentially already at its destination while the camera is still halfway there. That is the "early lock-on" effect.</p>
+<p>Position at $t = 0.5$: $\operatorname{easeInOutCubic}(0.5) = 0.5$, so $\mathbf{p}(0.5) = (50, 0, 1495)$. Target at $t = 0.5$: $\tau = \min(0.5/0.7, 1) \approx 0.714$, $\operatorname{easeOutCubic}(0.714) = 1 - (1 - 0.714)^3 = 1 - 0.02334 \approx 0.9767$, so $\mathbf{t}(0.5) = \operatorname{lerp}((0,0,0), (50,0,0), 0.9767) \approx (48.83, 0, 0)$. The target is essentially already at its destination while the camera is still halfway there. That is the "early lock-on" effect.</p>
 
 <h3>Example 3 — in the transition zone</h3>
 <p>Take a configuration with $\theta_{\text{fwd}} = 25°$, $\theta_{\text{up}} = 7°$. Then $\theta_{\text{total}} = 32°$. With $\theta_0 = 30°$, $\theta_1 = 35°$:</p>
