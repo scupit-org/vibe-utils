@@ -1,6 +1,6 @@
 import { parseAllZoomPlanes, parseZoomPlane } from './zoom-plane-parser';
 import type { ZoomPlaneConfig } from './types';
-import * as THREE from 'three';
+import { Vector3, Quaternion, Euler } from 'three';
 
 type Dataset = Record<string, string | undefined>;
 
@@ -28,19 +28,19 @@ function getPlane(configs: ZoomPlaneConfig[], id: string): ZoomPlaneConfig {
   return config;
 }
 
-function expectVectorClose(actual: THREE.Vector3, expected: THREE.Vector3): void {
+function expectVectorClose(actual: Vector3, expected: Vector3): void {
   expect(actual.x).toBeCloseTo(expected.x);
   expect(actual.y).toBeCloseTo(expected.y);
   expect(actual.z).toBeCloseTo(expected.z);
 }
 
-function quaternionFromConfig(config: ZoomPlaneConfig): THREE.Quaternion {
-  return new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(config.rotation[0], config.rotation[1], config.rotation[2], 'XYZ')
+function quaternionFromConfig(config: ZoomPlaneConfig): Quaternion {
+  return new Quaternion().setFromEuler(
+    new Euler(config.rotation[0], config.rotation[1], config.rotation[2], 'XYZ')
   );
 }
 
-function expectQuaternionClose(actual: THREE.Quaternion, expected: THREE.Quaternion): void {
+function expectQuaternionClose(actual: Quaternion, expected: Quaternion): void {
   expect(Math.abs(actual.dot(expected))).toBeCloseTo(1);
 }
 
@@ -48,24 +48,24 @@ function referenceLocalOffset(
   reference: ZoomPlaneConfig,
   x: number,
   y: number
-): THREE.Vector3 {
+): Vector3 {
   const quaternion = quaternionFromConfig(reference);
-  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion);
-  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion);
+  const right = new Vector3(1, 0, 0).applyQuaternion(quaternion);
+  const up = new Vector3(0, 1, 0).applyQuaternion(quaternion);
   return right.multiplyScalar(x).add(up.multiplyScalar(y));
 }
 
-function localAxis(reference: ZoomPlaneConfig, axis: 'right' | 'up'): THREE.Vector3 {
+function localAxis(reference: ZoomPlaneConfig, axis: 'right' | 'up'): Vector3 {
   const quaternion = quaternionFromConfig(reference);
-  return new THREE.Vector3(axis === 'right' ? 1 : 0, axis === 'up' ? 1 : 0, 0)
+  return new Vector3(axis === 'right' ? 1 : 0, axis === 'up' ? 1 : 0, 0)
     .applyQuaternion(quaternion)
     .normalize();
 }
 
 function expectSameProjectionOnAxis(
-  actual: THREE.Vector3,
-  expected: THREE.Vector3,
-  axis: THREE.Vector3
+  actual: Vector3,
+  expected: Vector3,
+  axis: Vector3
 ): void {
   expect(actual.dot(axis)).toBeCloseTo(expected.dot(axis));
 }
@@ -74,15 +74,15 @@ function edgeCenter(
   config: ZoomPlaneConfig,
   side: 'left' | 'right' | 'top' | 'bottom',
   scale: number
-): THREE.Vector3 {
-  const center = new THREE.Vector3(
+): Vector3 {
+  const center = new Vector3(
     config.position[0],
     config.position[1],
     config.position[2]
   );
-  const euler = new THREE.Euler(config.rotation[0], config.rotation[1], config.rotation[2]);
-  const right = new THREE.Vector3(1, 0, 0).applyEuler(euler);
-  const up = new THREE.Vector3(0, 1, 0).applyEuler(euler);
+  const euler = new Euler(config.rotation[0], config.rotation[1], config.rotation[2]);
+  const right = new Vector3(1, 0, 0).applyEuler(euler);
+  const up = new Vector3(0, 1, 0).applyEuler(euler);
 
   if (side === 'right') {
     return center.add(right.multiplyScalar(config.width * scale / 2));
@@ -531,11 +531,11 @@ describe('zoom plane parser', () => {
     const referenceConfig = getPlane(configs, 'reference');
     const tiledConfig = getPlane(configs, 'tiled');
     const referenceQuaternion = quaternionFromConfig(referenceConfig);
-    const offsetQuaternion = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(0, 2 * Math.PI / 180, -Math.PI / 180, 'XYZ')
+    const offsetQuaternion = new Quaternion().setFromEuler(
+      new Euler(0, 2 * Math.PI / 180, -Math.PI / 180, 'XYZ')
     );
-    const foldQuaternion = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(0, 1, 0),
+    const foldQuaternion = new Quaternion().setFromAxisAngle(
+      new Vector3(0, 1, 0),
       -35 * Math.PI / 180
     );
     const expectedQuaternion = referenceQuaternion.clone()

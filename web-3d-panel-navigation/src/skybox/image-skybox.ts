@@ -1,9 +1,9 @@
-import * as THREE from "three";
+import { Group, CubeTexture, Scene, CubeTextureLoader } from "three";
 import type { Skybox } from "./skybox";
 
 /**
  * Cubemap provider. `cubeUrls` order is [+X, -X, +Y, -Y, +Z, -Z] as required
- * by THREE.CubeTextureLoader. Each image should be square; all six must share
+ * by CubeTextureLoader. Each image should be square; all six must share
  * the same dimensions.
  */
 export interface ImageSkyboxOptions {
@@ -11,12 +11,12 @@ export interface ImageSkyboxOptions {
 }
 
 export function createImageSkybox(options: ImageSkyboxOptions): Skybox {
-  const root = new THREE.Group();
-  let texture: THREE.CubeTexture | null = null;
-  let attachedScene: THREE.Scene | null = null;
+  const root = new Group();
+  let texture: CubeTexture | null = null;
+  let attachedScene: Scene | null = null;
   let disposed = false;
 
-  const loader = new THREE.CubeTextureLoader();
+  const loader = new CubeTextureLoader();
   const ready = loader.loadAsync(options.cubeUrls).then((loaded) => {
     if (disposed) {
       loaded.dispose();

@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import { Vector3, BufferGeometry, BufferAttribute, Color, ShaderMaterial, AdditiveBlending, Points, Group } from "three";
 import type { Skybox } from "./skybox";
 import { createGradientMesh, type GradientMeshOptions } from "./gradient-mesh";
 import { readCssColor } from "./css-color";
@@ -62,7 +62,7 @@ export const STARFIELD_FRAGMENT_SHADER = /* glsl */ `
   }
 `;
 
-function samplePointOnUnitSphere(out: THREE.Vector3): void {
+function samplePointOnUnitSphere(out: Vector3): void {
   const u = Math.random();
   const v = Math.random();
   const z = 2 * u - 1;
@@ -71,12 +71,12 @@ function samplePointOnUnitSphere(out: THREE.Vector3): void {
   out.set(r * Math.cos(phi), r * Math.sin(phi), z);
 }
 
-function buildStarGeometry(count: number): THREE.BufferGeometry {
+function buildStarGeometry(count: number): BufferGeometry {
   const positions = new Float32Array(count * 3);
   const phases = new Float32Array(count);
   const brightnesses = new Float32Array(count);
   const tints = new Float32Array(count);
-  const scratch = new THREE.Vector3();
+  const scratch = new Vector3();
 
   for (let i = 0; i < count; i++) {
     samplePointOnUnitSphere(scratch);
@@ -90,11 +90,11 @@ function buildStarGeometry(count: number): THREE.BufferGeometry {
     tints[i] = Math.pow(Math.random(), 1.8);
   }
 
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
-  geometry.setAttribute("aBrightness", new THREE.BufferAttribute(brightnesses, 1));
-  geometry.setAttribute("aTint", new THREE.BufferAttribute(tints, 1));
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new BufferAttribute(positions, 3));
+  geometry.setAttribute("aPhase", new BufferAttribute(phases, 1));
+  geometry.setAttribute("aBrightness", new BufferAttribute(brightnesses, 1));
+  geometry.setAttribute("aTint", new BufferAttribute(tints, 1));
   return geometry;
 }
 
@@ -106,24 +106,24 @@ export function createStarfieldSkybox(options: StarfieldSkyboxOptions = {}): Sky
 
   const gradient = createGradientMesh(options.gradient);
 
-  const resolveWarm = (): THREE.Color =>
+  const resolveWarm = (): Color =>
     options.color
-      ? new THREE.Color(options.color)
+      ? new Color(options.color)
       : readCssColor(STAR_WARM_VAR, STAR_WARM_FALLBACK);
 
-  const resolveCool = (): THREE.Color =>
+  const resolveCool = (): Color =>
     options.colorCool
-      ? new THREE.Color(options.colorCool)
+      ? new Color(options.colorCool)
       : readCssColor(STAR_COOL_VAR, STAR_COOL_FALLBACK);
 
   const starGeometry = buildStarGeometry(starCount);
-  const starMaterial = new THREE.ShaderMaterial({
+  const starMaterial = new ShaderMaterial({
     vertexShader: STARFIELD_VERTEX_SHADER,
     fragmentShader: STARFIELD_FRAGMENT_SHADER,
     transparent: true,
     depthWrite: false,
     depthTest: false,
-    blending: THREE.AdditiveBlending,
+    blending: AdditiveBlending,
     uniforms: {
       uColorWarm: { value: resolveWarm() },
       uColorCool: { value: resolveCool() },
@@ -134,11 +134,11 @@ export function createStarfieldSkybox(options: StarfieldSkyboxOptions = {}): Sky
     },
   });
 
-  const starPoints = new THREE.Points(starGeometry, starMaterial);
+  const starPoints = new Points(starGeometry, starMaterial);
   starPoints.renderOrder = 0;
   starPoints.frustumCulled = false;
 
-  const group = new THREE.Group();
+  const group = new Group();
   group.add(gradient.mesh);
   group.add(starPoints);
 
@@ -156,8 +156,8 @@ export function createStarfieldSkybox(options: StarfieldSkyboxOptions = {}): Sky
     },
     refresh() {
       gradient.refresh();
-      (starMaterial.uniforms.uColorWarm.value as THREE.Color).copy(resolveWarm());
-      (starMaterial.uniforms.uColorCool.value as THREE.Color).copy(resolveCool());
+      (starMaterial.uniforms.uColorWarm.value as Color).copy(resolveWarm());
+      (starMaterial.uniforms.uColorCool.value as Color).copy(resolveCool());
     },
     dispose() {
       gradient.dispose();

@@ -1,11 +1,11 @@
-import type * as THREE from "three";
+import type { Object3D, Scene, PerspectiveCamera } from "three";
 
 export interface Skybox {
-  root: THREE.Object3D;
+  root: Object3D;
   ready?: Promise<void>;
-  attach?(scene: THREE.Scene): void;
-  detach?(scene: THREE.Scene): void;
-  update?(dt: number, camera: THREE.PerspectiveCamera): void;
+  attach?(scene: Scene): void;
+  detach?(scene: Scene): void;
+  update?(dt: number, camera: PerspectiveCamera): void;
   setPixelRatio?(pixelRatio: number): void;
   refresh?(): void;
   dispose(): void;

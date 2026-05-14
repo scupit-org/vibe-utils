@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import { Mesh, Color, BoxGeometry, ShaderMaterial, BackSide, Vector3 } from "three";
 import { readCssColor } from "./css-color";
 
 export interface GradientMeshOptions {
@@ -9,7 +9,7 @@ export interface GradientMeshOptions {
 }
 
 export interface GradientMesh {
-  mesh: THREE.Mesh;
+  mesh: Mesh;
   refresh(): void;
   dispose(): void;
 }
@@ -52,12 +52,12 @@ export function createGradientMesh(options: GradientMeshOptions = {}): GradientM
   const fallbacks = options.fallbackColors ?? DEFAULT_FALLBACK_COLORS;
   const direction = options.direction ?? DEFAULT_DIRECTION;
 
-  const resolveColors = (): [THREE.Color, THREE.Color, THREE.Color] => {
+  const resolveColors = (): [Color, Color, Color] => {
     if (options.colors) {
       return [
-        new THREE.Color(options.colors[0]),
-        new THREE.Color(options.colors[1]),
-        new THREE.Color(options.colors[2]),
+        new Color(options.colors[0]),
+        new Color(options.colors[1]),
+        new Color(options.colors[2]),
       ];
     }
     return [
@@ -69,22 +69,22 @@ export function createGradientMesh(options: GradientMeshOptions = {}): GradientM
 
   const [initA, initB, initC] = resolveColors();
 
-  const geometry = new THREE.BoxGeometry(2, 2, 2);
-  const material = new THREE.ShaderMaterial({
+  const geometry = new BoxGeometry(2, 2, 2);
+  const material = new ShaderMaterial({
     vertexShader: GRADIENT_VERTEX_SHADER,
     fragmentShader: GRADIENT_FRAGMENT_SHADER,
-    side: THREE.BackSide,
+    side: BackSide,
     depthWrite: false,
     depthTest: false,
     uniforms: {
       uColorA: { value: initA },
       uColorB: { value: initB },
       uColorC: { value: initC },
-      uDirection: { value: new THREE.Vector3(direction[0], direction[1], direction[2]) },
+      uDirection: { value: new Vector3(direction[0], direction[1], direction[2]) },
     },
   });
 
-  const mesh = new THREE.Mesh(geometry, material);
+  const mesh = new Mesh(geometry, material);
   mesh.renderOrder = -1;
   mesh.frustumCulled = false;
 
@@ -92,9 +92,9 @@ export function createGradientMesh(options: GradientMeshOptions = {}): GradientM
     mesh,
     refresh(): void {
       const [a, b, c] = resolveColors();
-      (material.uniforms.uColorA.value as THREE.Color).copy(a);
-      (material.uniforms.uColorB.value as THREE.Color).copy(b);
-      (material.uniforms.uColorC.value as THREE.Color).copy(c);
+      (material.uniforms.uColorA.value as Color).copy(a);
+      (material.uniforms.uColorB.value as Color).copy(b);
+      (material.uniforms.uColorC.value as Color).copy(c);
     },
     dispose(): void {
       geometry.dispose();

@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { PerspectiveCamera, Vector3, Euler } from 'three';
 import type { ZoomPlaneConfig, CameraState, NavigationConfig } from './types';
 
 /**
@@ -12,15 +12,15 @@ import type { ZoomPlaneConfig, CameraState, NavigationConfig } from './types';
  * Does NOT own: animation loops (the timeline drives interpolation externally)
  */
 export class CameraController {
-  private camera: THREE.PerspectiveCamera;
+  private camera: PerspectiveCamera;
   private overviewState: CameraState;
   private config: NavigationConfig;
 
   /** Explicitly stored target — avoids the getWorldDirection * 100 hack */
-  private currentTarget: THREE.Vector3;
+  private currentTarget: Vector3;
 
   constructor(
-    camera: THREE.PerspectiveCamera,
+    camera: PerspectiveCamera,
     overviewState: CameraState,
     config: NavigationConfig
   ) {
@@ -56,19 +56,19 @@ export class CameraController {
     const distanceForWidth = (actualWidth / 2) / (halfFovTan * fill * viewportAspect);
     const distance = Math.max(distanceForHeight, distanceForWidth);
 
-    const euler = new THREE.Euler(plane.rotation[0], plane.rotation[1], plane.rotation[2]);
+    const euler = new Euler(plane.rotation[0], plane.rotation[1], plane.rotation[2]);
 
     // Plane's normal vector (perpendicular, pointing toward viewer)
-    const normal = new THREE.Vector3(0, 0, 1);
+    const normal = new Vector3(0, 0, 1);
     normal.applyEuler(euler);
     normal.normalize();
 
     // Plane's local "up" vector — aligns with screen vertical when viewing head-on
-    const planeUp = new THREE.Vector3(0, 1, 0);
+    const planeUp = new Vector3(0, 1, 0);
     planeUp.applyEuler(euler);
     planeUp.normalize();
 
-    const planeCenter = new THREE.Vector3(
+    const planeCenter = new Vector3(
       plane.position[0],
       plane.position[1],
       plane.position[2]

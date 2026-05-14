@@ -1,6 +1,6 @@
-import * as THREE from "three";
+import { Color } from "three";
 
-export function readCssColor(name: string, fallback: string): THREE.Color {
+export function readCssColor(name: string, fallback: string): Color {
   const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return new THREE.Color(raw || fallback);
+  return new Color(raw || fallback);
 }

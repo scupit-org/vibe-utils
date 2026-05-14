@@ -1,10 +1,10 @@
-import * as THREE from 'three';
+import { Object3D, Scene, PerspectiveCamera, Matrix4 } from 'three';
 
 /**
  * CSS3DObject - Wraps a DOM element to be positioned in 3D space
  * The element will have CSS transforms applied by CSS3DRenderer
  */
-export class CSS3DObject extends THREE.Object3D {
+export class CSS3DObject extends Object3D {
   element: HTMLElement;
 
   constructor(element?: HTMLElement) {
@@ -85,7 +85,7 @@ export class CSS3DRenderer {
     this.cameraElement.style.height = `${height}px`;
   }
 
-  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera): void {
+  render(scene: Scene, camera: PerspectiveCamera): void {
     const fov = camera.projectionMatrix.elements[5] * this.heightHalf;
 
     // Update perspective on domElement
@@ -119,8 +119,8 @@ export class CSS3DRenderer {
   }
 
   private renderObject(
-    object: THREE.Object3D,
-    camera: THREE.PerspectiveCamera,
+    object: Object3D,
+    camera: PerspectiveCamera,
     cameraCSSMatrix: string
   ): void {
     if (object instanceof CSS3DObject) {
@@ -155,7 +155,7 @@ export class CSS3DRenderer {
   /**
    * Convert camera's inverse world matrix to CSS matrix3d
    */
-  private getCameraCSSMatrix(matrix: THREE.Matrix4): string {
+  private getCameraCSSMatrix(matrix: Matrix4): string {
     const elements = matrix.elements;
 
     return 'matrix3d(' +
@@ -182,7 +182,7 @@ export class CSS3DRenderer {
    * Convert object's world matrix to CSS matrix3d
    * The translate(-50%, -50%) centers the object on its position
    */
-  private getObjectCSSMatrix(matrix: THREE.Matrix4): string {
+  private getObjectCSSMatrix(matrix: Matrix4): string {
     const elements = matrix.elements;
 
     const matrix3d = 'matrix3d(' +

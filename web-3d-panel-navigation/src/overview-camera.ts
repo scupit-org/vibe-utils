@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { Vector3, Euler } from 'three';
 import type { ZoomPlaneConfig, CameraState } from './types';
 import { calculateAllPlanesBoundingBox, type BoundingBox } from './projection';
 import { findCenterZoomPlane } from './zoom-plane-parser';
@@ -27,9 +27,9 @@ export function calculateOverviewState(
 ): CameraState {
   if (configs.length === 0) {
     return {
-      position: new THREE.Vector3(0, 0, 1200),
-      target: new THREE.Vector3(0, 0, 0),
-      up: new THREE.Vector3(0, 1, 0),
+      position: new Vector3(0, 0, 1200),
+      target: new Vector3(0, 0, 0),
+      up: new Vector3(0, 1, 0),
       fov,
     };
   }
@@ -55,15 +55,15 @@ function calculateFocalElementMode(
   aspectRatio: number,
   padding: number
 ): CameraState {
-  const centerPosition = new THREE.Vector3(
+  const centerPosition = new Vector3(
     centerPlane.position[0],
     centerPlane.position[1],
     centerPlane.position[2]
   );
 
   // Calculate the center plane's normal vector (perpendicular to surface)
-  const normal = new THREE.Vector3(0, 0, 1);
-  const euler = new THREE.Euler(
+  const normal = new Vector3(0, 0, 1);
+  const euler = new Euler(
     centerPlane.rotation[0],
     centerPlane.rotation[1],
     centerPlane.rotation[2]
@@ -101,7 +101,7 @@ function calculateFocalElementMode(
   return {
     position: cameraPosition,
     target: centerPosition,
-    up: new THREE.Vector3(0, 1, 0),
+    up: new Vector3(0, 1, 0),
     fov,
   };
 }
@@ -122,9 +122,9 @@ function calculateBalancedSceneMode(
   const centerZ = (boundingBox.minZ + boundingBox.maxZ) / 2;
 
   return {
-    position: new THREE.Vector3(centerX, centerY, cameraZ),
-    target: new THREE.Vector3(centerX, centerY, centerZ),
-    up: new THREE.Vector3(0, 1, 0),
+    position: new Vector3(centerX, centerY, cameraZ),
+    target: new Vector3(centerX, centerY, centerZ),
+    up: new Vector3(0, 1, 0),
     fov,
   };
 }

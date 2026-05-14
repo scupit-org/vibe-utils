@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import type { Vector3, Object3D } from 'three';
 
 /**
  * Configuration for a zoom plane in the 3D scene.
@@ -46,17 +46,17 @@ export interface ZoomPlaneConfig {
  */
 export interface CameraState {
   /** Camera position in 3D space */
-  position: THREE.Vector3;
+  position: Vector3;
 
   /** Point the camera is looking at */
-  target: THREE.Vector3;
+  target: Vector3;
 
   /**
    * Camera's "up" direction. Controls the roll rotation.
    * When looking at a tilted plane, this should match the plane's local up
    * so that the plane appears axis-aligned on screen.
    */
-  up: THREE.Vector3;
+  up: Vector3;
 
   /** Field of view in degrees */
   fov: number;
@@ -113,7 +113,7 @@ export interface ScreenRect {
  */
 export interface CSS3DObjectRef {
   /** The CSS3DObject in the Three.js scene */
-  object: THREE.Object3D;
+  object: Object3D;
   /** The DOM element being rendered */
   element: HTMLElement;
 }

@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { Vector3, MathUtils, PerspectiveCamera } from 'three';
 import type { CameraState } from './types';
 import { easeInOutCubic, easeOutCubic } from './easing';
 
@@ -11,15 +11,15 @@ function lerpUpAndFov(
   from: CameraState,
   to: CameraState,
   t: number
-): { up: THREE.Vector3; fov: number } {
-  const up = new THREE.Vector3().lerpVectors(from.up, to.up, t).normalize();
+): { up: Vector3; fov: number } {
+  const up = new Vector3().lerpVectors(from.up, to.up, t).normalize();
   const fov = from.fov + (to.fov - from.fov) * t;
   return { up, fov };
 }
 
 /** Standard smoothstep (Hermite interpolation) between two edges */
 function smoothstep(edge0: number, edge1: number, x: number): number {
-  const t = THREE.MathUtils.clamp((x - edge0) / (edge1 - edge0), 0, 1);
+  const t = MathUtils.clamp((x - edge0) / (edge1 - edge0), 0, 1);
   return t * t * (3 - 2 * t);
 }
 
@@ -40,7 +40,7 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
  */
 export function applyTransition(
   from: CameraState, to: CameraState,
-  rawT: number, camera: THREE.PerspectiveCamera
+  rawT: number, camera: PerspectiveCamera
 ): void {
   const state = calculateTransitionState(from, to, rawT);
   camera.position.copy(state.position);
@@ -61,21 +61,21 @@ export function calculateTransitionState(
   rawT: number
 ): CameraState {
   // Forward angle
-  const fromFwd = new THREE.Vector3().subVectors(from.target, from.position).normalize();
-  const toFwd = new THREE.Vector3().subVectors(to.target, to.position).normalize();
-  const fwdDot = THREE.MathUtils.clamp(fromFwd.dot(toFwd), -1, 1);
+  const fromFwd = new Vector3().subVectors(from.target, from.position).normalize();
+  const toFwd = new Vector3().subVectors(to.target, to.position).normalize();
+  const fwdDot = MathUtils.clamp(fromFwd.dot(toFwd), -1, 1);
   const fwdAngle = Math.acos(fwdDot);
 
   // Up angle (captures roll/tilt that forward angle misses)
-  const upDot = THREE.MathUtils.clamp(from.up.dot(to.up), -1, 1);
+  const upDot = MathUtils.clamp(from.up.dot(to.up), -1, 1);
   const upAngle = Math.acos(upDot);
 
   // Total reorientation
   const totalAngle = fwdAngle + upAngle;
 
   // Blend: 0 (Early Look) at ≤30°, 1 (Orbit) at ≥35°
-  const lowerAngle = 30 * THREE.MathUtils.DEG2RAD;
-  const upperAngle = 35 * THREE.MathUtils.DEG2RAD;
+  const lowerAngle = 30 * MathUtils.DEG2RAD;
+  const upperAngle = 35 * MathUtils.DEG2RAD;
   const blend = smoothstep(lowerAngle, upperAngle, totalAngle);
 
   if (blend < 0.5) {
@@ -104,8 +104,8 @@ function calculateEarlyLookState(
   const targetRaw = Math.min(rawT / 0.7, 1.0);
   const targetT = easeOutCubic(targetRaw);
 
-  const position = new THREE.Vector3().lerpVectors(from.position, to.position, posT);
-  const target = new THREE.Vector3().lerpVectors(from.target, to.target, targetT);
+  const position = new Vector3().lerpVectors(from.position, to.position, posT);
+  const target = new Vector3().lerpVectors(from.target, to.target, targetT);
   const { up, fov } = lerpUpAndFov(from, to, posT);
 
   return { position, target, up, fov };
@@ -124,12 +124,12 @@ function calculateOrbitState(
   const t = easeInOutCubic(rawT);
 
   // Linearly interpolate the look-at target
-  const target = new THREE.Vector3().lerpVectors(from.target, to.target, t);
+  const target = new Vector3().lerpVectors(from.target, to.target, t);
 
   // For position: slerp around the midpoint of the two targets
-  const midTarget = new THREE.Vector3().lerpVectors(from.target, to.target, 0.5);
-  const fromOffset = new THREE.Vector3().subVectors(from.position, midTarget);
-  const toOffset = new THREE.Vector3().subVectors(to.position, midTarget);
+  const midTarget = new Vector3().lerpVectors(from.target, to.target, 0.5);
+  const fromOffset = new Vector3().subVectors(from.position, midTarget);
+  const toOffset = new Vector3().subVectors(to.position, midTarget);
 
   // Interpolate radius
   const fromLen = fromOffset.length();
@@ -139,18 +139,18 @@ function calculateOrbitState(
   // Slerp direction
   const fromDir = fromOffset.clone().normalize();
   const toDir = toOffset.clone().normalize();
-  const dot = THREE.MathUtils.clamp(fromDir.dot(toDir), -1, 1);
+  const dot = MathUtils.clamp(fromDir.dot(toDir), -1, 1);
   const theta = Math.acos(dot);
 
-  let position: THREE.Vector3;
+  let position: Vector3;
   if (theta < 0.001) {
     // Nearly parallel — fall back to lerp
-    position = new THREE.Vector3().lerpVectors(from.position, to.position, t);
+    position = new Vector3().lerpVectors(from.position, to.position, t);
   } else {
     const sinTheta = Math.sin(theta);
     const a = Math.sin((1 - t) * theta) / sinTheta;
     const b = Math.sin(t * theta) / sinTheta;
-    const slerpedDir = new THREE.Vector3()
+    const slerpedDir = new Vector3()
       .addScaledVector(fromDir, a)
       .addScaledVector(toDir, b)
       .normalize();

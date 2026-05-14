@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { Vector3, Quaternion, Euler } from 'three';
 import type { ZoomPlaneConfig } from './types';
 
 type TileSide = 'right' | 'left' | 'top' | 'bottom';
@@ -413,57 +413,57 @@ function resolveTiledPlane(
     throw new Error(`Zoom plane "${definition.id}": expected tiled layout`);
   }
 
-  const referenceCenter = new THREE.Vector3(
+  const referenceCenter = new Vector3(
     reference.position[0],
     reference.position[1],
     reference.position[2]
   );
-  const referenceQuaternion = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(reference.rotation[0], reference.rotation[1], reference.rotation[2], 'XYZ')
+  const referenceQuaternion = new Quaternion().setFromEuler(
+    new Euler(reference.rotation[0], reference.rotation[1], reference.rotation[2], 'XYZ')
   );
-  const referenceRight = new THREE.Vector3(1, 0, 0).applyQuaternion(referenceQuaternion);
-  const referenceUp = new THREE.Vector3(0, 1, 0).applyQuaternion(referenceQuaternion);
+  const referenceRight = new Vector3(1, 0, 0).applyQuaternion(referenceQuaternion);
+  const referenceUp = new Vector3(0, 1, 0).applyQuaternion(referenceQuaternion);
   const finalOffset = calculateErgonomicTileOffset(layout, definition, reference, scale);
   const hingeOffset = referenceRight.clone()
     .multiplyScalar(finalOffset[0])
     .add(referenceUp.clone().multiplyScalar(finalOffset[1]));
 
-  let relativeQuaternion: THREE.Quaternion;
-  let hinge: THREE.Vector3;
-  let center: THREE.Vector3;
+  let relativeQuaternion: Quaternion;
+  let hinge: Vector3;
+  let center: Vector3;
 
   // The hinge is the shared edge center. The final center is offset from that
   // hinge by half of the tiled plane's scaled size along its own rotated axis.
   if (layout.side === 'right') {
     hinge = referenceCenter.clone().add(referenceRight.clone().multiplyScalar(reference.width * scale / 2));
-    relativeQuaternion = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(0, 1, 0),
+    relativeQuaternion = new Quaternion().setFromAxisAngle(
+      new Vector3(0, 1, 0),
       -layout.angle
     );
   } else if (layout.side === 'left') {
     hinge = referenceCenter.clone().add(referenceRight.clone().multiplyScalar(-reference.width * scale / 2));
-    relativeQuaternion = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(0, 1, 0),
+    relativeQuaternion = new Quaternion().setFromAxisAngle(
+      new Vector3(0, 1, 0),
       layout.angle
     );
   } else if (layout.side === 'top') {
     hinge = referenceCenter.clone().add(referenceUp.clone().multiplyScalar(reference.height * scale / 2));
-    relativeQuaternion = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(1, 0, 0),
+    relativeQuaternion = new Quaternion().setFromAxisAngle(
+      new Vector3(1, 0, 0),
       layout.angle
     );
   } else {
     hinge = referenceCenter.clone().add(referenceUp.clone().multiplyScalar(-reference.height * scale / 2));
-    relativeQuaternion = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(1, 0, 0),
+    relativeQuaternion = new Quaternion().setFromAxisAngle(
+      new Vector3(1, 0, 0),
       -layout.angle
     );
   }
 
   hinge.add(hingeOffset);
 
-  const offsetQuaternion = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(
+  const offsetQuaternion = new Quaternion().setFromEuler(
+    new Euler(
       layout.rotationOffset[0],
       layout.rotationOffset[1],
       layout.rotationOffset[2],
@@ -473,8 +473,8 @@ function resolveTiledPlane(
   const quaternion = referenceQuaternion.clone()
     .multiply(offsetQuaternion)
     .multiply(relativeQuaternion);
-  const newRight = new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion);
-  const newUp = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion);
+  const newRight = new Vector3(1, 0, 0).applyQuaternion(quaternion);
+  const newUp = new Vector3(0, 1, 0).applyQuaternion(quaternion);
 
   if (layout.side === 'right') {
     center = hinge.add(newRight.multiplyScalar(definition.width * scale / 2));
@@ -486,7 +486,7 @@ function resolveTiledPlane(
     center = hinge.add(newUp.multiplyScalar(-definition.height * scale / 2));
   }
 
-  const euler = new THREE.Euler().setFromQuaternion(quaternion, 'XYZ');
+  const euler = new Euler().setFromQuaternion(quaternion, 'XYZ');
 
   return definitionToConfig(
     definition,

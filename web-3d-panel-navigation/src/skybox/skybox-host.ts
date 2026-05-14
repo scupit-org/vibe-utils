@@ -1,12 +1,12 @@
-import * as THREE from "three";
+import { PerspectiveCamera, WebGLRenderer, Scene, type ColorRepresentation } from "three";
 import type { Skybox } from "./skybox";
 
 export interface SkyboxHostOptions {
-  camera: THREE.PerspectiveCamera;
+  camera: PerspectiveCamera;
   mount: HTMLElement;
   skybox: Skybox;
   canvasId?: string;
-  clearColor?: THREE.ColorRepresentation;
+  clearColor?: ColorRepresentation;
   canvasStyle?: Partial<CSSStyleDeclaration>;
   antialias?: boolean;
   powerPreference?: WebGLPowerPreference;
@@ -15,7 +15,7 @@ export interface SkyboxHostOptions {
   externalFrameLoop?: boolean;
 }
 
-const DEFAULT_CLEAR_COLOR: THREE.ColorRepresentation = 0x000000;
+const DEFAULT_CLEAR_COLOR: ColorRepresentation = 0x000000;
 
 const DEFAULT_CANVAS_STYLE: Partial<CSSStyleDeclaration> = {
   position: "fixed",
@@ -29,10 +29,10 @@ const DEFAULT_CANVAS_STYLE: Partial<CSSStyleDeclaration> = {
 };
 
 export class SkyboxHost {
-  private readonly camera: THREE.PerspectiveCamera;
+  private readonly camera: PerspectiveCamera;
   private readonly mount: HTMLElement;
-  private readonly renderer: THREE.WebGLRenderer;
-  private readonly scene: THREE.Scene;
+  private readonly renderer: WebGLRenderer;
+  private readonly scene: Scene;
   private skybox: Skybox;
   private pixelRatio: number;
   private readonly pixelRatioOption: SkyboxHostOptions["pixelRatio"];
@@ -53,7 +53,7 @@ export class SkyboxHost {
     this.pixelRatioOption = options.pixelRatio;
     this.externalFrameLoop = options.externalFrameLoop ?? false;
 
-    this.renderer = new THREE.WebGLRenderer({
+    this.renderer = new WebGLRenderer({
       antialias: options.antialias ?? false,
       alpha: false,
       powerPreference: options.powerPreference ?? "default",
@@ -68,7 +68,7 @@ export class SkyboxHost {
     Object.assign(canvas.style, DEFAULT_CANVAS_STYLE, options.canvasStyle ?? {});
     this.mount.appendChild(canvas);
 
-    this.scene = new THREE.Scene();
+    this.scene = new Scene();
     this.scene.add(this.skybox.root);
     this.skybox.attach?.(this.scene);
     this.skybox.setPixelRatio?.(this.pixelRatio);

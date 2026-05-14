@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { Vector3, Camera, Euler, PerspectiveCamera } from 'three';
 import type { ScreenRect, ZoomPlaneConfig } from './types';
 
 /**
@@ -57,8 +57,8 @@ export function calculateAllPlanesBoundingBox(
  * @returns Screen coordinates {x, y} in pixels from top-left
  */
 export function projectToScreen(
-  point: THREE.Vector3,
-  camera: THREE.Camera,
+  point: Vector3,
+  camera: Camera,
   viewportWidth: number,
   viewportHeight: number
 ): { x: number; y: number } {
@@ -84,7 +84,7 @@ export function projectToScreen(
 export function getPlaneWorldCorners(
   config: ZoomPlaneConfig,
   scale: number
-): THREE.Vector3[] {
+): Vector3[] {
   const width = config.width * scale;
   const height = config.height * scale;
   const halfWidth = width / 2;
@@ -93,19 +93,19 @@ export function getPlaneWorldCorners(
   // Local space corners (before rotation)
   // Plane is assumed to be in XY plane, facing +Z
   const localCorners = [
-    new THREE.Vector3(-halfWidth, halfHeight, 0),   // top-left
-    new THREE.Vector3(halfWidth, halfHeight, 0),    // top-right
-    new THREE.Vector3(halfWidth, -halfHeight, 0),   // bottom-right
-    new THREE.Vector3(-halfWidth, -halfHeight, 0),  // bottom-left
+    new Vector3(-halfWidth, halfHeight, 0),   // top-left
+    new Vector3(halfWidth, halfHeight, 0),    // top-right
+    new Vector3(halfWidth, -halfHeight, 0),   // bottom-right
+    new Vector3(-halfWidth, -halfHeight, 0),  // bottom-left
   ];
 
-  const euler = new THREE.Euler(
+  const euler = new Euler(
     config.rotation[0],
     config.rotation[1],
     config.rotation[2]
   );
 
-  const position = new THREE.Vector3(
+  const position = new Vector3(
     config.position[0],
     config.position[1],
     config.position[2]
@@ -126,7 +126,7 @@ export function getPlaneWorldCorners(
 export function getPlaneScreenRect(
   config: ZoomPlaneConfig,
   scale: number,
-  camera: THREE.Camera,
+  camera: Camera,
   viewportWidth: number,
   viewportHeight: number
 ): ScreenRect {
@@ -158,14 +158,14 @@ export function getPlaneScreenRect(
 export function getCenteredPlaneRect(
   config: ZoomPlaneConfig,
   scale: number,
-  camera: THREE.PerspectiveCamera,
+  camera: PerspectiveCamera,
   viewportWidth: number,
   viewportHeight: number
 ): ScreenRect {
   const actualWidth = config.width * scale;
   const actualHeight = config.height * scale;
 
-  const planeCenter = new THREE.Vector3(
+  const planeCenter = new Vector3(
     config.position[0],
     config.position[1],
     config.position[2]

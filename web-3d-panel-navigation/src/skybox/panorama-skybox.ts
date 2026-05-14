@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import { Group, Texture, Scene, TextureLoader, EquirectangularReflectionMapping, SRGBColorSpace } from "three";
 import type { Skybox } from "./skybox";
 
 /**
@@ -11,19 +11,19 @@ export interface PanoramaSkyboxOptions {
 }
 
 export function createPanoramaSkybox(options: PanoramaSkyboxOptions): Skybox {
-  const root = new THREE.Group();
-  let texture: THREE.Texture | null = null;
-  let attachedScene: THREE.Scene | null = null;
+  const root = new Group();
+  let texture: Texture | null = null;
+  let attachedScene: Scene | null = null;
   let disposed = false;
 
-  const loader = new THREE.TextureLoader();
+  const loader = new TextureLoader();
   const ready = loader.loadAsync(options.url).then((loaded) => {
     if (disposed) {
       loaded.dispose();
       return;
     }
-    loaded.mapping = THREE.EquirectangularReflectionMapping;
-    loaded.colorSpace = THREE.SRGBColorSpace;
+    loaded.mapping = EquirectangularReflectionMapping;
+    loaded.colorSpace = SRGBColorSpace;
     texture = loaded;
     if (attachedScene) {
       attachedScene.background = texture;

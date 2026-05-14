@@ -23,6 +23,7 @@ await esbuild.build({
   platform: 'browser',
   target: 'es2022',
   sourcemap: true,
+  minify: true,
 });
 
 // Copy example/index.html into dist/ with asset paths rewritten so the

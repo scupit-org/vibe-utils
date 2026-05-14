@@ -19,7 +19,7 @@ await esbuild.build({
   platform: 'browser',
   target: 'es2022',
   sourcemap: true,
-  external: ['three'],
+  external: ['three']
 });
 
 const css = sass.compile(path.join(rootDir, 'src', 'styles.scss'));

@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { Scene, PerspectiveCamera } from 'three';
 import { CSS3DRenderer, CSS3DObject } from './css3d-renderer';
 import type { ZoomPlaneConfig, CSS3DObjectRef, NavigationConfig } from './types';
 import { findZoomPlane } from './zoom-plane-parser';
@@ -16,8 +16,8 @@ import { findZoomPlane } from './zoom-plane-parser';
  * Does NOT own: rAF loop, overview camera calculation, visibility toggling, event handling
  */
 export class SceneGraph {
-  public scene: THREE.Scene;
-  public camera: THREE.PerspectiveCamera;
+  public scene: Scene;
+  public camera: PerspectiveCamera;
   public renderer: CSS3DRenderer;
 
   private zoomPlanes = new Map<string, CSS3DObjectRef>();
@@ -36,8 +36,8 @@ export class SceneGraph {
     this.planeConfigs = planeConfigs;
 
     // Initialize Three.js scene
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(
+    this.scene = new Scene();
+    this.camera = new PerspectiveCamera(
       config.overviewFov,
       window.innerWidth / window.innerHeight,
       0.1,
