@@ -1,6 +1,7 @@
 export { ZoomPlaneNavigator } from './zoom-navigation';
 export { SceneGraph } from './scene-graph';
 export { DEFAULT_CONFIG } from './types';
+export { resolveContainerRefs, REQUIRED_CONTAINER_IDS } from './container-refs';
 
 export type {
   CameraState,

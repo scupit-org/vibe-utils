@@ -173,8 +173,7 @@ that don't exist.
 
 ## 4. Required HTML Structure and Selectors
 
-The shipped stylesheet targets these IDs and classes. Keep them unless you are
-replacing the stylesheet entirely.
+These IDs and classes are **required by the package** — both `resolveContainerRefs()` and the bundled stylesheet rely on them, so they are part of the contract and are not configurable.
 
 ### Global Document Rules (Applied Automatically)
 
@@ -404,15 +403,10 @@ const nav = new ZoomPlaneNavigator(refs, {
 ```
 
 ```ts
-import { ZoomPlaneNavigator } from '@scupit/web-3d-panel-navigation';
+import { ZoomPlaneNavigator, resolveContainerRefs } from '@scupit/web-3d-panel-navigation';
 import '@scupit/web-3d-panel-navigation/styles.css';
 
-const nav = new ZoomPlaneNavigator({
-  sceneContainer:   document.getElementById('scene-container')!,
-  contentContainer: document.getElementById('page-content-container')!,
-  planesSource:     document.getElementById('zoom-planes-source')!,
-  backButton:       document.getElementById('back-button'),
-});
+const nav = new ZoomPlaneNavigator(resolveContainerRefs());
 ```
 
 ---

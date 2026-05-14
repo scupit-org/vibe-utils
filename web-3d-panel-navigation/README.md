@@ -23,16 +23,13 @@ npm install @scupit/web-3d-panel-navigation three
 ## Usage
 
 ```ts
-import { ZoomPlaneNavigator } from '@scupit/web-3d-panel-navigation';
+import { ZoomPlaneNavigator, resolveContainerRefs } from '@scupit/web-3d-panel-navigation';
 import '@scupit/web-3d-panel-navigation/styles.css';
 
-const navigation = new ZoomPlaneNavigator({
-  sceneContainer: document.getElementById('scene-container')!,
-  contentContainer: document.getElementById('page-content-container')!,
-  planesSource: document.getElementById('zoom-planes-source')!,
-  backButton: document.getElementById('back-button'),
-});
+const navigation = new ZoomPlaneNavigator(resolveContainerRefs());
 ```
+
+The host page **must** include elements with the IDs `scene-container`, `page-content-container`, `zoom-planes-source`, and (optional) `back-button`. Both `resolveContainerRefs()` and the bundled stylesheet rely on these names — they are part of the package contract, not configurable. Advanced consumers that need to construct a `ContainerRefs` manually (e.g. for testing) can still pass one directly to `ZoomPlaneNavigator`.
 
 Plane elements must live inside `#zoom-planes-source` and use `data-zoom-plane`, `data-section`, `data-width`, and `data-height`. Positioning can be explicit with `data-position` and `data-rotation`, or tiled from another plane with one `data-tile-from-*` attribute plus `data-tile-angle`. Content sections must be `.page-section` elements with IDs matching `data-section`.
 
@@ -71,6 +68,8 @@ Tiled defaults are `data-tile-gap="0"`, `data-tile-align="center"`, `data-tile-a
 - `ZoomPlaneNavigator`
 - `SceneGraph`
 - `DEFAULT_CONFIG`
+- `resolveContainerRefs()`
+- `REQUIRED_CONTAINER_IDS`
 - `ContainerRefs`
 - `NavigationConfig`
 - `NavigationState`

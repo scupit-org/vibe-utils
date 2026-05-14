@@ -19,7 +19,7 @@ Version 1 intentionally preserves the current system shape:
 
 ### Key Features
 
-- Reusable library with injected DOM references via `ContainerRefs`
+- Reusable library with injected DOM references via `ContainerRefs` (resolved by `resolveContainerRefs()` against required convention IDs)
 - Declarative plane configuration via HTML data attributes
 - Arbitrary 3D rotation on all Euler axes
 - Unified animation timeline to avoid dead frames between camera and content phases
@@ -69,7 +69,7 @@ import '@scupit/web-3d-panel-navigation/styles.css';
 
 ### Minimal Setup
 
-The runtime itself is library-first: you pass DOM references explicitly. The shipped stylesheet, however, assumes the current default selectors used by the example app. For the easiest integration, use the same page structure shown below.
+The runtime is library-first: it operates on injected DOM references via the `ContainerRefs` struct. To keep the consumer-side boilerplate minimal, the package also exposes a `resolveContainerRefs()` helper that looks up the four required elements by ID. Both the helper and the shipped stylesheet target the same convention IDs — they are part of the package contract, not configurable. Advanced consumers (e.g. tests) can still build a `ContainerRefs` manually and pass it directly.
 
 ```html
 <div id="zoom-planes-source">
@@ -98,12 +98,9 @@ The runtime itself is library-first: you pass DOM references explicitly. The shi
 ```
 
 ```ts
-const navigation = new ZoomPlaneNavigator({
-  sceneContainer: document.getElementById('scene-container')!,
-  contentContainer: document.getElementById('page-content-container')!,
-  planesSource: document.getElementById('zoom-planes-source')!,
-  backButton: document.getElementById('back-button'),
-});
+import { ZoomPlaneNavigator, resolveContainerRefs } from '@scupit/web-3d-panel-navigation';
+
+const navigation = new ZoomPlaneNavigator(resolveContainerRefs());
 ```
 
 ### Styling Model
@@ -515,7 +512,7 @@ Shared contracts and defaults.
 
 | Export | Purpose |
 |--------|---------|
-| `ContainerRefs` | DOM references injected by the consumer |
+| `ContainerRefs` | DOM references injected by the consumer — typically constructed via `resolveContainerRefs()` (in `container-refs.ts`), which locates the required convention IDs |
 | `ZoomPlaneConfig` | Parsed configuration for a plane |
 | `CameraState` | Camera position, target, and FOV |
 | `NavigationConfig` | Runtime configuration options |
@@ -661,16 +658,11 @@ zoom-navigation.ts
 ### Initialization
 
 ```ts
-import { ZoomPlaneNavigator } from '@scupit/web-3d-panel-navigation';
+import { ZoomPlaneNavigator, resolveContainerRefs } from '@scupit/web-3d-panel-navigation';
 import '@scupit/web-3d-panel-navigation/styles.css';
 
 const zoomNav = new ZoomPlaneNavigator(
-  {
-    sceneContainer: document.getElementById('scene-container')!,
-    contentContainer: document.getElementById('page-content-container')!,
-    planesSource: document.getElementById('zoom-planes-source')!,
-    backButton: document.getElementById('back-button'),
-  },
+  resolveContainerRefs(),
   {
     cameraDuration: 1200,
     overlapRatio: 0.2,
@@ -917,9 +909,9 @@ The shipped stylesheet assumes these selectors and state classes:
 
 Important nuance:
 
-- The runtime itself works from passed DOM references.
-- The package stylesheet is opinionated and targets the default selectors above.
-- If you change those selectors, you must also replace or adapt the stylesheet.
+- The runtime operates on passed DOM references (`ContainerRefs`), but the four container IDs (`#scene-container`, `#page-content-container`, `#zoom-planes-source`, `#back-button`) are **required by the package**: both the stylesheet and `resolveContainerRefs()` rely on them.
+- The remaining selectors (state classes, component classes) are also part of the contract and toggled by the runtime.
+- If you replace the stylesheet wholesale, your replacement must preserve the same structural rules — IDs, state classes, and `.page-section` / `.zoom-plane` behaviors — for the runtime to keep working.
 
 ### What the Package Stylesheet Handles
 
