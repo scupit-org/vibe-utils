@@ -15,20 +15,34 @@ await mkdir(outDir, { recursive: true });
 const css = sass.compile(path.join(exampleDir, 'styles.scss'));
 await writeFile(path.join(outDir, 'styles.css'), css.css);
 
-await esbuild.build({
-  entryPoints: [path.join(exampleDir, 'main.ts')],
-  outfile: path.join(outDir, 'main.js'),
+const sharedExampleOptions = {
   bundle: true,
   format: 'esm',
   platform: 'browser',
   target: 'es2022',
   sourcemap: true,
   minify: true,
+};
+
+await esbuild.build({
+  ...sharedExampleOptions,
+  entryPoints: [path.join(exampleDir, 'main.ts')],
+  outfile: path.join(outDir, 'main.js'),
 });
 
-// Copy example/index.html into dist/ with asset paths rewritten so the
+await esbuild.build({
+  ...sharedExampleOptions,
+  entryPoints: [path.join(exampleDir, 'lite-compare.ts')],
+  outfile: path.join(outDir, 'lite-compare.js'),
+});
+
+// Copy example HTML pages into dist/ with asset paths rewritten so the
 // dist/ folder is hostable as-is (e.g. `./dist/main.js` -> `./main.js`).
-const html = await readFile(path.join(exampleDir, 'index.html'), 'utf8');
-const rewrittenHtml = html.replace(/(["'(])\.\/dist\//g, '$1./');
-await writeFile(path.join(outDir, 'index.html'), rewrittenHtml);
+async function copyHtml(filename) {
+  const html = await readFile(path.join(exampleDir, filename), 'utf8');
+  const rewrittenHtml = html.replace(/(["'(])\.\/dist\//g, '$1./');
+  await writeFile(path.join(outDir, filename), rewrittenHtml);
+}
+await copyHtml('index.html');
+await copyHtml('lite-compare.html');
 

@@ -21,6 +21,10 @@
       "types": "./src/index.ts",
       "import": "./dist/index.js"
     },
+    "./skybox-lite": {
+      "types": "./src/skybox/lite/index.ts",
+      "import": "./dist/skybox-lite.js"
+    },
     "./styles.css": "./dist/styles.css"
   },
   "scripts": {

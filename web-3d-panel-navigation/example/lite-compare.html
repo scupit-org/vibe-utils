@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skybox Lite vs Three — visual parity</title>
+    <style>
+      :root {
+        --skybox-color-a: #2a1a10;
+        --skybox-color-b: #3d2414;
+        --skybox-color-c: #5c3420;
+        --skybox-star-color: #ffe6c8;
+        --skybox-star-color-cool: #b5c9ff;
+      }
+      html, body { margin: 0; padding: 0; height: 100%; background: #000; color: #fff; font-family: ui-sans-serif, system-ui, sans-serif; overflow: hidden; }
+      #stage { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; height: 100vh; }
+      .pane { position: relative; overflow: hidden; }
+      .pane + .pane { border-left: 1px solid #222; }
+      .pane-label { position: absolute; top: 8px; left: 8px; padding: 4px 8px; background: rgba(0,0,0,0.5); border-radius: 4px; font-size: 12px; z-index: 10; pointer-events: none; }
+      #controls { position: fixed; bottom: 8px; left: 8px; display: flex; gap: 8px; z-index: 100; }
+      #controls button { background: #222; color: #fff; border: 1px solid #444; padding: 6px 10px; border-radius: 4px; cursor: pointer; font: inherit; }
+      #controls button:hover { background: #333; }
+      #status { position: fixed; bottom: 8px; right: 8px; font-size: 12px; color: #aaa; z-index: 100; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <div class="pane" id="pane-three">
+        <span class="pane-label">three-backed (legacy)</span>
+      </div>
+      <div class="pane" id="pane-lite">
+        <span class="pane-label">lite (custom WebGL2)</span>
+      </div>
+    </div>
+
+    <div id="controls">
+      <button id="toggle-flavor">Toggle gradient / starfield</button>
+      <button id="lose-context">Lose &amp; restore lite context</button>
+    </div>
+    <div id="status"></div>
+
+    <script type="module" src="./lite-compare.js"></script>
+  </body>
+</html>

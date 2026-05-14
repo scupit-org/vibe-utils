@@ -11,15 +11,25 @@ const distDir = path.join(rootDir, 'dist');
 await rm(distDir, { recursive: true, force: true });
 await mkdir(distDir, { recursive: true });
 
-await esbuild.build({
-  entryPoints: [path.join(rootDir, 'src', 'index.ts')],
-  outfile: path.join(distDir, 'index.js'),
+const sharedEsbuildOptions = {
   bundle: true,
   format: 'esm',
   platform: 'browser',
   target: 'es2022',
   sourcemap: true,
   external: ['three']
+};
+
+await esbuild.build({
+  ...sharedEsbuildOptions,
+  entryPoints: [path.join(rootDir, 'src', 'index.ts')],
+  outfile: path.join(distDir, 'index.js'),
+});
+
+await esbuild.build({
+  ...sharedEsbuildOptions,
+  entryPoints: [path.join(rootDir, 'src', 'skybox', 'lite', 'index.ts')],
+  outfile: path.join(distDir, 'skybox-lite.js'),
 });
 
 const css = sass.compile(path.join(rootDir, 'src', 'styles.scss'));
