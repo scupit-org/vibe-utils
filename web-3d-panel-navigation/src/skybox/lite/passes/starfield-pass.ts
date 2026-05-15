@@ -65,8 +65,9 @@ void main() {
   float twinkle = 0.7 + 0.3 * sin(uTime * uTwinkleFreq + vPhase);
   float intensity = vBrightness * twinkle * falloff;
   vec3 linear = mix(uColorWarm, uColorCool, vTint) * intensity;
-  vec3 srgb = pow(linear, vec3(1.0 / 2.2));
-  outColor = vec4(srgb, intensity);
+  // See gradient-pass.ts — match three's ShaderMaterial behavior by writing
+  // linear values directly without sRGB encoding.
+  outColor = vec4(linear, intensity);
 }
 `;
 

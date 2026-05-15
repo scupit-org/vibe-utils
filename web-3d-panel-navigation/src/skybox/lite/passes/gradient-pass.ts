@@ -39,8 +39,12 @@ void main() {
   vec3 linear = t < 0.5
     ? mix(uColorA, uColorB, t * 2.0)
     : mix(uColorB, uColorC, (t - 0.5) * 2.0);
-  vec3 srgb = pow(linear, vec3(1.0 / 2.2));
-  outColor = vec4(srgb, 1.0);
+  // Match three's ShaderMaterial pipeline: write linear values directly to the
+  // framebuffer (no sRGB encoding). three.Color stores linear, the legacy
+  // shader writes gl_FragColor = vec4(linear, 1.0) without re-encoding, and
+  // the framebuffer is then sampled as sRGB by the display. Re-encoding here
+  // would produce visibly brighter output than the legacy backend.
+  outColor = vec4(linear, 1.0);
 }
 `;
 

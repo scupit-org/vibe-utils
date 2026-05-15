@@ -53,10 +53,14 @@ function parseSrgb(value: string): LinearRgb | null {
 /**
  * Reads a CSS custom property from :root, falls back to `fallback` if unset or
  * unparseable, and returns the color as linear-space RGB in [0,1]. Mirrors the
- * behavior of `src/skybox/css-color.ts` but without depending on three.Color —
- * three internally linearizes hex/string inputs on Color construction; we do
- * the same here so shader-side mixing happens in linear space and the
- * fragment shader can re-encode to sRGB on output.
+ * behavior of `src/skybox/css-color.ts` but without depending on three.Color.
+ *
+ * three.Color linearizes sRGB hex/string inputs on construction. three's
+ * ShaderMaterial then writes those linear values to the framebuffer without
+ * sRGB encoding (the display treats the framebuffer as sRGB, producing the
+ * familiar "gamma-darkened" look that the legacy skybox visuals were authored
+ * against). The lite shaders match by writing linear values directly — see
+ * the comment in `passes/gradient-pass.ts`.
  */
 export function readCssColor(name: string, fallback: string): LinearRgb {
   let raw = "";

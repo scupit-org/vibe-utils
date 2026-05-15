@@ -189,7 +189,8 @@ export class LiteSkyboxHost {
     this.cachedFrame.heightCss = sized.heightCss;
     this.cachedFrame.widthPx = sized.widthPx;
     this.cachedFrame.heightPx = sized.heightPx;
-    this.cachedFrame.aspect = sized.widthCss / Math.max(1, sized.heightCss);
+    // aspect is driven by camera.aspect (refreshed every frame in updateFrame),
+    // not by the canvas dimensions — see updateFrame() for the rationale.
   }
 
   private handleVisibilityChange(): void {
@@ -225,7 +226,9 @@ export class LiteSkyboxHost {
       widthPx,
       heightPx,
       fovY: (this.camera.fov * Math.PI) / 180,
-      aspect: widthCss / Math.max(1, heightCss),
+      // Use camera.aspect (not canvas aspect). See updateFrame() for the
+      // rationale; we keep both reads in sync.
+      aspect: this.camera.aspect,
       time: this.elapsed,
       dt,
       forward: [0, 0, -1],
@@ -246,6 +249,17 @@ export class LiteSkyboxHost {
 
     const f = this.cachedFrame;
     f.fovY = (this.camera.fov * Math.PI) / 180;
+    // Drive the horizontal FOV from camera.aspect, not from the canvas
+    // dimensions. This matches three's WebGLRenderer (it reads the projection
+    // matrix off the camera, which the user owns) and lets consumers point a
+    // camera at a region whose aspect differs from the canvas — split views,
+    // picture-in-picture, etc. If you ever want to instead force the
+    // projection to match the actual canvas dimensions (e.g. a fullscreen
+    // skybox where you don't want to require the caller to keep camera.aspect
+    // in sync on resize), swap this back to:
+    //   f.aspect = f.widthCss / Math.max(1, f.heightCss);
+    // and remove the camera.aspect read.
+    f.aspect = this.camera.aspect;
     f.time = this.elapsed;
     f.dt = dt;
     f.forward[0] = fx; f.forward[1] = fy; f.forward[2] = fz;
