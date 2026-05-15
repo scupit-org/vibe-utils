@@ -1,4 +1,5 @@
-import { Vector3, Camera, Euler, PerspectiveCamera } from 'three';
+import { Vector3, Euler } from './math';
+import { PerspectiveCamera } from './scene';
 import type { ScreenRect, ZoomPlaneConfig } from './types';
 
 /**
@@ -58,7 +59,7 @@ export function calculateAllPlanesBoundingBox(
  */
 export function projectToScreen(
   point: Vector3,
-  camera: Camera,
+  camera: PerspectiveCamera,
   viewportWidth: number,
   viewportHeight: number
 ): { x: number; y: number } {
@@ -126,7 +127,7 @@ export function getPlaneWorldCorners(
 export function getPlaneScreenRect(
   config: ZoomPlaneConfig,
   scale: number,
-  camera: Camera,
+  camera: PerspectiveCamera,
   viewportWidth: number,
   viewportHeight: number
 ): ScreenRect {

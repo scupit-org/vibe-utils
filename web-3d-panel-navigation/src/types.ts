@@ -1,4 +1,5 @@
-import type { Vector3, Object3D } from 'three';
+import type { Vector3 } from './math';
+import type { Object3D } from './scene';
 
 /**
  * Configuration for a zoom plane in the 3D scene.

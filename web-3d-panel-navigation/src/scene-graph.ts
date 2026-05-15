@@ -1,4 +1,4 @@
-import { Scene, PerspectiveCamera } from 'three';
+import { Scene, PerspectiveCamera } from './scene';
 import { CSS3DRenderer, CSS3DObject } from './css3d-renderer';
 import type { ZoomPlaneConfig, CSS3DObjectRef, NavigationConfig } from './types';
 import { findZoomPlane } from './zoom-plane-parser';

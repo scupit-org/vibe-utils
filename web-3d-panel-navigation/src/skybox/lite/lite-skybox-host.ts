@@ -1,4 +1,4 @@
-import type { PerspectiveCamera } from "three";
+import type { PerspectiveCamera } from "../../scene";
 import { createLiteCanvas } from "./gl/context";
 import { resolvePixelRatio, resizeCanvas } from "./gl/resize";
 import type { LiteSkybox, LiteSkyboxHostOptions, SkyboxFrame } from "./lite-skybox";

@@ -1,4 +1,5 @@
-import { Object3D, Scene, PerspectiveCamera, Matrix4 } from 'three';
+import { Matrix4 } from './math';
+import { Object3D, Scene, PerspectiveCamera } from './scene';
 
 /**
  * CSS3DObject - Wraps a DOM element to be positioned in 3D space

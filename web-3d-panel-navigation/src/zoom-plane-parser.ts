@@ -1,4 +1,4 @@
-import { Vector3, Quaternion, Euler } from 'three';
+import { Vector3, Quaternion, Euler } from './math';
 import type { ZoomPlaneConfig } from './types';
 
 type TileSide = 'right' | 'left' | 'top' | 'bottom';

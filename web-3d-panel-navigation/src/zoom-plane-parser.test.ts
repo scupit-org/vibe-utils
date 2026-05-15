@@ -1,6 +1,6 @@
 import { parseAllZoomPlanes, parseZoomPlane } from './zoom-plane-parser';
 import type { ZoomPlaneConfig } from './types';
-import { Vector3, Quaternion, Euler } from 'three';
+import { Vector3, Quaternion, Euler } from './math';
 
 type Dataset = Record<string, string | undefined>;
 

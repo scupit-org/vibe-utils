@@ -1,6 +1,4 @@
-// PHASE 1: still using three's PerspectiveCamera as the camera type. Phase 2
-// will replace this with an in-house equivalent.
-import type { PerspectiveCamera } from "three";
+import type { PerspectiveCamera } from "../../scene";
 
 export interface SkyboxFrame {
   /** CSS pixel viewport size (matches canvas style width/height). */

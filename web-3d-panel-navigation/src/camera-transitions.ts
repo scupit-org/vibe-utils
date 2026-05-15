@@ -1,4 +1,5 @@
-import { Vector3, MathUtils, PerspectiveCamera } from 'three';
+import { Vector3, clamp, DEG2RAD } from './math';
+import { PerspectiveCamera } from './scene';
 import type { CameraState } from './types';
 import { easeInOutCubic, easeOutCubic } from './easing';
 
@@ -19,7 +20,7 @@ function lerpUpAndFov(
 
 /** Standard smoothstep (Hermite interpolation) between two edges */
 function smoothstep(edge0: number, edge1: number, x: number): number {
-  const t = MathUtils.clamp((x - edge0) / (edge1 - edge0), 0, 1);
+  const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
   return t * t * (3 - 2 * t);
 }
 
@@ -63,19 +64,19 @@ export function calculateTransitionState(
   // Forward angle
   const fromFwd = new Vector3().subVectors(from.target, from.position).normalize();
   const toFwd = new Vector3().subVectors(to.target, to.position).normalize();
-  const fwdDot = MathUtils.clamp(fromFwd.dot(toFwd), -1, 1);
+  const fwdDot = clamp(fromFwd.dot(toFwd), -1, 1);
   const fwdAngle = Math.acos(fwdDot);
 
   // Up angle (captures roll/tilt that forward angle misses)
-  const upDot = MathUtils.clamp(from.up.dot(to.up), -1, 1);
+  const upDot = clamp(from.up.dot(to.up), -1, 1);
   const upAngle = Math.acos(upDot);
 
   // Total reorientation
   const totalAngle = fwdAngle + upAngle;
 
   // Blend: 0 (Early Look) at ≤30°, 1 (Orbit) at ≥35°
-  const lowerAngle = 30 * MathUtils.DEG2RAD;
-  const upperAngle = 35 * MathUtils.DEG2RAD;
+  const lowerAngle = 30 * DEG2RAD;
+  const upperAngle = 35 * DEG2RAD;
   const blend = smoothstep(lowerAngle, upperAngle, totalAngle);
 
   if (blend < 0.5) {
@@ -139,7 +140,7 @@ function calculateOrbitState(
   // Slerp direction
   const fromDir = fromOffset.clone().normalize();
   const toDir = toOffset.clone().normalize();
-  const dot = MathUtils.clamp(fromDir.dot(toDir), -1, 1);
+  const dot = clamp(fromDir.dot(toDir), -1, 1);
   const theta = Math.acos(dot);
 
   let position: Vector3;

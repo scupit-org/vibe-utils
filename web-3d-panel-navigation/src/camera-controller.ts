@@ -1,4 +1,5 @@
-import { PerspectiveCamera, Vector3, Euler } from 'three';
+import { Vector3, Euler } from './math';
+import { PerspectiveCamera } from './scene';
 import type { ZoomPlaneConfig, CameraState, NavigationConfig } from './types';
 
 /**

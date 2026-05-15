@@ -1,4 +1,4 @@
-import { Vector3, Euler } from 'three';
+import { Vector3, Euler } from './math';
 import type { ZoomPlaneConfig, CameraState } from './types';
 import { calculateAllPlanesBoundingBox, type BoundingBox } from './projection';
 import { findCenterZoomPlane } from './zoom-plane-parser';
