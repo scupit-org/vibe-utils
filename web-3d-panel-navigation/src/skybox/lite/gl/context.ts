@@ -42,8 +42,8 @@ export interface LiteCanvas {
 // `canvas.getBoundingClientRect()` — it will report the backing-buffer size
 // instead of the viewport size.
 //
-// TODO: write a postmortem document for this in
-// docs/issue-reference/bundle-size-reduction/ once Phase 3 stabilizes.
+// Full writeup:
+// docs/issue-reference/bundle-size-reduction/lite-skybox-canvas-scaling-postmortem.md
 const DEFAULT_CANVAS_STYLE: Partial<CSSStyleDeclaration> = {
   position: "fixed",
   top: "0",
