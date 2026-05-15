@@ -11,12 +11,20 @@ export interface LiteCanvas {
   gl: WebGL2RenderingContext;
 }
 
+// `width`/`height: 100%` are required, not redundant with `inset: 0`. A canvas
+// is a CSS replaced element with intrinsic dimensions equal to
+// `canvas.width`/`canvas.height` (the backing-buffer size). Without an explicit
+// CSS width/height, browsers can display the canvas at its intrinsic size
+// rather than stretching it to the inset rectangle — overflowing the viewport
+// and scaling all rendered content up by the DPR factor.
 const DEFAULT_CANVAS_STYLE: Partial<CSSStyleDeclaration> = {
   position: "fixed",
   top: "0",
   left: "0",
   right: "0",
   bottom: "0",
+  width: "100%",
+  height: "100%",
   zIndex: "0",
   pointerEvents: "none",
   display: "block",
