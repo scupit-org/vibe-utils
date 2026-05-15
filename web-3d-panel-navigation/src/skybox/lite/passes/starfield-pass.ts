@@ -166,7 +166,27 @@ export function createStarfieldPass(
       gl.disable(gl.DEPTH_TEST);
       gl.enable(gl.BLEND);
       gl.blendEquation(gl.FUNC_ADD);
-      gl.blendFunc(gl.ONE, gl.ONE);
+      // Match three's ShaderMaterial + AdditiveBlending blend func. The
+      // fragment writes vec4(color * intensity, intensity); SRC_ALPHA on the
+      // RGB factor multiplies a *second* intensity into the source, giving an
+      // effective `color * intensity^2` contribution per pixel. Without this
+      // the squared falloff is missing — edge pixels and low-twinkle troughs
+      // never fade enough, so stars read as flat bright dots instead of the
+      // soft-haloed twinkling stars three produces.
+      //
+      // Three's actual code path (verified against node_modules/three at the
+      // pinned version): WebGLState.setBlending switches on
+      // `material.premultipliedAlpha`. Material defaults that field to false
+      // and ShaderMaterial does not override it, so the legacy starfield runs
+      // gl.blendFuncSeparate(SRC_ALPHA, ONE, ONE, ONE). The earlier
+      // ONE/ONE/ONE/ONE choice in this file came from the implementation
+      // handoff, which incorrectly conflated the material flag with the
+      // canvas context's premultipliedAlpha attribute (those are independent;
+      // see docs/issue-reference/bundle-size-reduction/implementation-handoff.md).
+      //
+      // Full writeup:
+      // docs/issue-reference/bundle-size-reduction/lite-skybox-starfield-blend-func-postmortem.md
+      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE);
       gl.drawArrays(gl.POINTS, 0, starCount);
       gl.disable(gl.BLEND);
       gl.bindVertexArray(null);
