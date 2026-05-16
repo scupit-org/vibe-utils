@@ -1,20 +1,28 @@
-import { PerspectiveCamera } from "three";
 import {
   threeBackend,
   createGradientSkybox as createGradientSkyboxThree,
   createStarfieldSkybox as createStarfieldSkyboxThree,
-  type SkyboxHost,
+  type SkyboxHost as ThreeSkyboxHost,
+  type ThreeRenderTypes,
 } from "../dist/three-backend.js";
 import {
   liteBackend,
   createGradientSkybox as createGradientSkyboxLite,
   createStarfieldSkybox as createStarfieldSkyboxLite,
   type LiteSkyboxHost,
+  type LiteRenderTypes,
 } from "../dist/lite-backend.js";
+import type {
+  PerspectiveCameraLike,
+  RenderBackend,
+  RenderTypes,
+} from "../dist/render-contract.js";
 
-// Side-by-side visual parity harness. Both columns share a single camera
-// instance, so any visual delta is purely backend-driven (three's
-// WebGLRenderer vs the lite raw-WebGL2 path).
+// Side-by-side visual parity harness. Each column owns a backend-native
+// camera built via that backend's `createPerspectiveCamera` factory; the
+// two cameras are kept in lockstep every frame so any visual delta is
+// purely backend-driven (three's WebGLRenderer vs the lite raw-WebGL2
+// path) rather than a camera-type mismatch.
 //
 // The harness intentionally constructs cameras directly rather than going
 // through ZoomPlaneNavigator — its purpose is to exercise just the skybox
@@ -22,31 +30,27 @@ import {
 // drift the visual check relies on.
 
 type Flavor = "gradient" | "starfield";
+type ThreeCamera = ThreeRenderTypes["PerspectiveCamera"];
+type LiteCamera = LiteRenderTypes["PerspectiveCamera"];
 
-function makeCamera(): PerspectiveCamera {
-  const cam = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+function makeCamera<T extends RenderTypes>(backend: RenderBackend<T>): T["PerspectiveCamera"] {
+  const cam = backend.createPerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
   cam.position.set(0, 0, 0);
   cam.lookAt(0, 0, -1);
   return cam;
 }
 
-function buildThree(mount: HTMLElement, camera: PerspectiveCamera, flavor: Flavor): SkyboxHost {
+function buildThree(mount: HTMLElement, camera: ThreeCamera, flavor: Flavor): ThreeSkyboxHost {
   const skybox = flavor === "gradient" ? createGradientSkyboxThree() : createStarfieldSkyboxThree();
   return threeBackend.createSkyboxHost({
     camera, mount, skybox, canvasId: "three-skybox-canvas", autoStart: false,
   });
 }
 
-function buildLite(mount: HTMLElement, camera: PerspectiveCamera, flavor: Flavor): LiteSkyboxHost {
+function buildLite(mount: HTMLElement, camera: LiteCamera, flavor: Flavor): LiteSkyboxHost {
   const skybox = flavor === "gradient" ? createGradientSkyboxLite() : createStarfieldSkyboxLite();
-  // The lite host's options type pins `camera` to the lite PerspectiveCamera.
-  // Three's PerspectiveCamera is structurally compatible (same matrix layout,
-  // identical method surface that the host reads), so this cast is the
-  // documented coexistence path for the side-by-side harness only — production
-  // consumers pick one backend and stay in that universe.
   return liteBackend.createSkyboxHost({
-    camera: camera as unknown as Parameters<typeof liteBackend.createSkyboxHost>[0]["camera"],
-    mount, skybox, canvasId: "lite-skybox-canvas", autoStart: false,
+    camera, mount, skybox, canvasId: "lite-skybox-canvas", autoStart: false,
   });
 }
 
@@ -84,12 +88,14 @@ onReady(() => {
     pointerEvents: "none",
   };
 
-  // Both columns share a camera so visual differences are purely backend-driven.
-  const camera = makeCamera();
+  // Each column gets its backend's native camera; the two are kept in
+  // lockstep in `tick()` below so visual differences are purely backend-driven.
+  const threeCamera = makeCamera(threeBackend);
+  const liteCamera = makeCamera(liteBackend);
 
   let flavor: Flavor = "starfield";
-  let threeHost: SkyboxHost = buildThree(paneThree, camera, flavor);
-  let liteHost: LiteSkyboxHost = buildLite(paneLite, camera, flavor);
+  let threeHost: ThreeSkyboxHost = buildThree(paneThree, threeCamera, flavor);
+  let liteHost: LiteSkyboxHost = buildLite(paneLite, liteCamera, flavor);
 
   // Re-apply pane-scoped canvas styling (constructors already appended canvases
   // with fixed positioning; override here).
@@ -101,8 +107,8 @@ onReady(() => {
   function rebuildHosts(): void {
     threeHost.destroy();
     liteHost.destroy();
-    threeHost = buildThree(paneThree, camera, flavor);
-    liteHost = buildLite(paneLite, camera, flavor);
+    threeHost = buildThree(paneThree, threeCamera, flavor);
+    liteHost = buildLite(paneLite, liteCamera, flavor);
     const tc = document.getElementById("three-skybox-canvas");
     if (tc) Object.assign(tc.style, paneCanvasStyle);
     const lc = document.getElementById("lite-skybox-canvas");
@@ -133,22 +139,29 @@ onReady(() => {
     void canvas;
   });
 
-  // Slow camera rotation so both columns animate identically.
+  // Slow camera rotation so both columns animate identically. Both cameras
+  // are mutated through the structural `PerspectiveCameraLike` surface so
+  // the loop body is identical regardless of backend-concrete type.
+  function syncCamera(cam: PerspectiveCameraLike, yaw: number, aspect: number): void {
+    cam.rotation.set(0, yaw, 0);
+    cam.updateMatrixWorld();
+    if (cam.aspect !== aspect) {
+      cam.aspect = aspect;
+      cam.updateProjectionMatrix();
+    }
+  }
+
   let last = performance.now();
   let yaw = 0;
   function tick(now: number): void {
     const dt = now - last;
     last = now;
     yaw += dt * 0.0002; // ~0.012 rad/sec, slow drift
-    camera.rotation.set(0, yaw, 0);
-    camera.updateMatrixWorld();
-    // Both backends update aspect via window resize; ensure the camera aspect
-    // matches the pane aspect (each pane is half the viewport width).
+    // Both backends update aspect via window resize; ensure each camera's
+    // aspect matches the pane aspect (each pane is half the viewport width).
     const aspect = (window.innerWidth / 2) / window.innerHeight;
-    if (camera.aspect !== aspect) {
-      camera.aspect = aspect;
-      camera.updateProjectionMatrix();
-    }
+    syncCamera(threeCamera, yaw, aspect);
+    syncCamera(liteCamera, yaw, aspect);
     threeHost.renderFrame(dt);
     liteHost.renderFrame(dt);
     requestAnimationFrame(tick);
