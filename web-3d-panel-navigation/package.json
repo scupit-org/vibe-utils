@@ -44,13 +44,17 @@
     "three": ">=0.182.0 <1.0.0"
   },
   "peerDependenciesMeta": {
-    "three": { "optional": true }
+    "three": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/three": "^0.184.1",
     "esbuild": "^0.25.5",
     "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.4.1",
     "sass": "^1.89.2",
-    "three": "^0.182.0"
+    "three": "^0.182.0",
+    "typescript": "^6.0.3"
   }
 }

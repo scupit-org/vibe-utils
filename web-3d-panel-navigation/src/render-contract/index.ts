@@ -116,11 +116,15 @@ export interface Object3DLike {
  * Scene is structurally just an Object3D root with `matrixWorldAutoUpdate`.
  * Distinguishing it lets the navigator typecheck that it isn't accidentally
  * adding a Scene to another Scene.
+ *
+ * Intentionally empty: SceneLike is declared as a distinct interface (rather
+ * than a type alias for Object3DLike) purely so `SceneGraph.scene: T['Scene']`
+ * is named meaningfully at the type level. If a stricter linter ever flags
+ * this with `no-empty-interface`, disable the rule here rather than collapsing
+ * the interface — the naming is the whole point.
  */
-export interface SceneLike extends Object3DLike {
-  // No additional fields beyond Object3D; declared as a distinct interface so
-  // SceneGraph.scene's type is meaningfully different from a generic node.
-}
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface SceneLike extends Object3DLike {}
 
 export interface PerspectiveCameraLike extends Object3DLike {
   /**

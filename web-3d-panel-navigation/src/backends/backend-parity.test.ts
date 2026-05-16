@@ -1,3 +1,12 @@
+/**
+ * @jest-environment jsdom
+ *
+ * The parity tests for `createCSS3DObject` need a real `document` so the
+ * backend factory can wrap (or construct) an HTMLElement. The repo-wide
+ * default is the `node` environment because `url-hash-sync.test.ts`
+ * reassigns `globalThis.window` (which jsdom refuses to allow). Per-file
+ * opt-in keeps this test isolated to jsdom without affecting the rest.
+ */
 import { liteBackend } from './lite';
 import { threeBackend } from './three';
 import type { RenderBackend, RenderTypes } from '../render-contract';
@@ -60,6 +69,19 @@ describe('RenderBackend contract parity', () => {
         const child = backend.createObject3D();
         scene.add(child);
         expect(scene.children).toContain(child);
+      });
+
+      it('createCSS3DObject returns a CSS3D-tagged Object3D wrapping a DOM element', () => {
+        const element = document.createElement('div');
+        const css = backend.createCSS3DObject(element);
+        // Runtime tag the shared CSS3DRenderer reads to identify CSS3D-aware
+        // nodes during traversal. Must be strictly true on every backend.
+        expect(css.isCSS3DObject).toBe(true);
+        expect(css.element).toBe(element);
+        // The returned object should be addable to a Scene as a child.
+        const scene = backend.createScene();
+        scene.add(css);
+        expect(scene.children).toContain(css);
       });
 
       it('createMatrix4 / createEuler / createQuaternion produce typed values', () => {

@@ -96,11 +96,20 @@ function calculateFocalElementMode<T extends RenderTypes>(
   );
   requiredDistance += maxDepthBehindCenter;
 
-  // Position camera along the center plane's normal at the required distance
+  // Position camera along the center plane's normal at the required distance.
+  // `centerPosition.clone()` is essential — without the clone, `.add(...)` would
+  // mutate centerPosition itself, which we still want untouched for the `target`
+  // field below.
   const cameraPosition = (centerPosition.clone() as T['Vector3']).add(
     (normal.clone() as T['Vector3']).multiplyScalar(requiredDistance)
   );
 
+  // Aliasing note: `target` and the local `centerPosition` are the SAME object
+  // reference. Mutating one mutates the other. This is safe today because
+  // CameraController.setToState clones state.target into its own internal
+  // currentTarget defensively, so callers never see the aliasing. If a future
+  // consumer mutates the returned state's target in place expecting it to be
+  // independent of centerPlane.position-derived state, clone it here.
   return {
     position: cameraPosition,
     target: centerPosition,
