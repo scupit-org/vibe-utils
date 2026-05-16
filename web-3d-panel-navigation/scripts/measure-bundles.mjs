@@ -71,6 +71,9 @@ const ENTRIES = [
     ].join('\n') + '\n',
     mustNotContain: [...THREE_LEAK_MARKERS],
     budgetBytes: 75 * 1024,
+    // Treated as the "full functionality, lite backend" use case for the
+    // per-file breakdown table emitted at the end of this script.
+    perFileBreakdown: true,
   },
   {
     label: 'Lite gradient only (LiteSkyboxHost direct)',
@@ -191,7 +194,7 @@ for (let i = 0; i < ENTRIES.length; i++) {
   const entryFile = path.join(tmpDir, `entry-${i}.ts`);
   const outFile = path.join(tmpDir, `out-${i}.js`);
   await writeFile(entryFile, entry.source);
-  await esbuild.build({
+  const buildResult = await esbuild.build({
     entryPoints: [entryFile],
     outfile: outFile,
     bundle: true,
@@ -201,10 +204,17 @@ for (let i = 0; i < ENTRIES.length; i++) {
     target: 'es2022',
     // No `external` — measure the full closed bundle including any deps that
     // might leak. The budgets and content checks below assume a closed bundle.
+    metafile: entry.perFileBreakdown === true,
     logLevel: 'silent',
   });
   const content = await readFile(outFile, 'utf8');
-  results.push({ ...entry, bytes: content.length, content });
+  results.push({
+    ...entry,
+    bytes: content.length,
+    content,
+    outFile,
+    metafile: buildResult.metafile,
+  });
 }
 
 // =============================================================================
@@ -270,6 +280,102 @@ for (const pair of PAIRS) {
   );
 }
 console.log('');
+
+// =============================================================================
+// Output: per-file breakdown for flagged entries
+// =============================================================================
+//
+// For each entry that opted in via `perFileBreakdown: true`, render a table of
+// every input file in the closed bundle alongside:
+//   * Bundle bytes — esbuild metafile `bytesInOutput`, i.e. the file's
+//     post-tree-shake contribution to the bundle. Measured BEFORE minify, so
+//     these will NOT sum to the closed minified total reported above.
+//   * Self min   — `esbuild.transform({ minify: true })` of the file's source
+//     in isolation. Represents what the file weighs on its own, with no
+//     tree-shaking and no dependency context.
+//
+// The two numbers are intentionally complementary: bundle bytes ranks who-pays
+// what in a real consumer bundle; self min provides a stable per-file
+// reference that doesn't move when unrelated callers add or drop imports.
+
+const srcRoot = path.resolve(rootDir, 'src');
+
+function isUnderSrc(p) {
+  const resolved = path.resolve(rootDir, p);
+  const rel = path.relative(srcRoot, resolved);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+function srcRelative(p) {
+  const resolved = path.resolve(rootDir, p);
+  return path.relative(rootDir, resolved).replace(/\\/g, '/');
+}
+
+const FILE_W = 56;
+const NUM_W = 14;
+
+for (const r of results) {
+  if (!r.perFileBreakdown || !r.metafile) continue;
+
+  const outputKey = Object.keys(r.metafile.outputs).find(
+    (k) => path.resolve(rootDir, k) === path.resolve(r.outFile),
+  );
+  if (!outputKey) continue;
+  const inputsMap = r.metafile.outputs[outputKey].inputs ?? {};
+
+  const rows = [];
+  let bundleTotal = 0;
+  let selfTotal = 0;
+  for (const [inputPath, info] of Object.entries(inputsMap)) {
+    if (!isUnderSrc(inputPath)) continue;
+    const absPath = path.resolve(rootDir, inputPath);
+    const source = await readFile(absPath, 'utf8');
+    const transformed = await esbuild.transform(source, {
+      minify: true,
+      loader: 'ts',
+      format: 'esm',
+      target: 'es2022',
+      logLevel: 'silent',
+    });
+    const selfBytes = Buffer.byteLength(transformed.code, 'utf8');
+    rows.push({
+      file: srcRelative(inputPath),
+      bundleBytes: info.bytesInOutput,
+      selfBytes,
+    });
+    bundleTotal += info.bytesInOutput;
+    selfTotal += selfBytes;
+  }
+  rows.sort((a, b) => b.bundleBytes - a.bundleBytes);
+
+  console.log(`=== Per-file breakdown: ${r.label} ===`);
+  console.log(
+    'Bundle bytes = post-tree-shake, pre-minify contribution to the closed bundle.',
+  );
+  console.log(
+    'Self min     = isolated `esbuild.transform({ minify: true })` of the file alone.',
+  );
+  console.log(
+    `Neither column sums to the closed minified total (${r.bytes.toLocaleString('en-US')} bytes).`,
+  );
+  console.log('');
+  console.log(pad('File', FILE_W) + pad('Bundle bytes', NUM_W) + pad('Self min', NUM_W));
+  console.log('-'.repeat(FILE_W + NUM_W * 2));
+  for (const row of rows) {
+    console.log(
+      pad(row.file, FILE_W) +
+        pad(row.bundleBytes.toLocaleString('en-US'), NUM_W) +
+        pad(row.selfBytes.toLocaleString('en-US'), NUM_W),
+    );
+  }
+  console.log('-'.repeat(FILE_W + NUM_W * 2));
+  console.log(
+    pad(`Total (${rows.length} files)`, FILE_W) +
+      pad(bundleTotal.toLocaleString('en-US'), NUM_W) +
+      pad(selfTotal.toLocaleString('en-US'), NUM_W),
+  );
+  console.log('');
+}
 
 await rm(tmpDir, { recursive: true, force: true });
 
