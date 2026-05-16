@@ -1,4 +1,4 @@
-import type { PerspectiveCamera } from "../../scene";
+import type { PerspectiveCamera } from "../scene";
 import { createLiteCanvas } from "./gl/context";
 import { resolvePixelRatio, resizeCanvas } from "./gl/resize";
 import type { LiteSkybox, LiteSkyboxHostOptions, SkyboxFrame } from "./lite-skybox";
@@ -242,7 +242,7 @@ export class LiteSkyboxHost {
     // called. The lite host can't rely on that — derive matrixWorld now.
     this.camera.updateMatrixWorld();
     const e = this.camera.matrixWorld.elements;
-    // Three's camera looks down -Z, so column 2 (back basis) negated = forward.
+    // Camera looks down -Z, so column 2 (back basis) negated = forward.
     const rx = e[0], ry = e[1], rz = e[2];
     const ux = e[4], uy = e[5], uz = e[6];
     const fx = -e[8], fy = -e[9], fz = -e[10];

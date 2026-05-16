@@ -1,6 +1,7 @@
 import { parseAllZoomPlanes, parseZoomPlane } from './zoom-plane-parser';
 import type { ZoomPlaneConfig } from './types';
-import { Vector3, Quaternion, Euler } from './math';
+import { Vector3, Quaternion, Euler } from './backends/lite/math';
+import { liteBackend } from './backends/lite';
 
 type Dataset = Record<string, string | undefined>;
 
@@ -148,7 +149,7 @@ describe('zoom plane parser', () => {
       rotation: '0, 0, 0',
     });
 
-    expect(() => parseAllZoomPlanes(createContainer([first, second]))).toThrow(/Duplicate/);
+    expect(() => parseAllZoomPlanes(liteBackend, createContainer([first, second]))).toThrow(/Duplicate/);
 
     const centerOne = createZoomPlaneElement({
       zoomPlane: 'center-one',
@@ -167,7 +168,7 @@ describe('zoom plane parser', () => {
       rotation: '0, 0, 0',
     }, ['data-zoom-center']);
 
-    expect(() => parseAllZoomPlanes(createContainer([centerOne, centerTwo]))).toThrow(/Multiple center/);
+    expect(() => parseAllZoomPlanes(liteBackend, createContainer([centerOne, centerTwo]))).toThrow(/Multiple center/);
   });
 
   it('tiles right and left panels from an unrotated reference', () => {
@@ -197,7 +198,7 @@ describe('zoom plane parser', () => {
       tileAngle: '30',
     });
 
-    const configs = parseAllZoomPlanes(createContainer([center, right, left]), { scale });
+    const configs = parseAllZoomPlanes(liteBackend, createContainer([center, right, left]), { scale });
     const centerConfig = getPlane(configs, 'center');
     const rightConfig = getPlane(configs, 'right');
     const leftConfig = getPlane(configs, 'left');
@@ -241,7 +242,7 @@ describe('zoom plane parser', () => {
       tileAngle: '30',
     });
 
-    const configs = parseAllZoomPlanes(createContainer([center, top, bottom]), { scale });
+    const configs = parseAllZoomPlanes(liteBackend, createContainer([center, top, bottom]), { scale });
     const centerConfig = getPlane(configs, 'center');
     const topConfig = getPlane(configs, 'top');
     const bottomConfig = getPlane(configs, 'bottom');
@@ -277,7 +278,7 @@ describe('zoom plane parser', () => {
       tileAngle: '35',
     });
 
-    const configs = parseAllZoomPlanes(createContainer([reference, tiled]), { scale });
+    const configs = parseAllZoomPlanes(liteBackend, createContainer([reference, tiled]), { scale });
     const referenceConfig = getPlane(configs, 'reference');
     const tiledConfig = getPlane(configs, 'tiled');
 
@@ -307,7 +308,7 @@ describe('zoom plane parser', () => {
       tileOffset: '40, -20',
     });
 
-    const configs = parseAllZoomPlanes(createContainer([reference, tiled]), { scale });
+    const configs = parseAllZoomPlanes(liteBackend, createContainer([reference, tiled]), { scale });
     const referenceConfig = getPlane(configs, 'reference');
     const tiledConfig = getPlane(configs, 'tiled');
     const expectedHinge = edgeCenter(referenceConfig, 'right', scale)
@@ -363,7 +364,7 @@ describe('zoom plane parser', () => {
       tileGap: '40',
     });
 
-    const configs = parseAllZoomPlanes(createContainer([center, right, left, top, bottom]), { scale });
+    const configs = parseAllZoomPlanes(liteBackend, createContainer([center, right, left, top, bottom]), { scale });
     const centerConfig = getPlane(configs, 'center');
 
     expectVectorClose(
@@ -413,7 +414,7 @@ describe('zoom plane parser', () => {
       tileAlign: 'bottom',
     });
 
-    const configs = parseAllZoomPlanes(createContainer([center, topAligned, bottomAligned]), { scale });
+    const configs = parseAllZoomPlanes(liteBackend, createContainer([center, topAligned, bottomAligned]), { scale });
     const centerConfig = getPlane(configs, 'center');
     const up = localAxis(centerConfig, 'up');
 
@@ -458,7 +459,7 @@ describe('zoom plane parser', () => {
       tileAlign: 'right',
     });
 
-    const configs = parseAllZoomPlanes(createContainer([center, leftAligned, rightAligned]), { scale });
+    const configs = parseAllZoomPlanes(liteBackend, createContainer([center, leftAligned, rightAligned]), { scale });
     const centerConfig = getPlane(configs, 'center');
     const rightAxis = localAxis(centerConfig, 'right');
 
@@ -497,7 +498,7 @@ describe('zoom plane parser', () => {
       tileOffset: '5, 2',
     });
 
-    const configs = parseAllZoomPlanes(createContainer([center, tiled]), { scale });
+    const configs = parseAllZoomPlanes(liteBackend, createContainer([center, tiled]), { scale });
     const centerConfig = getPlane(configs, 'center');
     const tiledConfig = getPlane(configs, 'tiled');
     const alignY = ((centerConfig.height - tiledConfig.height) * scale) / 2;
@@ -527,7 +528,7 @@ describe('zoom plane parser', () => {
       tileRotationOffset: '0, 2, -1',
     });
 
-    const configs = parseAllZoomPlanes(createContainer([reference, tiled]), { scale });
+    const configs = parseAllZoomPlanes(liteBackend, createContainer([reference, tiled]), { scale });
     const referenceConfig = getPlane(configs, 'reference');
     const tiledConfig = getPlane(configs, 'tiled');
     const referenceQuaternion = quaternionFromConfig(referenceConfig);
@@ -570,7 +571,7 @@ describe('zoom plane parser', () => {
       tileRotationOffset: '1, 0, 3',
     });
 
-    const configs = parseAllZoomPlanes(createContainer([reference, tiled]), { scale });
+    const configs = parseAllZoomPlanes(liteBackend, createContainer([reference, tiled]), { scale });
     const referenceConfig = getPlane(configs, 'reference');
     const tiledConfig = getPlane(configs, 'tiled');
     const expectedHinge = edgeCenter(referenceConfig, 'top', scale)
@@ -606,7 +607,7 @@ describe('zoom plane parser', () => {
       rotation: '0, 0, 0',
     });
 
-    const configs = parseAllZoomPlanes(createContainer([second, first, base]), { scale });
+    const configs = parseAllZoomPlanes(liteBackend, createContainer([second, first, base]), { scale });
     const baseConfig = getPlane(configs, 'base');
     const firstConfig = getPlane(configs, 'first');
     const secondConfig = getPlane(configs, 'second');
@@ -653,7 +654,7 @@ describe('zoom plane parser', () => {
       ...invalidValues,
     });
 
-    expect(() => parseAllZoomPlanes(createContainer([center, invalid]))).toThrow(errorPattern);
+    expect(() => parseAllZoomPlanes(liteBackend, createContainer([center, invalid]))).toThrow(errorPattern);
   });
 
   it('rejects circular tiled layout references', () => {
@@ -674,6 +675,6 @@ describe('zoom plane parser', () => {
       tileAngle: '30',
     });
 
-    expect(() => parseAllZoomPlanes(createContainer([first, second]))).toThrow(/circular/);
+    expect(() => parseAllZoomPlanes(liteBackend, createContainer([first, second]))).toThrow(/circular/);
   });
 });

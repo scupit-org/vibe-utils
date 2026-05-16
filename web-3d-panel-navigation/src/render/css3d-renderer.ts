@@ -1,41 +1,19 @@
-import { Matrix4 } from './math';
-import { Object3D, Scene, PerspectiveCamera } from './scene';
+import type {
+  CSS3DObjectLike,
+  Matrix4Like,
+  Object3DLike,
+  PerspectiveCameraLike,
+  SceneLike,
+} from '../render-contract';
 
 /**
- * CSS3DObject - Wraps a DOM element to be positioned in 3D space
- * The element will have CSS transforms applied by CSS3DRenderer
- */
-export class CSS3DObject extends Object3D {
-  element: HTMLElement;
-
-  constructor(element?: HTMLElement) {
-    super();
-    this.element = element || document.createElement('div');
-    this.element.style.position = 'absolute';
-    this.element.style.pointerEvents = 'auto';
-
-    this.addEventListener('removed', () => {
-      this.traverse((object) => {
-        if (object instanceof CSS3DObject) {
-          if (object.element.parentNode !== null) {
-            object.element.parentNode.removeChild(object.element);
-          }
-        }
-      });
-    });
-  }
-
-  copy(source: CSS3DObject, recursive?: boolean): this {
-    super.copy(source, recursive);
-    this.element = source.element.cloneNode(true) as HTMLElement;
-    return this;
-  }
-}
-
-/**
- * CSS3DRenderer - Renders CSS3DObjects by applying CSS matrix3d transforms
- * This allows real DOM elements to be positioned in 3D space with full
- * camera control (position, rotation, FOV)
+ * Backend-agnostic CSS3D renderer.
+ *
+ * Operates against the structural interfaces declared in `render-contract` so
+ * both the lite and three backends can plug in their own Object3D/Scene/
+ * PerspectiveCamera implementations. CSS3D-aware nodes are identified by a
+ * runtime `isCSS3DObject: true` tag instead of `instanceof`, which keeps this
+ * file free of any backend-specific class imports.
  */
 export class CSS3DRenderer {
   domElement: HTMLDivElement;
@@ -47,7 +25,7 @@ export class CSS3DRenderer {
 
   private cache = {
     camera: { fov: 0, style: '' },
-    objects: new WeakMap<CSS3DObject, { style: string }>()
+    objects: new WeakMap<CSS3DObjectLike, { style: string }>(),
   };
 
   constructor() {
@@ -86,7 +64,7 @@ export class CSS3DRenderer {
     this.cameraElement.style.height = `${height}px`;
   }
 
-  render(scene: Scene, camera: PerspectiveCamera): void {
+  render(scene: SceneLike, camera: PerspectiveCameraLike): void {
     const fov = camera.projectionMatrix.elements[5] * this.heightHalf;
 
     // Update perspective on domElement
@@ -116,15 +94,11 @@ export class CSS3DRenderer {
     }
 
     // Render all objects in the scene
-    this.renderObject(scene, camera, cameraCSSMatrix);
+    this.renderObject(scene);
   }
 
-  private renderObject(
-    object: Object3D,
-    camera: PerspectiveCamera,
-    cameraCSSMatrix: string
-  ): void {
-    if (object instanceof CSS3DObject) {
+  private renderObject(object: Object3DLike): void {
+    if (isCSS3DObject(object)) {
       const style = this.getObjectCSSMatrix(object.matrixWorld);
       const element = object.element;
       const cachedObject = this.cache.objects.get(object);
@@ -142,7 +116,7 @@ export class CSS3DRenderer {
 
     // Recursively render children
     for (const child of object.children) {
-      this.renderObject(child, camera, cameraCSSMatrix);
+      this.renderObject(child);
     }
   }
 
@@ -156,7 +130,7 @@ export class CSS3DRenderer {
   /**
    * Convert camera's inverse world matrix to CSS matrix3d
    */
-  private getCameraCSSMatrix(matrix: Matrix4): string {
+  private getCameraCSSMatrix(matrix: Matrix4Like): string {
     const elements = matrix.elements;
 
     return 'matrix3d(' +
@@ -180,10 +154,10 @@ export class CSS3DRenderer {
   }
 
   /**
-   * Convert object's world matrix to CSS matrix3d
-   * The translate(-50%, -50%) centers the object on its position
+   * Convert object's world matrix to CSS matrix3d.
+   * The translate(-50%, -50%) centers the object on its position.
    */
-  private getObjectCSSMatrix(matrix: Matrix4): string {
+  private getObjectCSSMatrix(matrix: Matrix4Like): string {
     const elements = matrix.elements;
 
     const matrix3d = 'matrix3d(' +
@@ -208,4 +182,8 @@ export class CSS3DRenderer {
     // translate3d(-50%,-50%,0) centers the element on its 3D position
     return `translate3d(-50%,-50%,0)${matrix3d}`;
   }
+}
+
+function isCSS3DObject(object: Object3DLike): object is CSS3DObjectLike {
+  return (object as Partial<CSS3DObjectLike>).isCSS3DObject === true;
 }

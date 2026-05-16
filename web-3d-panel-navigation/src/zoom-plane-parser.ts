@@ -1,4 +1,4 @@
-import { Vector3, Quaternion, Euler } from './math';
+import type { RenderBackend, RenderTypes } from './render-contract';
 import type { ZoomPlaneConfig } from './types';
 
 type TileSide = 'right' | 'left' | 'top' | 'bottom';
@@ -403,78 +403,87 @@ function calculateErgonomicTileOffset(
   ];
 }
 
-function resolveTiledPlane(
+function resolveTiledPlane<T extends RenderTypes>(
+  backend: RenderBackend<T>,
   definition: PlaneDefinition,
   reference: ZoomPlaneConfig,
-  scale: number
+  scale: number,
 ): ZoomPlaneConfig {
   const layout = definition.layout;
   if (layout.layout !== 'tiled') {
     throw new Error(`Zoom plane "${definition.id}": expected tiled layout`);
   }
 
-  const referenceCenter = new Vector3(
+  const referenceCenter = backend.createVector3(
     reference.position[0],
     reference.position[1],
     reference.position[2]
   );
-  const referenceQuaternion = new Quaternion().setFromEuler(
-    new Euler(reference.rotation[0], reference.rotation[1], reference.rotation[2], 'XYZ')
+  const referenceQuaternion = backend.createQuaternion().setFromEuler(
+    backend.createEuler(reference.rotation[0], reference.rotation[1], reference.rotation[2], 'XYZ')
   );
-  const referenceRight = new Vector3(1, 0, 0).applyQuaternion(referenceQuaternion);
-  const referenceUp = new Vector3(0, 1, 0).applyQuaternion(referenceQuaternion);
+  const referenceRight = backend.createVector3(1, 0, 0).applyQuaternion(referenceQuaternion);
+  const referenceUp = backend.createVector3(0, 1, 0).applyQuaternion(referenceQuaternion);
   const finalOffset = calculateErgonomicTileOffset(layout, definition, reference, scale);
-  const hingeOffset = referenceRight.clone()
+  const hingeOffset = (referenceRight.clone() as T['Vector3'])
     .multiplyScalar(finalOffset[0])
-    .add(referenceUp.clone().multiplyScalar(finalOffset[1]));
+    .add((referenceUp.clone() as T['Vector3']).multiplyScalar(finalOffset[1]));
 
-  let relativeQuaternion: Quaternion;
-  let hinge: Vector3;
-  let center: Vector3;
+  let relativeQuaternion: T['Quaternion'];
+  let hinge: T['Vector3'];
+  let center: T['Vector3'];
 
   // The hinge is the shared edge center. The final center is offset from that
   // hinge by half of the tiled plane's scaled size along its own rotated axis.
   if (layout.side === 'right') {
-    hinge = referenceCenter.clone().add(referenceRight.clone().multiplyScalar(reference.width * scale / 2));
-    relativeQuaternion = new Quaternion().setFromAxisAngle(
-      new Vector3(0, 1, 0),
+    hinge = (referenceCenter.clone() as T['Vector3']).add(
+      (referenceRight.clone() as T['Vector3']).multiplyScalar(reference.width * scale / 2)
+    );
+    relativeQuaternion = backend.createQuaternion().setFromAxisAngle(
+      backend.createVector3(0, 1, 0),
       -layout.angle
     );
   } else if (layout.side === 'left') {
-    hinge = referenceCenter.clone().add(referenceRight.clone().multiplyScalar(-reference.width * scale / 2));
-    relativeQuaternion = new Quaternion().setFromAxisAngle(
-      new Vector3(0, 1, 0),
+    hinge = (referenceCenter.clone() as T['Vector3']).add(
+      (referenceRight.clone() as T['Vector3']).multiplyScalar(-reference.width * scale / 2)
+    );
+    relativeQuaternion = backend.createQuaternion().setFromAxisAngle(
+      backend.createVector3(0, 1, 0),
       layout.angle
     );
   } else if (layout.side === 'top') {
-    hinge = referenceCenter.clone().add(referenceUp.clone().multiplyScalar(reference.height * scale / 2));
-    relativeQuaternion = new Quaternion().setFromAxisAngle(
-      new Vector3(1, 0, 0),
+    hinge = (referenceCenter.clone() as T['Vector3']).add(
+      (referenceUp.clone() as T['Vector3']).multiplyScalar(reference.height * scale / 2)
+    );
+    relativeQuaternion = backend.createQuaternion().setFromAxisAngle(
+      backend.createVector3(1, 0, 0),
       layout.angle
     );
   } else {
-    hinge = referenceCenter.clone().add(referenceUp.clone().multiplyScalar(-reference.height * scale / 2));
-    relativeQuaternion = new Quaternion().setFromAxisAngle(
-      new Vector3(1, 0, 0),
+    hinge = (referenceCenter.clone() as T['Vector3']).add(
+      (referenceUp.clone() as T['Vector3']).multiplyScalar(-reference.height * scale / 2)
+    );
+    relativeQuaternion = backend.createQuaternion().setFromAxisAngle(
+      backend.createVector3(1, 0, 0),
       -layout.angle
     );
   }
 
   hinge.add(hingeOffset);
 
-  const offsetQuaternion = new Quaternion().setFromEuler(
-    new Euler(
+  const offsetQuaternion = backend.createQuaternion().setFromEuler(
+    backend.createEuler(
       layout.rotationOffset[0],
       layout.rotationOffset[1],
       layout.rotationOffset[2],
       'XYZ'
     )
   );
-  const quaternion = referenceQuaternion.clone()
+  const quaternion = (referenceQuaternion.clone() as T['Quaternion'])
     .multiply(offsetQuaternion)
     .multiply(relativeQuaternion);
-  const newRight = new Vector3(1, 0, 0).applyQuaternion(quaternion);
-  const newUp = new Vector3(0, 1, 0).applyQuaternion(quaternion);
+  const newRight = backend.createVector3(1, 0, 0).applyQuaternion(quaternion);
+  const newUp = backend.createVector3(0, 1, 0).applyQuaternion(quaternion);
 
   if (layout.side === 'right') {
     center = hinge.add(newRight.multiplyScalar(definition.width * scale / 2));
@@ -486,7 +495,7 @@ function resolveTiledPlane(
     center = hinge.add(newUp.multiplyScalar(-definition.height * scale / 2));
   }
 
-  const euler = new Euler().setFromQuaternion(quaternion, 'XYZ');
+  const euler = backend.createEuler().setFromQuaternion(quaternion, 'XYZ');
 
   return definitionToConfig(
     definition,
@@ -495,9 +504,10 @@ function resolveTiledPlane(
   );
 }
 
-function resolvePlaneDefinitions(
+function resolvePlaneDefinitions<T extends RenderTypes>(
+  backend: RenderBackend<T>,
   definitions: PlaneDefinition[],
-  scale: number
+  scale: number,
 ): ZoomPlaneConfig[] {
   const byId = new Map<string, PlaneDefinition>();
   const resolved = new Map<string, ZoomPlaneConfig>();
@@ -544,7 +554,7 @@ function resolvePlaneDefinitions(
       }
 
       const reference = resolve(referenceDefinition.id);
-      config = resolveTiledPlane(definition, reference, scale);
+      config = resolveTiledPlane(backend, definition, reference, scale);
     }
 
     resolving.delete(id);
@@ -558,15 +568,18 @@ function resolvePlaneDefinitions(
 /**
  * Parse all zoom plane elements within a container.
  *
+ * @param backend - Active render backend (used for tiled-layout math)
  * @param container - Container element to search within
- * @param selector - CSS selector for zoom plane elements (default: '[data-zoom-plane]')
+ * @param selectorOrOptions - CSS selector or options bag
+ * @param scaleOverride - Override scale if a selector string is passed
  * @returns Array of parsed ZoomPlaneConfig objects
  * @throws Error if any plane fails to parse, or if multiple center elements exist
  */
-export function parseAllZoomPlanes(
+export function parseAllZoomPlanes<T extends RenderTypes>(
+  backend: RenderBackend<T>,
   container: HTMLElement,
   selectorOrOptions: string | ParseAllZoomPlanesOptions = '[data-zoom-plane]',
-  scaleOverride?: number
+  scaleOverride?: number,
 ): ZoomPlaneConfig[] {
   const selector = typeof selectorOrOptions === 'string'
     ? selectorOrOptions
@@ -605,7 +618,7 @@ export function parseAllZoomPlanes(
     }
   });
 
-  return resolvePlaneDefinitions(definitions, scale);
+  return resolvePlaneDefinitions(backend, definitions, scale);
 }
 
 /**

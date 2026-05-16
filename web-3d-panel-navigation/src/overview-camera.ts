@@ -1,4 +1,4 @@
-import { Vector3, Euler } from './math';
+import type { RenderBackend, RenderTypes } from './render-contract';
 import type { ZoomPlaneConfig, CameraState } from './types';
 import { calculateAllPlanesBoundingBox, type BoundingBox } from './projection';
 import { findCenterZoomPlane } from './zoom-plane-parser';
@@ -11,6 +11,7 @@ import { findCenterZoomPlane } from './zoom-plane-parser';
  *   perpendicular to it with it dead-center in viewport
  * - Balanced Scene Mode: camera centers on the geometric center of all planes
  *
+ * @param backend - Active render backend (used to construct Vector3/Euler)
  * @param configs - All zoom plane configurations
  * @param scale - Scale factor applied to planes
  * @param fov - Camera field of view in degrees
@@ -18,29 +19,30 @@ import { findCenterZoomPlane } from './zoom-plane-parser';
  * @param padding - Extra padding as fraction (e.g., 0.15 = 15%)
  * @returns CameraState for the overview position
  */
-export function calculateOverviewState(
+export function calculateOverviewState<T extends RenderTypes>(
+  backend: RenderBackend<T>,
   configs: ZoomPlaneConfig[],
   scale: number,
   fov: number,
   aspectRatio: number,
-  padding: number = 0.15
-): CameraState {
+  padding: number = 0.15,
+): CameraState<T> {
   if (configs.length === 0) {
     return {
-      position: new Vector3(0, 0, 1200),
-      target: new Vector3(0, 0, 0),
-      up: new Vector3(0, 1, 0),
+      position: backend.createVector3(0, 0, 1200),
+      target: backend.createVector3(0, 0, 0),
+      up: backend.createVector3(0, 1, 0),
       fov,
     };
   }
 
-  const boundingBox = calculateAllPlanesBoundingBox(configs, scale);
+  const boundingBox = calculateAllPlanesBoundingBox(backend, configs, scale);
   const centerPlane = findCenterZoomPlane(configs);
 
   if (centerPlane) {
-    return calculateFocalElementMode(centerPlane, boundingBox, fov, aspectRatio, padding);
+    return calculateFocalElementMode(backend, centerPlane, boundingBox, fov, aspectRatio, padding);
   } else {
-    return calculateBalancedSceneMode(boundingBox, fov, aspectRatio, padding);
+    return calculateBalancedSceneMode(backend, boundingBox, fov, aspectRatio, padding);
   }
 }
 
@@ -48,22 +50,23 @@ export function calculateOverviewState(
  * Focal Element Mode: camera perpendicular to the center plane,
  * pulled back far enough to keep all planes in frame.
  */
-function calculateFocalElementMode(
+function calculateFocalElementMode<T extends RenderTypes>(
+  backend: RenderBackend<T>,
   centerPlane: ZoomPlaneConfig,
   boundingBox: BoundingBox,
   fov: number,
   aspectRatio: number,
-  padding: number
-): CameraState {
-  const centerPosition = new Vector3(
+  padding: number,
+): CameraState<T> {
+  const centerPosition = backend.createVector3(
     centerPlane.position[0],
     centerPlane.position[1],
     centerPlane.position[2]
   );
 
   // Calculate the center plane's normal vector (perpendicular to surface)
-  const normal = new Vector3(0, 0, 1);
-  const euler = new Euler(
+  const normal = backend.createVector3(0, 0, 1);
+  const euler = backend.createEuler(
     centerPlane.rotation[0],
     centerPlane.rotation[1],
     centerPlane.rotation[2]
@@ -94,14 +97,14 @@ function calculateFocalElementMode(
   requiredDistance += maxDepthBehindCenter;
 
   // Position camera along the center plane's normal at the required distance
-  const cameraPosition = centerPosition.clone().add(
-    normal.clone().multiplyScalar(requiredDistance)
+  const cameraPosition = (centerPosition.clone() as T['Vector3']).add(
+    (normal.clone() as T['Vector3']).multiplyScalar(requiredDistance)
   );
 
   return {
     position: cameraPosition,
     target: centerPosition,
-    up: new Vector3(0, 1, 0),
+    up: backend.createVector3(0, 1, 0),
     fov,
   };
 }
@@ -109,12 +112,13 @@ function calculateFocalElementMode(
 /**
  * Balanced Scene Mode: camera centered on the geometric center of all planes.
  */
-function calculateBalancedSceneMode(
+function calculateBalancedSceneMode<T extends RenderTypes>(
+  backend: RenderBackend<T>,
   boundingBox: BoundingBox,
   fov: number,
   aspectRatio: number,
-  padding: number
-): CameraState {
+  padding: number,
+): CameraState<T> {
   const cameraZ = calculateOverviewCameraDistance(boundingBox, fov, aspectRatio, padding);
 
   const centerX = (boundingBox.minX + boundingBox.maxX) / 2;
@@ -122,9 +126,9 @@ function calculateBalancedSceneMode(
   const centerZ = (boundingBox.minZ + boundingBox.maxZ) / 2;
 
   return {
-    position: new Vector3(centerX, centerY, cameraZ),
-    target: new Vector3(centerX, centerY, centerZ),
-    up: new Vector3(0, 1, 0),
+    position: backend.createVector3(centerX, centerY, cameraZ),
+    target: backend.createVector3(centerX, centerY, centerZ),
+    up: backend.createVector3(0, 1, 0),
     fov,
   };
 }

@@ -9,6 +9,7 @@ import { Object3D, Scene, PerspectiveCamera } from './index';
 // freely — only the library's runtime path must stay three-free.
 
 const EPS = 1e-5;
+void ThreeScene; // imported for symmetry with three-equivalent checks
 
 function expectArrayClose(a: ArrayLike<number>, b: ArrayLike<number>): void {
   expect(a.length).toBe(b.length);

@@ -8,7 +8,7 @@ import { Vector3, Quaternion, Euler, Matrix4, clamp, DEG2RAD } from './index';
 
 // Tests cross-validate the in-house math primitives against three.js, which is
 // already a devDependency. The library itself never imports three for math —
-// see src/index.ts and src/skybox/lite/*. The runtime bundle is independent.
+// see src/index.ts and src/backends/lite/skybox/*. The runtime bundle is independent.
 
 const EPS = 1e-5;
 

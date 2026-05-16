@@ -1,5 +1,4 @@
-import type { Vector3 } from './math';
-import type { Object3D } from './scene';
+import type { RenderTypes } from './render-contract';
 
 /**
  * Configuration for a zoom plane in the 3D scene.
@@ -43,21 +42,24 @@ export interface ZoomPlaneConfig {
 }
 
 /**
- * Represents a camera state (position, look-at target, up vector, and field of view)
+ * Represents a camera state (position, look-at target, up vector, and field
+ * of view). Generic over the backend's `RenderTypes` so the position/target/up
+ * vectors are typed against the concrete `Vector3` class chosen by the
+ * backend (the lite library-native one, or `THREE.Vector3`).
  */
-export interface CameraState {
+export interface CameraState<T extends RenderTypes = RenderTypes> {
   /** Camera position in 3D space */
-  position: Vector3;
+  position: T['Vector3'];
 
   /** Point the camera is looking at */
-  target: Vector3;
+  target: T['Vector3'];
 
   /**
    * Camera's "up" direction. Controls the roll rotation.
    * When looking at a tilted plane, this should match the plane's local up
    * so that the plane appears axis-aligned on screen.
    */
-  up: Vector3;
+  up: T['Vector3'];
 
   /** Field of view in degrees */
   fov: number;
@@ -110,11 +112,13 @@ export interface ScreenRect {
 }
 
 /**
- * Reference to a CSS3DObject and its associated DOM element
+ * Reference to a CSS3DObject and its associated DOM element. Generic over the
+ * backend's `RenderTypes` so the `object` field reflects the concrete
+ * CSS3DObject class produced by the active backend.
  */
-export interface CSS3DObjectRef {
-  /** The CSS3DObject in the Three.js scene */
-  object: Object3D;
+export interface CSS3DObjectRef<T extends RenderTypes = RenderTypes> {
+  /** The CSS3D-tagged object in the scene */
+  object: T['CSS3DObject'];
   /** The DOM element being rendered */
   element: HTMLElement;
 }

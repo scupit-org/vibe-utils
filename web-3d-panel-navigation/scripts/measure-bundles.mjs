@@ -15,8 +15,8 @@ await mkdir(tmpDir, { recursive: true });
 // Three.js leak: `THREE.WebGL` is a substring of warning prefixes embedded as
 // string literals inside three's source (e.g. "THREE.WebGLRenderer: ..."),
 // so it survives minification of three.module.min.js. Any consumer that
-// transitively pulls three (including the legacy SkyboxHost, which depends on
-// THREE.WebGLRenderer) will contain this substring.
+// transitively pulls three (including the three-backend SkyboxHost, which
+// depends on THREE.WebGLRenderer) will contain this substring.
 const THREE_LEAK_MARKERS = [/THREE\.WebGL/];
 
 // Nav core: the CSS3DRenderer emits a distinctive template literal we can
@@ -26,20 +26,25 @@ const NAV_CORE_MARKERS = [/translate3d\(-50%,-50%,0\)/];
 // Path helpers — esbuild on Windows still wants forward slashes inside
 // generated source strings.
 const indexPath = path.join(rootDir, 'src', 'index.ts').replace(/\\/g, '/');
-const liteIndexPath = path.join(rootDir, 'src', 'skybox', 'lite', 'index.ts').replace(/\\/g, '/');
+const liteIndexPath = path.join(rootDir, 'src', 'backends', 'lite', 'index.ts').replace(/\\/g, '/');
+const threeIndexPath = path.join(rootDir, 'src', 'backends', 'three', 'index.ts').replace(/\\/g, '/');
 
 const ENTRIES = [
   // ---------------------------------------------------------------------------
-  // Lite group — Phase 2 in-house math/scene-graph + lite WebGL skybox subpath.
-  // None of these should contain three.
+  // Lite group — Phase 3 backend abstraction over the in-house math/scene-graph
+  // and the lite WebGL skybox subpath. None of these should contain three.
   // ---------------------------------------------------------------------------
   {
     label: 'ZoomPlaneNavigator only (CSS3D, no skybox)',
     key: 'nav-only',
     group: 'lite',
-    source: `import { ZoomPlaneNavigator } from '${indexPath}';\nconsole.log(ZoomPlaneNavigator);\n`,
-    // The navigator entry pulls in src/index.ts which re-exports the legacy
-    // three-backed skybox; tree-shaking must drop those.
+    // The main entry now exports zero backend-specific code. A meaningful
+    // navigator measurement must construct one with `liteBackend`.
+    source: [
+      `import { ZoomPlaneNavigator } from '${indexPath}';`,
+      `import { liteBackend } from '${liteIndexPath}';`,
+      `console.log(ZoomPlaneNavigator, liteBackend);`,
+    ].join('\n') + '\n',
     mustNotContain: [...THREE_LEAK_MARKERS],
     budgetBytes: 55 * 1024,
   },
@@ -49,8 +54,8 @@ const ENTRIES = [
     group: 'lite',
     source: [
       `import { ZoomPlaneNavigator } from '${indexPath}';`,
-      `import { LiteSkyboxHost, createGradientSkybox } from '${liteIndexPath}';`,
-      `console.log(ZoomPlaneNavigator, LiteSkyboxHost, createGradientSkybox);`,
+      `import { liteBackend, createGradientSkybox } from '${liteIndexPath}';`,
+      `console.log(ZoomPlaneNavigator, liteBackend, createGradientSkybox);`,
     ].join('\n') + '\n',
     mustNotContain: [...THREE_LEAK_MARKERS],
     budgetBytes: 70 * 1024,
@@ -61,16 +66,21 @@ const ENTRIES = [
     group: 'lite',
     source: [
       `import { ZoomPlaneNavigator } from '${indexPath}';`,
-      `import { LiteSkyboxHost, createStarfieldSkybox } from '${liteIndexPath}';`,
-      `console.log(ZoomPlaneNavigator, LiteSkyboxHost, createStarfieldSkybox);`,
+      `import { liteBackend, createStarfieldSkybox } from '${liteIndexPath}';`,
+      `console.log(ZoomPlaneNavigator, liteBackend, createStarfieldSkybox);`,
     ].join('\n') + '\n',
     mustNotContain: [...THREE_LEAK_MARKERS],
     budgetBytes: 75 * 1024,
   },
   {
-    label: 'Lite gradient only',
+    label: 'Lite gradient only (LiteSkyboxHost direct)',
     key: 'lite-gradient',
     group: 'lite',
+    // True standalone-skybox consumers reach for `LiteSkyboxHost` directly
+    // rather than the `liteBackend` factory object. The backend object can't
+    // be tree-shaken property-by-property, so importing only the host class
+    // is how downstream sites avoid paying for CSS3DRenderer / navigator
+    // primitives they don't use.
     source: [
       `import { LiteSkyboxHost, createGradientSkybox } from '${liteIndexPath}';`,
       `console.log(LiteSkyboxHost, createGradientSkybox);`,
@@ -79,7 +89,7 @@ const ENTRIES = [
     budgetBytes: 15 * 1024,
   },
   {
-    label: 'Lite starfield only',
+    label: 'Lite starfield only (LiteSkyboxHost direct)',
     key: 'lite-starfield',
     group: 'lite',
     source: [
@@ -91,18 +101,33 @@ const ENTRIES = [
   },
 
   // ---------------------------------------------------------------------------
-  // Three-backed group — legacy `src/skybox/` flavors that pull in three's
+  // Three-backed group — the three-backend subpath pulls in three's
   // WebGLRenderer / Scene / Camera / math primitives. These bundles are
-  // expected to contain three; the standalone variants must NOT contain
-  // nav-core (verifies SkyboxHost imports don't drag the navigator in).
+  // expected to contain three; the standalone-skybox variants must NOT
+  // contain nav-core (verifies the three-backend factories don't drag the
+  // navigator in transitively).
   // ---------------------------------------------------------------------------
+  {
+    label: 'ZoomPlaneNavigator only (three backend, no skybox)',
+    key: 'nav-three-only',
+    group: 'three',
+    source: [
+      `import { ZoomPlaneNavigator } from '${indexPath}';`,
+      `import { threeBackend } from '${threeIndexPath}';`,
+      `console.log(ZoomPlaneNavigator, threeBackend);`,
+    ].join('\n') + '\n',
+    mustContain: [...THREE_LEAK_MARKERS],
+    mustNotContain: [],
+    budgetBytes: 600 * 1024,
+  },
   {
     label: 'ZoomPlaneNavigator + three gradient',
     key: 'nav-three-gradient',
     group: 'three',
     source: [
-      `import { ZoomPlaneNavigator, SkyboxHost, createGradientSkybox } from '${indexPath}';`,
-      `console.log(ZoomPlaneNavigator, SkyboxHost, createGradientSkybox);`,
+      `import { ZoomPlaneNavigator } from '${indexPath}';`,
+      `import { threeBackend, createGradientSkybox } from '${threeIndexPath}';`,
+      `console.log(ZoomPlaneNavigator, threeBackend, createGradientSkybox);`,
     ].join('\n') + '\n',
     mustContain: [...THREE_LEAK_MARKERS],
     mustNotContain: [],
@@ -113,19 +138,22 @@ const ENTRIES = [
     key: 'nav-three-starfield',
     group: 'three',
     source: [
-      `import { ZoomPlaneNavigator, SkyboxHost, createStarfieldSkybox } from '${indexPath}';`,
-      `console.log(ZoomPlaneNavigator, SkyboxHost, createStarfieldSkybox);`,
+      `import { ZoomPlaneNavigator } from '${indexPath}';`,
+      `import { threeBackend, createStarfieldSkybox } from '${threeIndexPath}';`,
+      `console.log(ZoomPlaneNavigator, threeBackend, createStarfieldSkybox);`,
     ].join('\n') + '\n',
     mustContain: [...THREE_LEAK_MARKERS],
     mustNotContain: [],
     budgetBytes: 600 * 1024,
   },
   {
-    label: 'Three gradient only',
+    label: 'Three gradient only (SkyboxHost direct)',
     key: 'three-gradient',
     group: 'three',
+    // Mirrors the lite "direct" pattern: standalone-skybox consumers import
+    // the host class itself rather than the threeBackend factory object.
     source: [
-      `import { SkyboxHost, createGradientSkybox } from '${indexPath}';`,
+      `import { SkyboxHost, createGradientSkybox } from '${threeIndexPath}';`,
       `console.log(SkyboxHost, createGradientSkybox);`,
     ].join('\n') + '\n',
     mustContain: [...THREE_LEAK_MARKERS],
@@ -133,11 +161,11 @@ const ENTRIES = [
     budgetBytes: 560 * 1024,
   },
   {
-    label: 'Three starfield only',
+    label: 'Three starfield only (SkyboxHost direct)',
     key: 'three-starfield',
     group: 'three',
     source: [
-      `import { SkyboxHost, createStarfieldSkybox } from '${indexPath}';`,
+      `import { SkyboxHost, createStarfieldSkybox } from '${threeIndexPath}';`,
       `console.log(SkyboxHost, createStarfieldSkybox);`,
     ].join('\n') + '\n',
     mustContain: [...THREE_LEAK_MARKERS],
@@ -150,6 +178,7 @@ const ENTRIES = [
 // names a logical "shape" (e.g. nav + starfield) so the reader can read the
 // delta and ratio without cross-referencing keys.
 const PAIRS = [
+  { label: 'Nav only (no skybox)', lite: 'nav-only', three: 'nav-three-only' },
   { label: 'Nav + gradient', lite: 'nav-lite-gradient', three: 'nav-three-gradient' },
   { label: 'Nav + starfield', lite: 'nav-lite-starfield', three: 'nav-three-starfield' },
   { label: 'Gradient only', lite: 'lite-gradient', three: 'three-gradient' },
@@ -250,7 +279,7 @@ await rm(tmpDir, { recursive: true, force: true });
 
 const failures = [];
 
-// Size budgets — Phase 2 floor measurements with headroom for navigator growth.
+// Size budgets — Phase 2/3 floor measurements with headroom for navigator growth.
 for (const r of results) {
   if (r.bytes > r.budgetBytes) {
     failures.push(

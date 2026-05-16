@@ -15,26 +15,22 @@ export type {
   ZoomPlaneConfig,
 } from './types';
 
-// Skybox subsystem (optional WebGL layer)
-export { SkyboxHost } from './skybox/skybox-host';
-export type { SkyboxHostOptions } from './skybox/skybox-host';
-export type { Skybox, SkyboxFactory } from './skybox/skybox';
-export { readCssColor } from './skybox/css-color';
-export {
-  createGradientMesh,
-  GRADIENT_VERTEX_SHADER,
-  GRADIENT_FRAGMENT_SHADER,
-} from './skybox/gradient-mesh';
-export type { GradientMesh, GradientMeshOptions } from './skybox/gradient-mesh';
-export { createGradientSkybox } from './skybox/gradient-skybox';
-export type { GradientSkyboxOptions } from './skybox/gradient-skybox';
-export {
-  createStarfieldSkybox,
-  STARFIELD_VERTEX_SHADER,
-  STARFIELD_FRAGMENT_SHADER,
-} from './skybox/starfield-skybox';
-export type { StarfieldSkyboxOptions } from './skybox/starfield-skybox';
-export { createImageSkybox } from './skybox/image-skybox';
-export type { ImageSkyboxOptions } from './skybox/image-skybox';
-export { createPanoramaSkybox } from './skybox/panorama-skybox';
-export type { PanoramaSkyboxOptions } from './skybox/panorama-skybox';
+// Backend contract types — consumers writing their own helpers can reference
+// these. Concrete backends are imported from the dedicated subpaths
+// (`@scupit/web-3d-panel-navigation/lite-backend` or
+// `@scupit/web-3d-panel-navigation/three-backend`).
+export type {
+  RenderBackend,
+  RenderTypes,
+  Vec3Like,
+  EulerLike,
+  EulerOrderLike,
+  QuaternionLike,
+  Matrix4Like,
+  Object3DLike,
+  SceneLike,
+  PerspectiveCameraLike,
+  CSS3DObjectLike,
+  CSS3DRendererLike,
+  SkyboxHostLike,
+} from './render-contract';

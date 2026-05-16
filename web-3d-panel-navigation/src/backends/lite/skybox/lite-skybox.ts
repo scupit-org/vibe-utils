@@ -1,4 +1,4 @@
-import type { PerspectiveCamera } from "../../scene";
+import type { PerspectiveCamera } from "../scene";
 
 export interface SkyboxFrame {
   /** CSS pixel viewport size (matches canvas style width/height). */

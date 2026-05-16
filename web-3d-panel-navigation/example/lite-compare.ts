@@ -1,14 +1,25 @@
 import { PerspectiveCamera } from "three";
 import {
-  SkyboxHost,
+  threeBackend,
   createGradientSkybox as createGradientSkyboxThree,
   createStarfieldSkybox as createStarfieldSkyboxThree,
-} from "../dist/index.js";
+  type SkyboxHost,
+} from "../dist/three-backend.js";
 import {
-  LiteSkyboxHost,
+  liteBackend,
   createGradientSkybox as createGradientSkyboxLite,
   createStarfieldSkybox as createStarfieldSkyboxLite,
-} from "../dist/skybox-lite.js";
+  type LiteSkyboxHost,
+} from "../dist/lite-backend.js";
+
+// Side-by-side visual parity harness. Both columns share a single camera
+// instance, so any visual delta is purely backend-driven (three's
+// WebGLRenderer vs the lite raw-WebGL2 path).
+//
+// The harness intentionally constructs cameras directly rather than going
+// through ZoomPlaneNavigator — its purpose is to exercise just the skybox
+// hosts. Camera state is mutated manually below to produce the slow yaw
+// drift the visual check relies on.
 
 type Flavor = "gradient" | "starfield";
 
@@ -21,12 +32,22 @@ function makeCamera(): PerspectiveCamera {
 
 function buildThree(mount: HTMLElement, camera: PerspectiveCamera, flavor: Flavor): SkyboxHost {
   const skybox = flavor === "gradient" ? createGradientSkyboxThree() : createStarfieldSkyboxThree();
-  return new SkyboxHost({ camera, mount, skybox, canvasId: "three-skybox-canvas", autoStart: false });
+  return threeBackend.createSkyboxHost({
+    camera, mount, skybox, canvasId: "three-skybox-canvas", autoStart: false,
+  });
 }
 
 function buildLite(mount: HTMLElement, camera: PerspectiveCamera, flavor: Flavor): LiteSkyboxHost {
   const skybox = flavor === "gradient" ? createGradientSkyboxLite() : createStarfieldSkyboxLite();
-  return new LiteSkyboxHost({ camera, mount, skybox, canvasId: "lite-skybox-canvas", autoStart: false });
+  // The lite host's options type pins `camera` to the lite PerspectiveCamera.
+  // Three's PerspectiveCamera is structurally compatible (same matrix layout,
+  // identical method surface that the host reads), so this cast is the
+  // documented coexistence path for the side-by-side harness only — production
+  // consumers pick one backend and stay in that universe.
+  return liteBackend.createSkyboxHost({
+    camera: camera as unknown as Parameters<typeof liteBackend.createSkyboxHost>[0]["camera"],
+    mount, skybox, canvasId: "lite-skybox-canvas", autoStart: false,
+  });
 }
 
 function setStatus(text: string): void {

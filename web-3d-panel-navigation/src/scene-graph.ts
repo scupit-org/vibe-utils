@@ -1,26 +1,31 @@
-import { Scene, PerspectiveCamera } from './scene';
-import { CSS3DRenderer, CSS3DObject } from './css3d-renderer';
+import type { RenderBackend, RenderTypes } from './render-contract';
 import type { ZoomPlaneConfig, CSS3DObjectRef, NavigationConfig } from './types';
 import { findZoomPlane } from './zoom-plane-parser';
 
 /**
- * SceneGraph - Manages the Three.js scene, camera, CSS3D renderer, and plane objects.
+ * SceneGraph - Manages the scene, camera, CSS3D renderer, and plane objects.
+ *
+ * Generic over the active backend's `RenderTypes` so `scene`, `camera`, and
+ * `renderer` are typed against the backend's concrete classes (e.g.
+ * `LitePerspectiveCamera` vs `THREE.PerspectiveCamera`). The constructor
+ * receives the backend and asks it for primitives via factory methods instead
+ * of calling `new` on a concrete class.
  *
  * Responsibilities:
- * - Scene, camera, and renderer initialization
- * - CSS3DObject creation from plane configs
+ * - Scene, camera, and renderer initialization (via backend factories)
+ * - CSS3DObject creation from plane configs (via backend factory)
  * - Rendering (single pass, called externally by the animation timeline)
  * - Resize handling (camera aspect + renderer size)
  * - Plane opacity control
  *
  * Does NOT own: rAF loop, overview camera calculation, visibility toggling, event handling
  */
-export class SceneGraph {
-  public scene: Scene;
-  public camera: PerspectiveCamera;
-  public renderer: CSS3DRenderer;
+export class SceneGraph<T extends RenderTypes = RenderTypes> {
+  public scene: T['Scene'];
+  public camera: T['PerspectiveCamera'];
+  public renderer: T['CSS3DRenderer'];
 
-  private zoomPlanes = new Map<string, CSS3DObjectRef>();
+  private zoomPlanes = new Map<string, CSS3DObjectRef<T>>();
   private planeOpacities = new Map<string, string>();
   private planeConfigs: ZoomPlaneConfig[] = [];
   private config: NavigationConfig;
@@ -30,22 +35,21 @@ export class SceneGraph {
   constructor(
     container: HTMLElement,
     planeConfigs: ZoomPlaneConfig[],
-    config: NavigationConfig
+    config: NavigationConfig,
+    backend: RenderBackend<T>
   ) {
     this.config = config;
     this.planeConfigs = planeConfigs;
 
-    // Initialize Three.js scene
-    this.scene = new Scene();
-    this.camera = new PerspectiveCamera(
+    this.scene = backend.createScene();
+    this.camera = backend.createPerspectiveCamera(
       config.overviewFov,
       window.innerWidth / window.innerHeight,
       0.1,
       10000
     );
 
-    // Initialize CSS3D renderer
-    this.renderer = new CSS3DRenderer();
+    this.renderer = backend.createCSS3DRenderer();
     const width = window.innerWidth;
     const height = window.innerHeight;
     this.renderer.setSize(width, height);
@@ -54,23 +58,20 @@ export class SceneGraph {
     this.renderer.domElement.style.left = '0';
     container.appendChild(this.renderer.domElement);
 
-    // Create CSS3D objects for each zoom plane
-    this.createZoomPlaneObjects();
+    this.createZoomPlaneObjects(backend);
   }
 
-  private createZoomPlaneObjects(): void {
+  private createZoomPlaneObjects(backend: RenderBackend<T>): void {
     for (const config of this.planeConfigs) {
       const element = config.element;
       const isBakedScale = this.config.planeScaleMode === 'baked-layout';
       const elementScale = isBakedScale ? this.config.scale : 1;
       const objectScale = isBakedScale ? 1 : this.config.scale;
 
-      // Set dimensions on element
       element.style.width = `${config.width * elementScale}px`;
       element.style.height = `${config.height * elementScale}px`;
 
-      // Create CSS3DObject
-      const object = new CSS3DObject(element);
+      const object = backend.createCSS3DObject(element);
       object.position.set(
         config.position[0],
         config.position[1],
@@ -121,7 +122,7 @@ export class SceneGraph {
   /**
    * Get a zoom plane's CSS3DObject reference by ID.
    */
-  getZoomPlane(id: string): CSS3DObjectRef | undefined {
+  getZoomPlane(id: string): CSS3DObjectRef<T> | undefined {
     return this.zoomPlanes.get(id);
   }
 

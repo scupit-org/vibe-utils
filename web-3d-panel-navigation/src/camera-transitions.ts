@@ -1,19 +1,25 @@
-import { Vector3, clamp, DEG2RAD } from './math';
-import { PerspectiveCamera } from './scene';
+import type { RenderBackend, RenderTypes } from './render-contract';
 import type { CameraState } from './types';
 import { easeInOutCubic, easeOutCubic } from './easing';
+
+const DEG2RAD = Math.PI / 180;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
 
 // =============================================================================
 // Helpers
 // =============================================================================
 
 /** Interpolate up vector and FOV */
-function lerpUpAndFov(
-  from: CameraState,
-  to: CameraState,
-  t: number
-): { up: Vector3; fov: number } {
-  const up = new Vector3().lerpVectors(from.up, to.up, t).normalize();
+function lerpUpAndFov<T extends RenderTypes>(
+  backend: RenderBackend<T>,
+  from: CameraState<T>,
+  to: CameraState<T>,
+  t: number,
+): { up: T['Vector3']; fov: number } {
+  const up = backend.createVector3().lerpVectors(from.up, to.up, t).normalize() as T['Vector3'];
   const fov = from.fov + (to.fov - from.fov) * t;
   return { up, fov };
 }
@@ -39,11 +45,14 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
  * Using forward + up angle captures the full camera reorientation,
  * including roll/tilt that forward angle alone misses.
  */
-export function applyTransition(
-  from: CameraState, to: CameraState,
-  rawT: number, camera: PerspectiveCamera
+export function applyTransition<T extends RenderTypes>(
+  backend: RenderBackend<T>,
+  from: CameraState<T>,
+  to: CameraState<T>,
+  rawT: number,
+  camera: T['PerspectiveCamera'],
 ): void {
-  const state = calculateTransitionState(from, to, rawT);
+  const state = calculateTransitionState(backend, from, to, rawT);
   camera.position.copy(state.position);
   camera.fov = state.fov;
   camera.updateProjectionMatrix();
@@ -54,16 +63,17 @@ export function applyTransition(
 /**
  * Calculate the complete camera state for a transition progress value.
  * Callers that track camera targets explicitly should apply this state through
- * their camera controller instead of mutating the Three.js camera directly.
+ * their camera controller instead of mutating the camera directly.
  */
-export function calculateTransitionState(
-  from: CameraState,
-  to: CameraState,
-  rawT: number
-): CameraState {
+export function calculateTransitionState<T extends RenderTypes>(
+  backend: RenderBackend<T>,
+  from: CameraState<T>,
+  to: CameraState<T>,
+  rawT: number,
+): CameraState<T> {
   // Forward angle
-  const fromFwd = new Vector3().subVectors(from.target, from.position).normalize();
-  const toFwd = new Vector3().subVectors(to.target, to.position).normalize();
+  const fromFwd = backend.createVector3().subVectors(from.target, from.position).normalize();
+  const toFwd = backend.createVector3().subVectors(to.target, to.position).normalize();
   const fwdDot = clamp(fromFwd.dot(toFwd), -1, 1);
   const fwdAngle = Math.acos(fwdDot);
 
@@ -80,11 +90,9 @@ export function calculateTransitionState(
   const blend = smoothstep(lowerAngle, upperAngle, totalAngle);
 
   if (blend < 0.5) {
-    // Early Look regime: target leads position, straight path
-    return calculateEarlyLookState(from, to, rawT);
+    return calculateEarlyLookState(backend, from, to, rawT);
   } else {
-    // Orbit regime: matched timing, sweeping arc
-    return calculateOrbitState(from, to, rawT);
+    return calculateOrbitState(backend, from, to, rawT);
   }
 }
 
@@ -94,20 +102,21 @@ export function calculateTransitionState(
  * while still sliding into its final position. This makes the rotation
  * feel concurrent with the translation rather than sequential.
  */
-function calculateEarlyLookState(
-  from: CameraState,
-  to: CameraState,
-  rawT: number
-): CameraState {
+function calculateEarlyLookState<T extends RenderTypes>(
+  backend: RenderBackend<T>,
+  from: CameraState<T>,
+  to: CameraState<T>,
+  rawT: number,
+): CameraState<T> {
   const posT = easeInOutCubic(rawT);
 
   // Target uses a faster curve — arrives at ~70% of the animation
   const targetRaw = Math.min(rawT / 0.7, 1.0);
   const targetT = easeOutCubic(targetRaw);
 
-  const position = new Vector3().lerpVectors(from.position, to.position, posT);
-  const target = new Vector3().lerpVectors(from.target, to.target, targetT);
-  const { up, fov } = lerpUpAndFov(from, to, posT);
+  const position = backend.createVector3().lerpVectors(from.position, to.position, posT) as T['Vector3'];
+  const target = backend.createVector3().lerpVectors(from.target, to.target, targetT) as T['Vector3'];
+  const { up, fov } = lerpUpAndFov(backend, from, to, posT);
 
   return { position, target, up, fov };
 }
@@ -117,20 +126,21 @@ function calculateEarlyLookState(
  * of the two targets, maintaining roughly constant distance while
  * sweeping around. Creates an orbital/turntable feel.
  */
-function calculateOrbitState(
-  from: CameraState,
-  to: CameraState,
-  rawT: number
-): CameraState {
+function calculateOrbitState<T extends RenderTypes>(
+  backend: RenderBackend<T>,
+  from: CameraState<T>,
+  to: CameraState<T>,
+  rawT: number,
+): CameraState<T> {
   const t = easeInOutCubic(rawT);
 
   // Linearly interpolate the look-at target
-  const target = new Vector3().lerpVectors(from.target, to.target, t);
+  const target = backend.createVector3().lerpVectors(from.target, to.target, t) as T['Vector3'];
 
   // For position: slerp around the midpoint of the two targets
-  const midTarget = new Vector3().lerpVectors(from.target, to.target, 0.5);
-  const fromOffset = new Vector3().subVectors(from.position, midTarget);
-  const toOffset = new Vector3().subVectors(to.position, midTarget);
+  const midTarget = backend.createVector3().lerpVectors(from.target, to.target, 0.5);
+  const fromOffset = backend.createVector3().subVectors(from.position, midTarget);
+  const toOffset = backend.createVector3().subVectors(to.position, midTarget);
 
   // Interpolate radius
   const fromLen = fromOffset.length();
@@ -138,26 +148,26 @@ function calculateOrbitState(
   const currentLen = fromLen + (toLen - fromLen) * t;
 
   // Slerp direction
-  const fromDir = fromOffset.clone().normalize();
-  const toDir = toOffset.clone().normalize();
+  const fromDir = (fromOffset.clone() as T['Vector3']).normalize();
+  const toDir = (toOffset.clone() as T['Vector3']).normalize();
   const dot = clamp(fromDir.dot(toDir), -1, 1);
   const theta = Math.acos(dot);
 
-  let position: Vector3;
+  let position: T['Vector3'];
   if (theta < 0.001) {
     // Nearly parallel — fall back to lerp
-    position = new Vector3().lerpVectors(from.position, to.position, t);
+    position = backend.createVector3().lerpVectors(from.position, to.position, t) as T['Vector3'];
   } else {
     const sinTheta = Math.sin(theta);
     const a = Math.sin((1 - t) * theta) / sinTheta;
     const b = Math.sin(t * theta) / sinTheta;
-    const slerpedDir = new Vector3()
+    const slerpedDir = backend.createVector3()
       .addScaledVector(fromDir, a)
       .addScaledVector(toDir, b)
       .normalize();
-    position = midTarget.clone().add(slerpedDir.multiplyScalar(currentLen));
+    position = (midTarget.clone() as T['Vector3']).add(slerpedDir.multiplyScalar(currentLen));
   }
 
-  const { up, fov } = lerpUpAndFov(from, to, t);
+  const { up, fov } = lerpUpAndFov(backend, from, to, t);
   return { position, target, up, fov };
 }

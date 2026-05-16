@@ -1,5 +1,4 @@
-import { Vector3, Euler } from './math';
-import { PerspectiveCamera } from './scene';
+import type { RenderBackend, RenderTypes } from './render-contract';
 import type { ScreenRect, ZoomPlaneConfig } from './types';
 
 /**
@@ -17,13 +16,15 @@ export interface BoundingBox {
 /**
  * Calculate the world-space bounding box that contains all zoom planes.
  *
+ * @param backend - Active render backend (used to construct world-space corners).
  * @param configs - Array of zoom plane configurations
  * @param scale - Scale factor applied to planes
  * @returns Bounding box containing all plane corners
  */
-export function calculateAllPlanesBoundingBox(
+export function calculateAllPlanesBoundingBox<T extends RenderTypes>(
+  backend: RenderBackend<T>,
   configs: ZoomPlaneConfig[],
-  scale: number
+  scale: number,
 ): BoundingBox {
   if (configs.length === 0) {
     return { minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0, maxZ: 0 };
@@ -34,7 +35,7 @@ export function calculateAllPlanesBoundingBox(
   let minZ = Infinity, maxZ = -Infinity;
 
   for (const config of configs) {
-    const corners = getPlaneWorldCorners(config, scale);
+    const corners = getPlaneWorldCorners(backend, config, scale);
     for (const corner of corners) {
       minX = Math.min(minX, corner.x);
       maxX = Math.max(maxX, corner.x);
@@ -57,13 +58,13 @@ export function calculateAllPlanesBoundingBox(
  * @param viewportHeight - Viewport height in pixels
  * @returns Screen coordinates {x, y} in pixels from top-left
  */
-export function projectToScreen(
-  point: Vector3,
-  camera: PerspectiveCamera,
+export function projectToScreen<T extends RenderTypes>(
+  point: T['Vector3'],
+  camera: T['PerspectiveCamera'],
   viewportWidth: number,
-  viewportHeight: number
+  viewportHeight: number,
 ): { x: number; y: number } {
-  const projected = point.clone();
+  const projected = point.clone() as T['Vector3'];
   projected.project(camera);
 
   // NDC x: -1 = left edge, +1 = right edge
@@ -78,14 +79,16 @@ export function projectToScreen(
 /**
  * Calculate the four corners of a zoom plane in world space.
  *
+ * @param backend - Active render backend (used to construct Vector3/Euler)
  * @param config - Zoom plane configuration
  * @param scale - Scale factor applied to the plane
- * @returns Array of four Vector3 corners [topLeft, topRight, bottomRight, bottomLeft]
+ * @returns Array of four corners [topLeft, topRight, bottomRight, bottomLeft]
  */
-export function getPlaneWorldCorners(
+export function getPlaneWorldCorners<T extends RenderTypes>(
+  backend: RenderBackend<T>,
   config: ZoomPlaneConfig,
-  scale: number
-): Vector3[] {
+  scale: number,
+): T['Vector3'][] {
   const width = config.width * scale;
   const height = config.height * scale;
   const halfWidth = width / 2;
@@ -93,27 +96,27 @@ export function getPlaneWorldCorners(
 
   // Local space corners (before rotation)
   // Plane is assumed to be in XY plane, facing +Z
-  const localCorners = [
-    new Vector3(-halfWidth, halfHeight, 0),   // top-left
-    new Vector3(halfWidth, halfHeight, 0),    // top-right
-    new Vector3(halfWidth, -halfHeight, 0),   // bottom-right
-    new Vector3(-halfWidth, -halfHeight, 0),  // bottom-left
+  const localCorners: T['Vector3'][] = [
+    backend.createVector3(-halfWidth, halfHeight, 0),   // top-left
+    backend.createVector3(halfWidth, halfHeight, 0),    // top-right
+    backend.createVector3(halfWidth, -halfHeight, 0),   // bottom-right
+    backend.createVector3(-halfWidth, -halfHeight, 0),  // bottom-left
   ];
 
-  const euler = new Euler(
+  const euler = backend.createEuler(
     config.rotation[0],
     config.rotation[1],
     config.rotation[2]
   );
 
-  const position = new Vector3(
+  const position = backend.createVector3(
     config.position[0],
     config.position[1],
     config.position[2]
   );
 
-  return localCorners.map(corner => {
-    const worldCorner = corner.clone();
+  return localCorners.map((corner) => {
+    const worldCorner = corner.clone() as T['Vector3'];
     worldCorner.applyEuler(euler);
     worldCorner.add(position);
     return worldCorner;
@@ -124,16 +127,17 @@ export function getPlaneWorldCorners(
  * Get the screen-space bounding rectangle of a zoom plane.
  * Returns inset values (distance from each viewport edge).
  */
-export function getPlaneScreenRect(
+export function getPlaneScreenRect<T extends RenderTypes>(
+  backend: RenderBackend<T>,
   config: ZoomPlaneConfig,
   scale: number,
-  camera: PerspectiveCamera,
+  camera: T['PerspectiveCamera'],
   viewportWidth: number,
-  viewportHeight: number
+  viewportHeight: number,
 ): ScreenRect {
-  const worldCorners = getPlaneWorldCorners(config, scale);
+  const worldCorners = getPlaneWorldCorners(backend, config, scale);
   const screenCorners = worldCorners.map(corner =>
-    projectToScreen(corner, camera, viewportWidth, viewportHeight)
+    projectToScreen<T>(corner, camera, viewportWidth, viewportHeight)
   );
 
   const xs = screenCorners.map(c => c.x);
@@ -156,17 +160,18 @@ export function getPlaneScreenRect(
  * Calculate the screen rect for a plane that is centered and viewed perpendicularly.
  * Simplified calculation since the plane is axis-aligned on screen.
  */
-export function getCenteredPlaneRect(
+export function getCenteredPlaneRect<T extends RenderTypes>(
+  backend: RenderBackend<T>,
   config: ZoomPlaneConfig,
   scale: number,
-  camera: PerspectiveCamera,
+  camera: T['PerspectiveCamera'],
   viewportWidth: number,
-  viewportHeight: number
+  viewportHeight: number,
 ): ScreenRect {
   const actualWidth = config.width * scale;
   const actualHeight = config.height * scale;
 
-  const planeCenter = new Vector3(
+  const planeCenter = backend.createVector3(
     config.position[0],
     config.position[1],
     config.position[2]

@@ -28,8 +28,20 @@ await esbuild.build({
 
 await esbuild.build({
   ...sharedEsbuildOptions,
-  entryPoints: [path.join(rootDir, 'src', 'skybox', 'lite', 'index.ts')],
-  outfile: path.join(distDir, 'skybox-lite.js'),
+  entryPoints: [path.join(rootDir, 'src', 'render-contract', 'index.ts')],
+  outfile: path.join(distDir, 'render-contract.js'),
+});
+
+await esbuild.build({
+  ...sharedEsbuildOptions,
+  entryPoints: [path.join(rootDir, 'src', 'backends', 'lite', 'index.ts')],
+  outfile: path.join(distDir, 'lite-backend.js'),
+});
+
+await esbuild.build({
+  ...sharedEsbuildOptions,
+  entryPoints: [path.join(rootDir, 'src', 'backends', 'three', 'index.ts')],
+  outfile: path.join(distDir, 'three-backend.js'),
 });
 
 const css = sass.compile(path.join(rootDir, 'src', 'styles.scss'));

@@ -8,6 +8,7 @@ import { getCenteredPlaneRect, lerpScreenRect, fullViewportRect } from './projec
 import { remap } from './easing';
 import { calculateTransitionState } from './camera-transitions';
 import { HashUrlSync } from './url-hash-sync';
+import type { RenderBackend, RenderTypes } from './render-contract';
 import type {
   NavigationState, NavigationConfig, NavigationEventType,
   NavigationEventHandler, ZoomPlaneConfig, CameraState, ContainerRefs,
@@ -15,7 +16,13 @@ import type {
 import { DEFAULT_CONFIG } from './types';
 
 /**
- * ZoomPlaneNavigator - Main orchestrating controller for the zoom plane navigation system.
+ * ZoomPlaneNavigator - Main orchestrating controller for the zoom plane
+ * navigation system.
+ *
+ * Generic over the active backend's `RenderTypes`. The backend is the second
+ * constructor argument and is threaded through every subsystem so that the
+ * navigator's camera, scene, and CSS3D objects are typed against (and
+ * constructed from) the chosen backend's concrete classes.
  *
  * Coordinates all subsystems through a unified animation timeline:
  * - SceneGraph (3D rendering)
@@ -23,18 +30,19 @@ import { DEFAULT_CONFIG } from './types';
  * - ClipController (page content reveal)
  * - AnimationTimeline (single rAF loop)
  */
-export class ZoomPlaneNavigator {
-  private sceneGraph: SceneGraph;
-  private cameraController: CameraController;
+export class ZoomPlaneNavigator<T extends RenderTypes = RenderTypes> {
+  private sceneGraph: SceneGraph<T>;
+  private cameraController: CameraController<T>;
   private clipController: ClipController;
   private timeline: AnimationTimeline;
   private refs: ContainerRefs;
+  private backend: RenderBackend<T>;
 
   private _state: NavigationState = 'overview';
   private _activePlaneId: string | null = null;
 
   private config: NavigationConfig;
-  private overviewState: CameraState;
+  private overviewState: CameraState<T>;
   private activeCancel: (() => void) | null = null;
   private renderFrameId: number | null = null;
   private sceneVisibilityToken = 0;
@@ -47,18 +55,24 @@ export class ZoomPlaneNavigator {
   private boundHandleResize: () => void;
   private boundHandleKeydown: (e: KeyboardEvent) => void;
 
-  constructor(refs: ContainerRefs, config: Partial<NavigationConfig> = {}) {
+  constructor(
+    refs: ContainerRefs,
+    backend: RenderBackend<T>,
+    config: Partial<NavigationConfig> = {},
+  ) {
     this.refs = refs;
+    this.backend = backend;
     this.config = Object.freeze({ ...DEFAULT_CONFIG, ...config });
 
-    const planeConfigs = parseAllZoomPlanes(refs.planesSource, { scale: this.config.scale });
+    const planeConfigs = parseAllZoomPlanes(backend, refs.planesSource, { scale: this.config.scale });
 
     this.clipController = new ClipController(refs.contentContainer, this.config.revealMode);
     this.validatePlaneSections(planeConfigs);
 
-    this.sceneGraph = new SceneGraph(refs.sceneContainer, planeConfigs, this.config);
+    this.sceneGraph = new SceneGraph<T>(refs.sceneContainer, planeConfigs, this.config, backend);
 
-    this.overviewState = calculateOverviewState(
+    this.overviewState = calculateOverviewState<T>(
+      backend,
       planeConfigs,
       this.config.scale,
       this.config.overviewFov,
@@ -66,10 +80,11 @@ export class ZoomPlaneNavigator {
       this.config.overviewPadding
     );
 
-    this.cameraController = new CameraController(
+    this.cameraController = new CameraController<T>(
       this.sceneGraph.camera,
       this.overviewState,
-      this.config
+      this.config,
+      backend,
     );
     this.cameraController.setToState(this.overviewState);
     this.sceneGraph.render();
@@ -128,7 +143,8 @@ export class ZoomPlaneNavigator {
   }
 
   recalculateOverview(): void {
-    this.overviewState = calculateOverviewState(
+    this.overviewState = calculateOverviewState<T>(
+      this.backend,
       this.sceneGraph.getPlaneConfigs(),
       this.config.scale,
       this.config.overviewFov,
@@ -143,7 +159,7 @@ export class ZoomPlaneNavigator {
     }
   }
 
-  getScene(): SceneGraph {
+  getScene(): SceneGraph<T> {
     return this.sceneGraph;
   }
 
@@ -215,7 +231,7 @@ export class ZoomPlaneNavigator {
     const { promise, cancel } = this.timeline.runSequence(totalDuration, (progress) => {
       const rawCameraT = remap(progress, 0, cameraEnd);
       this.cameraController.setToState(
-        calculateTransitionState(startCameraState, targetCameraState, rawCameraT)
+        calculateTransitionState(this.backend, startCameraState, targetCameraState, rawCameraT)
       );
 
       if (progress >= clipStart) {
@@ -323,7 +339,8 @@ export class ZoomPlaneNavigator {
     this.showSceneContainer();
 
     this.sceneGraph.render();
-    const planeRect = getCenteredPlaneRect(
+    const planeRect = getCenteredPlaneRect<T>(
+      this.backend,
       planeConfig,
       this.sceneGraph.getScale(),
       this.sceneGraph.camera,
@@ -362,7 +379,7 @@ export class ZoomPlaneNavigator {
       if (progress >= cameraStart) {
         const rawCameraT = remap(progress, cameraStart, 1.0);
         this.cameraController.setToState(
-          calculateTransitionState(overviewState, startCameraState, 1 - rawCameraT)
+          calculateTransitionState(this.backend, overviewState, startCameraState, 1 - rawCameraT)
         );
       }
 
@@ -398,7 +415,7 @@ export class ZoomPlaneNavigator {
       this.config.cameraDuration,
       (progress) => {
         this.cameraController.setToState(
-          calculateTransitionState(overviewState, startCameraState, 1 - progress)
+          calculateTransitionState(this.backend, overviewState, startCameraState, 1 - progress)
         );
         this.sceneGraph.render();
       }
@@ -430,8 +447,8 @@ export class ZoomPlaneNavigator {
 
   private precomputePlaneRect(
     planeConfig: ZoomPlaneConfig,
-    targetCameraState: CameraState,
-    restoreState: CameraState
+    targetCameraState: CameraState<T>,
+    restoreState: CameraState<T>
   ): {
     top: number;
     right: number;
@@ -440,7 +457,8 @@ export class ZoomPlaneNavigator {
   } {
     this.cameraController.setToState(targetCameraState);
 
-    const rect = getCenteredPlaneRect(
+    const rect = getCenteredPlaneRect<T>(
+      this.backend,
       planeConfig,
       this.sceneGraph.getScale(),
       this.sceneGraph.camera,
@@ -501,7 +519,8 @@ export class ZoomPlaneNavigator {
     this.sceneGraph.setSize(width, height);
 
     if (this._state === 'overview') {
-      this.overviewState = calculateOverviewState(
+      this.overviewState = calculateOverviewState<T>(
+        this.backend,
         this.sceneGraph.getPlaneConfigs(),
         this.config.scale,
         this.config.overviewFov,

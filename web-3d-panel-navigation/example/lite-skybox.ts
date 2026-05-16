@@ -1,5 +1,5 @@
 import { ZoomPlaneNavigator, resolveContainerRefs } from '../dist/index.js';
-import { LiteSkyboxHost, createStarfieldSkybox } from '../dist/skybox-lite.js';
+import { liteBackend, createStarfieldSkybox } from '../dist/lite-backend.js';
 
 function onReady(callback: () => void): void {
   if (document.readyState === 'loading') {
@@ -11,14 +11,12 @@ function onReady(callback: () => void): void {
 
 onReady(() => {
   const refs = resolveContainerRefs();
-  const nav = new ZoomPlaneNavigator(refs);
-  const camera = nav.getScene().camera;
+  const nav = new ZoomPlaneNavigator(refs, liteBackend);
 
-  const skybox = createStarfieldSkybox();
-  new LiteSkyboxHost({
-    camera,
+  liteBackend.createSkyboxHost({
+    camera: nav.getScene().camera,
     mount: document.body,
-    skybox,
+    skybox: createStarfieldSkybox(),
     canvasId: 'skybox-canvas',
     autoStart: true,
   });

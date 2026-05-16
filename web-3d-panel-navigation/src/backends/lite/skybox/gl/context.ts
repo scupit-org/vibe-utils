@@ -75,7 +75,7 @@ export function createLiteCanvas(options: CreateLiteCanvasOptions): LiteCanvas {
   if (!gl) {
     throw new Error(
       "LiteSkyboxHost: WebGL2 is not available. Fall back to the three-backed SkyboxHost from " +
-        "@scupit/web-3d-panel-navigation if WebGL2 cannot be guaranteed in your target environment.",
+        "@scupit/web-3d-panel-navigation/three-backend if WebGL2 cannot be guaranteed in your target environment.",
     );
   }
 
