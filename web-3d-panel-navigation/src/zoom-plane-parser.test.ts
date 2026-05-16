@@ -1,24 +1,26 @@
+/**
+ * @jest-environment jsdom
+ */
+
 import { parseAllZoomPlanes, parseZoomPlane } from './zoom-plane-parser';
 import type { ZoomPlaneConfig } from './types';
 import { Vector3, Quaternion, Euler } from './backends/lite/math';
 import { liteBackend } from './backends/lite';
 
-type Dataset = Record<string, string | undefined>;
-
 function createZoomPlaneElement(
-  dataset: Dataset,
-  attributes: string[] = []
+  attributes: Record<string, string>
 ): HTMLElement {
-  return {
-    dataset,
-    hasAttribute: (name: string) => attributes.includes(name),
-  } as unknown as HTMLElement;
+  const el = document.createElement('div');
+  for (const [name, value] of Object.entries(attributes)) {
+    el.setAttribute(name, value);
+  }
+  return el;
 }
 
 function createContainer(elements: HTMLElement[]): HTMLElement {
-  return {
-    querySelectorAll: () => elements,
-  } as unknown as HTMLElement;
+  const container = document.createElement('div');
+  for (const el of elements) container.appendChild(el);
+  return container;
 }
 
 function getPlane(configs: ZoomPlaneConfig[], id: string): ZoomPlaneConfig {
@@ -100,12 +102,12 @@ function edgeCenter(
 describe('zoom plane parser', () => {
   it('accepts strict finite decimal values, including signs and scientific notation', () => {
     const config = parseZoomPlane(createZoomPlaneElement({
-      zoomPlane: 'valid',
-      section: 'page-valid',
-      width: '1.2e3',
-      height: '.5',
-      position: '-1, +2.5, 3e2',
-      rotation: '0, -45, 1e1',
+      'data-zoom-plane': 'valid',
+      'data-section': 'page-valid',
+      'data-width': '1.2e3',
+      'data-height': '.5',
+      'data-position': '-1, +2.5, 3e2',
+      'data-rotation': '0, -45, 1e1',
     }));
 
     expect(config.id).toBe('valid');
@@ -118,55 +120,57 @@ describe('zoom plane parser', () => {
   });
 
   it.each([
-    ['suffixed width', { width: '100px', height: '1', position: '0, 0, 0', rotation: '0, 0, 0' }],
-    ['suffixed position', { width: '1', height: '1', position: '0, 10abc, 0', rotation: '0, 0, 0' }],
-    ['infinite rotation', { width: '1', height: '1', position: '0, 0, 0', rotation: '0, Infinity, 0' }],
-    ['hex width', { width: '0x10', height: '1', position: '0, 0, 0', rotation: '0, 0, 0' }],
-    ['non-positive height', { width: '1', height: '0', position: '0, 0, 0', rotation: '0, 0, 0' }],
+    ['suffixed width', { 'data-width': '100px', 'data-height': '1', 'data-position': '0, 0, 0', 'data-rotation': '0, 0, 0' }],
+    ['suffixed position', { 'data-width': '1', 'data-height': '1', 'data-position': '0, 10abc, 0', 'data-rotation': '0, 0, 0' }],
+    ['infinite rotation', { 'data-width': '1', 'data-height': '1', 'data-position': '0, 0, 0', 'data-rotation': '0, Infinity, 0' }],
+    ['hex width', { 'data-width': '0x10', 'data-height': '1', 'data-position': '0, 0, 0', 'data-rotation': '0, 0, 0' }],
+    ['non-positive height', { 'data-width': '1', 'data-height': '0', 'data-position': '0, 0, 0', 'data-rotation': '0, 0, 0' }],
   ])('rejects malformed numeric attributes: %s', (_caseName, values) => {
     expect(() => parseZoomPlane(createZoomPlaneElement({
-      zoomPlane: 'invalid',
-      section: 'page-invalid',
+      'data-zoom-plane': 'invalid',
+      'data-section': 'page-invalid',
       ...values,
     }))).toThrow();
   });
 
   it('rejects duplicate plane IDs and multiple focal planes', () => {
     const first = createZoomPlaneElement({
-      zoomPlane: 'duplicate',
-      section: 'page-one',
-      width: '1',
-      height: '1',
-      position: '0, 0, 0',
-      rotation: '0, 0, 0',
+      'data-zoom-plane': 'duplicate',
+      'data-section': 'page-one',
+      'data-width': '1',
+      'data-height': '1',
+      'data-position': '0, 0, 0',
+      'data-rotation': '0, 0, 0',
     });
     const second = createZoomPlaneElement({
-      zoomPlane: 'duplicate',
-      section: 'page-two',
-      width: '1',
-      height: '1',
-      position: '1, 0, 0',
-      rotation: '0, 0, 0',
+      'data-zoom-plane': 'duplicate',
+      'data-section': 'page-two',
+      'data-width': '1',
+      'data-height': '1',
+      'data-position': '1, 0, 0',
+      'data-rotation': '0, 0, 0',
     });
 
     expect(() => parseAllZoomPlanes(liteBackend, createContainer([first, second]))).toThrow(/Duplicate/);
 
     const centerOne = createZoomPlaneElement({
-      zoomPlane: 'center-one',
-      section: 'page-one',
-      width: '1',
-      height: '1',
-      position: '0, 0, 0',
-      rotation: '0, 0, 0',
-    }, ['data-zoom-center']);
+      'data-zoom-plane': 'center-one',
+      'data-section': 'page-one',
+      'data-width': '1',
+      'data-height': '1',
+      'data-position': '0, 0, 0',
+      'data-rotation': '0, 0, 0',
+      'data-zoom-center': '',
+    });
     const centerTwo = createZoomPlaneElement({
-      zoomPlane: 'center-two',
-      section: 'page-two',
-      width: '1',
-      height: '1',
-      position: '1, 0, 0',
-      rotation: '0, 0, 0',
-    }, ['data-zoom-center']);
+      'data-zoom-plane': 'center-two',
+      'data-section': 'page-two',
+      'data-width': '1',
+      'data-height': '1',
+      'data-position': '1, 0, 0',
+      'data-rotation': '0, 0, 0',
+      'data-zoom-center': '',
+    });
 
     expect(() => parseAllZoomPlanes(liteBackend, createContainer([centerOne, centerTwo]))).toThrow(/Multiple center/);
   });
@@ -174,28 +178,28 @@ describe('zoom plane parser', () => {
   it('tiles right and left panels from an unrotated reference', () => {
     const scale = 0.5;
     const center = createZoomPlaneElement({
-      zoomPlane: 'center',
-      section: 'page-center',
-      width: '1000',
-      height: '500',
-      position: '0, 0, 0',
-      rotation: '0, 0, 0',
+      'data-zoom-plane': 'center',
+      'data-section': 'page-center',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-position': '0, 0, 0',
+      'data-rotation': '0, 0, 0',
     });
     const right = createZoomPlaneElement({
-      zoomPlane: 'right',
-      section: 'page-right',
-      width: '800',
-      height: '500',
-      tileFromRight: 'center',
-      tileAngle: '30',
+      'data-zoom-plane': 'right',
+      'data-section': 'page-right',
+      'data-width': '800',
+      'data-height': '500',
+      'data-tile-from-right': 'center',
+      'data-tile-angle': '30',
     });
     const left = createZoomPlaneElement({
-      zoomPlane: 'left',
-      section: 'page-left',
-      width: '800',
-      height: '500',
-      tileFromLeft: 'center',
-      tileAngle: '30',
+      'data-zoom-plane': 'left',
+      'data-section': 'page-left',
+      'data-width': '800',
+      'data-height': '500',
+      'data-tile-from-left': 'center',
+      'data-tile-angle': '30',
     });
 
     const configs = parseAllZoomPlanes(liteBackend, createContainer([center, right, left]), { scale });
@@ -218,28 +222,28 @@ describe('zoom plane parser', () => {
   it('tiles top and bottom panels from an unrotated reference', () => {
     const scale = 0.5;
     const center = createZoomPlaneElement({
-      zoomPlane: 'center',
-      section: 'page-center',
-      width: '1000',
-      height: '500',
-      position: '0, 0, 0',
-      rotation: '0, 0, 0',
+      'data-zoom-plane': 'center',
+      'data-section': 'page-center',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-position': '0, 0, 0',
+      'data-rotation': '0, 0, 0',
     });
     const top = createZoomPlaneElement({
-      zoomPlane: 'top',
-      section: 'page-top',
-      width: '1000',
-      height: '500',
-      tileFromTop: 'center',
-      tileAngle: '30',
+      'data-zoom-plane': 'top',
+      'data-section': 'page-top',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-tile-from-top': 'center',
+      'data-tile-angle': '30',
     });
     const bottom = createZoomPlaneElement({
-      zoomPlane: 'bottom',
-      section: 'page-bottom',
-      width: '1000',
-      height: '500',
-      tileFromBottom: 'center',
-      tileAngle: '30',
+      'data-zoom-plane': 'bottom',
+      'data-section': 'page-bottom',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-tile-from-bottom': 'center',
+      'data-tile-angle': '30',
     });
 
     const configs = parseAllZoomPlanes(liteBackend, createContainer([center, top, bottom]), { scale });
@@ -262,20 +266,20 @@ describe('zoom plane parser', () => {
   it('tiles from an already rotated reference by aligning shared world-space edges', () => {
     const scale = 0.5;
     const reference = createZoomPlaneElement({
-      zoomPlane: 'reference',
-      section: 'page-reference',
-      width: '1000',
-      height: '500',
-      position: '10, 20, 30',
-      rotation: '10, 45, 5',
+      'data-zoom-plane': 'reference',
+      'data-section': 'page-reference',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-position': '10, 20, 30',
+      'data-rotation': '10, 45, 5',
     });
     const tiled = createZoomPlaneElement({
-      zoomPlane: 'tiled',
-      section: 'page-tiled',
-      width: '800',
-      height: '500',
-      tileFromRight: 'reference',
-      tileAngle: '35',
+      'data-zoom-plane': 'tiled',
+      'data-section': 'page-tiled',
+      'data-width': '800',
+      'data-height': '500',
+      'data-tile-from-right': 'reference',
+      'data-tile-angle': '35',
     });
 
     const configs = parseAllZoomPlanes(liteBackend, createContainer([reference, tiled]), { scale });
@@ -291,21 +295,21 @@ describe('zoom plane parser', () => {
   it('applies tile offset in the reference plane local axes', () => {
     const scale = 0.5;
     const reference = createZoomPlaneElement({
-      zoomPlane: 'reference',
-      section: 'page-reference',
-      width: '1000',
-      height: '500',
-      position: '10, 20, 30',
-      rotation: '10, 45, 5',
+      'data-zoom-plane': 'reference',
+      'data-section': 'page-reference',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-position': '10, 20, 30',
+      'data-rotation': '10, 45, 5',
     });
     const tiled = createZoomPlaneElement({
-      zoomPlane: 'tiled',
-      section: 'page-tiled',
-      width: '800',
-      height: '500',
-      tileFromRight: 'reference',
-      tileAngle: '35',
-      tileOffset: '40, -20',
+      'data-zoom-plane': 'tiled',
+      'data-section': 'page-tiled',
+      'data-width': '800',
+      'data-height': '500',
+      'data-tile-from-right': 'reference',
+      'data-tile-angle': '35',
+      'data-tile-offset': '40, -20',
     });
 
     const configs = parseAllZoomPlanes(liteBackend, createContainer([reference, tiled]), { scale });
@@ -320,48 +324,48 @@ describe('zoom plane parser', () => {
   it('applies tile gap away from the reference edge for every side', () => {
     const scale = 0.5;
     const center = createZoomPlaneElement({
-      zoomPlane: 'center',
-      section: 'page-center',
-      width: '1000',
-      height: '500',
-      position: '0, 0, 0',
-      rotation: '0, 0, 0',
+      'data-zoom-plane': 'center',
+      'data-section': 'page-center',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-position': '0, 0, 0',
+      'data-rotation': '0, 0, 0',
     });
     const right = createZoomPlaneElement({
-      zoomPlane: 'right',
-      section: 'page-right',
-      width: '800',
-      height: '500',
-      tileFromRight: 'center',
-      tileAngle: '30',
-      tileGap: '40',
+      'data-zoom-plane': 'right',
+      'data-section': 'page-right',
+      'data-width': '800',
+      'data-height': '500',
+      'data-tile-from-right': 'center',
+      'data-tile-angle': '30',
+      'data-tile-gap': '40',
     });
     const left = createZoomPlaneElement({
-      zoomPlane: 'left',
-      section: 'page-left',
-      width: '800',
-      height: '500',
-      tileFromLeft: 'center',
-      tileAngle: '30',
-      tileGap: '40',
+      'data-zoom-plane': 'left',
+      'data-section': 'page-left',
+      'data-width': '800',
+      'data-height': '500',
+      'data-tile-from-left': 'center',
+      'data-tile-angle': '30',
+      'data-tile-gap': '40',
     });
     const top = createZoomPlaneElement({
-      zoomPlane: 'top',
-      section: 'page-top',
-      width: '800',
-      height: '500',
-      tileFromTop: 'center',
-      tileAngle: '30',
-      tileGap: '40',
+      'data-zoom-plane': 'top',
+      'data-section': 'page-top',
+      'data-width': '800',
+      'data-height': '500',
+      'data-tile-from-top': 'center',
+      'data-tile-angle': '30',
+      'data-tile-gap': '40',
     });
     const bottom = createZoomPlaneElement({
-      zoomPlane: 'bottom',
-      section: 'page-bottom',
-      width: '800',
-      height: '500',
-      tileFromBottom: 'center',
-      tileAngle: '30',
-      tileGap: '40',
+      'data-zoom-plane': 'bottom',
+      'data-section': 'page-bottom',
+      'data-width': '800',
+      'data-height': '500',
+      'data-tile-from-bottom': 'center',
+      'data-tile-angle': '30',
+      'data-tile-gap': '40',
     });
 
     const configs = parseAllZoomPlanes(liteBackend, createContainer([center, right, left, top, bottom]), { scale });
@@ -388,30 +392,30 @@ describe('zoom plane parser', () => {
   it('aligns top and bottom edges for right-side tiled panels with different sizes', () => {
     const scale = 0.5;
     const center = createZoomPlaneElement({
-      zoomPlane: 'center',
-      section: 'page-center',
-      width: '1600',
-      height: '900',
-      position: '0, 0, 0',
-      rotation: '0, 0, 0',
+      'data-zoom-plane': 'center',
+      'data-section': 'page-center',
+      'data-width': '1600',
+      'data-height': '900',
+      'data-position': '0, 0, 0',
+      'data-rotation': '0, 0, 0',
     });
     const topAligned = createZoomPlaneElement({
-      zoomPlane: 'top-aligned',
-      section: 'page-top-aligned',
-      width: '1200',
-      height: '600',
-      tileFromRight: 'center',
-      tileAngle: '30',
-      tileAlign: 'top',
+      'data-zoom-plane': 'top-aligned',
+      'data-section': 'page-top-aligned',
+      'data-width': '1200',
+      'data-height': '600',
+      'data-tile-from-right': 'center',
+      'data-tile-angle': '30',
+      'data-tile-align': 'top',
     });
     const bottomAligned = createZoomPlaneElement({
-      zoomPlane: 'bottom-aligned',
-      section: 'page-bottom-aligned',
-      width: '1200',
-      height: '600',
-      tileFromRight: 'center',
-      tileAngle: '30',
-      tileAlign: 'bottom',
+      'data-zoom-plane': 'bottom-aligned',
+      'data-section': 'page-bottom-aligned',
+      'data-width': '1200',
+      'data-height': '600',
+      'data-tile-from-right': 'center',
+      'data-tile-angle': '30',
+      'data-tile-align': 'bottom',
     });
 
     const configs = parseAllZoomPlanes(liteBackend, createContainer([center, topAligned, bottomAligned]), { scale });
@@ -433,30 +437,30 @@ describe('zoom plane parser', () => {
   it('aligns left and right edges for top-side tiled panels with different sizes', () => {
     const scale = 0.5;
     const center = createZoomPlaneElement({
-      zoomPlane: 'center',
-      section: 'page-center',
-      width: '1600',
-      height: '900',
-      position: '0, 0, 0',
-      rotation: '0, 0, 0',
+      'data-zoom-plane': 'center',
+      'data-section': 'page-center',
+      'data-width': '1600',
+      'data-height': '900',
+      'data-position': '0, 0, 0',
+      'data-rotation': '0, 0, 0',
     });
     const leftAligned = createZoomPlaneElement({
-      zoomPlane: 'left-aligned',
-      section: 'page-left-aligned',
-      width: '900',
-      height: '600',
-      tileFromTop: 'center',
-      tileAngle: '30',
-      tileAlign: 'left',
+      'data-zoom-plane': 'left-aligned',
+      'data-section': 'page-left-aligned',
+      'data-width': '900',
+      'data-height': '600',
+      'data-tile-from-top': 'center',
+      'data-tile-angle': '30',
+      'data-tile-align': 'left',
     });
     const rightAligned = createZoomPlaneElement({
-      zoomPlane: 'right-aligned',
-      section: 'page-right-aligned',
-      width: '900',
-      height: '600',
-      tileFromTop: 'center',
-      tileAngle: '30',
-      tileAlign: 'right',
+      'data-zoom-plane': 'right-aligned',
+      'data-section': 'page-right-aligned',
+      'data-width': '900',
+      'data-height': '600',
+      'data-tile-from-top': 'center',
+      'data-tile-angle': '30',
+      'data-tile-align': 'right',
     });
 
     const configs = parseAllZoomPlanes(liteBackend, createContainer([center, leftAligned, rightAligned]), { scale });
@@ -478,24 +482,24 @@ describe('zoom plane parser', () => {
   it('combines ergonomic alignment, align offset, gap, and manual tile offset', () => {
     const scale = 0.5;
     const center = createZoomPlaneElement({
-      zoomPlane: 'center',
-      section: 'page-center',
-      width: '1600',
-      height: '900',
-      position: '0, 0, 0',
-      rotation: '0, 0, 0',
+      'data-zoom-plane': 'center',
+      'data-section': 'page-center',
+      'data-width': '1600',
+      'data-height': '900',
+      'data-position': '0, 0, 0',
+      'data-rotation': '0, 0, 0',
     });
     const tiled = createZoomPlaneElement({
-      zoomPlane: 'tiled',
-      section: 'page-tiled',
-      width: '1200',
-      height: '600',
-      tileFromRight: 'center',
-      tileAngle: '30',
-      tileGap: '40',
-      tileAlign: 'top',
-      tileAlignOffset: '-10',
-      tileOffset: '5, 2',
+      'data-zoom-plane': 'tiled',
+      'data-section': 'page-tiled',
+      'data-width': '1200',
+      'data-height': '600',
+      'data-tile-from-right': 'center',
+      'data-tile-angle': '30',
+      'data-tile-gap': '40',
+      'data-tile-align': 'top',
+      'data-tile-align-offset': '-10',
+      'data-tile-offset': '5, 2',
     });
 
     const configs = parseAllZoomPlanes(liteBackend, createContainer([center, tiled]), { scale });
@@ -511,21 +515,21 @@ describe('zoom plane parser', () => {
   it('applies tile rotation offset relative to the reference orientation', () => {
     const scale = 0.5;
     const reference = createZoomPlaneElement({
-      zoomPlane: 'reference',
-      section: 'page-reference',
-      width: '1000',
-      height: '500',
-      position: '10, 20, 30',
-      rotation: '10, 45, 5',
+      'data-zoom-plane': 'reference',
+      'data-section': 'page-reference',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-position': '10, 20, 30',
+      'data-rotation': '10, 45, 5',
     });
     const tiled = createZoomPlaneElement({
-      zoomPlane: 'tiled',
-      section: 'page-tiled',
-      width: '800',
-      height: '500',
-      tileFromRight: 'reference',
-      tileAngle: '35',
-      tileRotationOffset: '0, 2, -1',
+      'data-zoom-plane': 'tiled',
+      'data-section': 'page-tiled',
+      'data-width': '800',
+      'data-height': '500',
+      'data-tile-from-right': 'reference',
+      'data-tile-angle': '35',
+      'data-tile-rotation-offset': '0, 2, -1',
     });
 
     const configs = parseAllZoomPlanes(liteBackend, createContainer([reference, tiled]), { scale });
@@ -553,22 +557,22 @@ describe('zoom plane parser', () => {
   it('combines tile offset and rotation offset while keeping the offset hinge anchored', () => {
     const scale = 0.5;
     const reference = createZoomPlaneElement({
-      zoomPlane: 'reference',
-      section: 'page-reference',
-      width: '1000',
-      height: '500',
-      position: '10, 20, 30',
-      rotation: '10, 45, 5',
+      'data-zoom-plane': 'reference',
+      'data-section': 'page-reference',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-position': '10, 20, 30',
+      'data-rotation': '10, 45, 5',
     });
     const tiled = createZoomPlaneElement({
-      zoomPlane: 'tiled',
-      section: 'page-tiled',
-      width: '800',
-      height: '500',
-      tileFromTop: 'reference',
-      tileAngle: '20',
-      tileOffset: '-15, 35',
-      tileRotationOffset: '1, 0, 3',
+      'data-zoom-plane': 'tiled',
+      'data-section': 'page-tiled',
+      'data-width': '800',
+      'data-height': '500',
+      'data-tile-from-top': 'reference',
+      'data-tile-angle': '20',
+      'data-tile-offset': '-15, 35',
+      'data-tile-rotation-offset': '1, 0, 3',
     });
 
     const configs = parseAllZoomPlanes(liteBackend, createContainer([reference, tiled]), { scale });
@@ -583,28 +587,28 @@ describe('zoom plane parser', () => {
   it('supports chained tiled references and references declared later in the DOM', () => {
     const scale = 0.5;
     const second = createZoomPlaneElement({
-      zoomPlane: 'second',
-      section: 'page-second',
-      width: '1000',
-      height: '500',
-      tileFromRight: 'first',
-      tileAngle: '20',
+      'data-zoom-plane': 'second',
+      'data-section': 'page-second',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-tile-from-right': 'first',
+      'data-tile-angle': '20',
     });
     const first = createZoomPlaneElement({
-      zoomPlane: 'first',
-      section: 'page-first',
-      width: '1000',
-      height: '500',
-      tileFromRight: 'base',
-      tileAngle: '20',
+      'data-zoom-plane': 'first',
+      'data-section': 'page-first',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-tile-from-right': 'base',
+      'data-tile-angle': '20',
     });
     const base = createZoomPlaneElement({
-      zoomPlane: 'base',
-      section: 'page-base',
-      width: '1000',
-      height: '500',
-      position: '0, 0, 0',
-      rotation: '0, 0, 0',
+      'data-zoom-plane': 'base',
+      'data-section': 'page-base',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-position': '0, 0, 0',
+      'data-rotation': '0, 0, 0',
     });
 
     const configs = parseAllZoomPlanes(liteBackend, createContainer([second, first, base]), { scale });
@@ -623,34 +627,34 @@ describe('zoom plane parser', () => {
   });
 
   it.each([
-    ['missing reference', { tileFromRight: 'missing', tileAngle: '30' }, /not found/],
-    ['self reference', { tileFromRight: 'invalid', tileAngle: '30' }, /itself/],
-    ['invalid angle', { tileFromRight: 'center', tileAngle: '30deg' }, /Invalid number/],
-    ['invalid offset length', { tileFromRight: 'center', tileAngle: '30', tileOffset: '1, 2, 3' }, /Expected 2/],
-    ['invalid offset number', { tileFromRight: 'center', tileAngle: '30', tileOffset: '1px, 2' }, /Invalid number/],
-    ['invalid rotation offset length', { tileFromRight: 'center', tileAngle: '30', tileRotationOffset: '1, 2' }, /Expected 3/],
-    ['invalid rotation offset number', { tileFromRight: 'center', tileAngle: '30', tileRotationOffset: '1, nope, 3' }, /Invalid number/],
-    ['invalid gap', { tileFromRight: 'center', tileAngle: '30', tileGap: '1px' }, /invalid tileGap/],
-    ['invalid align offset', { tileFromRight: 'center', tileAngle: '30', tileAlignOffset: 'nope' }, /invalid tileAlignOffset/],
-    ['invalid align value', { tileFromRight: 'center', tileAngle: '30', tileAlign: 'middle' }, /invalid tileAlign/],
-    ['invalid horizontal align for side tile', { tileFromRight: 'center', tileAngle: '30', tileAlign: 'left' }, /invalid for right tiling/],
-    ['invalid vertical align for top tile', { tileFromTop: 'center', tileAngle: '30', tileAlign: 'top' }, /invalid for top tiling/],
-    ['multiple tile sides', { tileFromRight: 'center', tileFromLeft: 'center', tileAngle: '30' }, /exactly one/],
-    ['mixed explicit and tiled', { position: '0, 0, 0', rotation: '0, 0, 0', tileFromRight: 'center', tileAngle: '30' }, /cannot mix/],
+    ['missing reference', { 'data-tile-from-right': 'missing', 'data-tile-angle': '30' }, /not found/],
+    ['self reference', { 'data-tile-from-right': 'invalid', 'data-tile-angle': '30' }, /itself/],
+    ['invalid angle', { 'data-tile-from-right': 'center', 'data-tile-angle': '30deg' }, /Invalid number/],
+    ['invalid offset length', { 'data-tile-from-right': 'center', 'data-tile-angle': '30', 'data-tile-offset': '1, 2, 3' }, /Expected 2/],
+    ['invalid offset number', { 'data-tile-from-right': 'center', 'data-tile-angle': '30', 'data-tile-offset': '1px, 2' }, /Invalid number/],
+    ['invalid rotation offset length', { 'data-tile-from-right': 'center', 'data-tile-angle': '30', 'data-tile-rotation-offset': '1, 2' }, /Expected 3/],
+    ['invalid rotation offset number', { 'data-tile-from-right': 'center', 'data-tile-angle': '30', 'data-tile-rotation-offset': '1, nope, 3' }, /Invalid number/],
+    ['invalid gap', { 'data-tile-from-right': 'center', 'data-tile-angle': '30', 'data-tile-gap': '1px' }, /invalid tileGap/],
+    ['invalid align offset', { 'data-tile-from-right': 'center', 'data-tile-angle': '30', 'data-tile-align-offset': 'nope' }, /invalid tileAlignOffset/],
+    ['invalid align value', { 'data-tile-from-right': 'center', 'data-tile-angle': '30', 'data-tile-align': 'middle' }, /invalid tileAlign/],
+    ['invalid horizontal align for side tile', { 'data-tile-from-right': 'center', 'data-tile-angle': '30', 'data-tile-align': 'left' }, /invalid for right tiling/],
+    ['invalid vertical align for top tile', { 'data-tile-from-top': 'center', 'data-tile-angle': '30', 'data-tile-align': 'top' }, /invalid for top tiling/],
+    ['multiple tile sides', { 'data-tile-from-right': 'center', 'data-tile-from-left': 'center', 'data-tile-angle': '30' }, /exactly one/],
+    ['mixed explicit and tiled', { 'data-position': '0, 0, 0', 'data-rotation': '0, 0, 0', 'data-tile-from-right': 'center', 'data-tile-angle': '30' }, /cannot mix/],
   ])('rejects invalid tiled layout: %s', (_caseName, invalidValues, errorPattern) => {
     const center = createZoomPlaneElement({
-      zoomPlane: 'center',
-      section: 'page-center',
-      width: '1000',
-      height: '500',
-      position: '0, 0, 0',
-      rotation: '0, 0, 0',
+      'data-zoom-plane': 'center',
+      'data-section': 'page-center',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-position': '0, 0, 0',
+      'data-rotation': '0, 0, 0',
     });
     const invalid = createZoomPlaneElement({
-      zoomPlane: 'invalid',
-      section: 'page-invalid',
-      width: '1000',
-      height: '500',
+      'data-zoom-plane': 'invalid',
+      'data-section': 'page-invalid',
+      'data-width': '1000',
+      'data-height': '500',
       ...invalidValues,
     });
 
@@ -659,20 +663,20 @@ describe('zoom plane parser', () => {
 
   it('rejects circular tiled layout references', () => {
     const first = createZoomPlaneElement({
-      zoomPlane: 'first',
-      section: 'page-first',
-      width: '1000',
-      height: '500',
-      tileFromRight: 'second',
-      tileAngle: '30',
+      'data-zoom-plane': 'first',
+      'data-section': 'page-first',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-tile-from-right': 'second',
+      'data-tile-angle': '30',
     });
     const second = createZoomPlaneElement({
-      zoomPlane: 'second',
-      section: 'page-second',
-      width: '1000',
-      height: '500',
-      tileFromRight: 'first',
-      tileAngle: '30',
+      'data-zoom-plane': 'second',
+      'data-section': 'page-second',
+      'data-width': '1000',
+      'data-height': '500',
+      'data-tile-from-right': 'first',
+      'data-tile-angle': '30',
     });
 
     expect(() => parseAllZoomPlanes(liteBackend, createContainer([first, second]))).toThrow(/circular/);
