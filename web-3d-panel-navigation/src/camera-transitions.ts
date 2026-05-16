@@ -1,12 +1,7 @@
 import type { RenderBackend, RenderTypes } from './render-contract';
 import type { CameraState } from './types';
 import { easeInOutCubic, easeOutCubic } from './easing';
-
-const DEG2RAD = Math.PI / 180;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
+import { clamp, DEG2RAD } from './math-helpers';
 
 // =============================================================================
 // Helpers

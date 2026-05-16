@@ -1,6 +1,6 @@
 import { Vector3 } from '../math/vector3';
 import { Matrix4 } from '../math/matrix4';
-import { DEG2RAD } from '../math/math-utils';
+import { DEG2RAD } from '../../../math-helpers';
 import { Object3D } from './object3d';
 
 const _cameraLookMatrix = new Matrix4();

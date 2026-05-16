@@ -1,7 +1,7 @@
 import type { Vector3 } from './vector3';
 import type { Euler, EulerOrder } from './euler';
 import type { Matrix4 } from './matrix4';
-import { clamp } from './math-utils';
+import { clamp } from '../../../math-helpers';
 
 export class Quaternion {
   x: number;

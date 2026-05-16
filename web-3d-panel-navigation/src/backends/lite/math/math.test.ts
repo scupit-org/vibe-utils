@@ -4,7 +4,8 @@ import {
   Euler as ThreeEuler,
   Matrix4 as ThreeMatrix4,
 } from 'three';
-import { Vector3, Quaternion, Euler, Matrix4, clamp, DEG2RAD } from './index';
+import { Vector3, Quaternion, Euler, Matrix4 } from './index';
+import { DEG2RAD } from '../../../math-helpers';
 
 // Tests cross-validate the in-house math primitives against three.js, which is
 // already a devDependency. The library itself never imports three for math —
@@ -23,18 +24,6 @@ function expectArrayClose(actual: ArrayLike<number>, expected: ArrayLike<number>
     expect(Math.abs(actual[i] - expected[i])).toBeLessThan(EPS);
   }
 }
-
-describe('math-utils', () => {
-  it('clamp', () => {
-    expect(clamp(5, 0, 10)).toBe(5);
-    expect(clamp(-1, 0, 10)).toBe(0);
-    expect(clamp(11, 0, 10)).toBe(10);
-  });
-
-  it('DEG2RAD constant', () => {
-    expectClose(DEG2RAD, Math.PI / 180);
-  });
-});
 
 describe('Vector3', () => {
   it('basic ops match three', () => {

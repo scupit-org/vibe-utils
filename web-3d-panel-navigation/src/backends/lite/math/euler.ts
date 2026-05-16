@@ -1,6 +1,6 @@
 import type { Quaternion } from './quaternion';
 import { Matrix4 } from './matrix4';
-import { clamp } from './math-utils';
+import { clamp } from '../../../math-helpers';
 
 export type EulerOrder = 'XYZ' | 'YXZ' | 'ZXY' | 'ZYX' | 'YZX' | 'XZY';
 
