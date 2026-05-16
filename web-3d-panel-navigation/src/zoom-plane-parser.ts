@@ -570,23 +570,17 @@ function resolvePlaneDefinitions<T extends RenderTypes>(
  *
  * @param backend - Active render backend (used for tiled-layout math)
  * @param container - Container element to search within
- * @param selectorOrOptions - CSS selector or options bag
- * @param scaleOverride - Override scale if a selector string is passed
+ * @param options - Optional selector and scale overrides
  * @returns Array of parsed ZoomPlaneConfig objects
  * @throws Error if any plane fails to parse, or if multiple center elements exist
  */
 export function parseAllZoomPlanes<T extends RenderTypes>(
   backend: RenderBackend<T>,
   container: HTMLElement,
-  selectorOrOptions: string | ParseAllZoomPlanesOptions = '[data-zoom-plane]',
-  scaleOverride?: number,
+  options: ParseAllZoomPlanesOptions = {},
 ): ZoomPlaneConfig[] {
-  const selector = typeof selectorOrOptions === 'string'
-    ? selectorOrOptions
-    : selectorOrOptions.selector ?? '[data-zoom-plane]';
-  const scale = typeof selectorOrOptions === 'string'
-    ? scaleOverride ?? 1
-    : selectorOrOptions.scale ?? 1;
+  const selector: string = options.selector ?? '[data-zoom-plane]';
+  const scale: number = options.scale ?? 1;
   const elements = container.querySelectorAll<HTMLElement>(selector);
   const definitions: PlaneDefinition[] = [];
   const seenIds = new Set<string>();
