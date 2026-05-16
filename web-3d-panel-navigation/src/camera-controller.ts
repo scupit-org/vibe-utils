@@ -36,7 +36,7 @@ export class CameraController<T extends RenderTypes = RenderTypes> {
     this.overviewState = overviewState;
     this.config = config;
     this.backend = backend;
-    this.currentTarget = overviewState.target.clone() as T['Vector3'];
+    this.currentTarget = overviewState.target.clone();
   }
 
   /**
@@ -88,12 +88,12 @@ export class CameraController<T extends RenderTypes = RenderTypes> {
     );
 
     // Camera position: plane center + (normal * distance)
-    const cameraPosition = (planeCenter.clone() as T['Vector3'])
-      .add((normal.clone() as T['Vector3']).multiplyScalar(distance));
+    const cameraPosition = planeCenter.clone()
+      .add(normal.clone().multiplyScalar(distance));
 
     return {
       position: cameraPosition,
-      target: planeCenter.clone() as T['Vector3'],
+      target: planeCenter.clone(),
       up: planeUp,
       fov: targetFov,
     };
@@ -109,7 +109,7 @@ export class CameraController<T extends RenderTypes = RenderTypes> {
     this.camera.fov = state.fov;
     this.camera.updateProjectionMatrix();
     this.camera.lookAt(state.target);
-    this.currentTarget = state.target.clone() as T['Vector3'];
+    this.currentTarget = state.target.clone();
   }
 
   /**
@@ -124,9 +124,9 @@ export class CameraController<T extends RenderTypes = RenderTypes> {
    */
   getOverviewState(): CameraState<T> {
     return {
-      position: this.overviewState.position.clone() as T['Vector3'],
-      target: this.overviewState.target.clone() as T['Vector3'],
-      up: this.overviewState.up.clone() as T['Vector3'],
+      position: this.overviewState.position.clone(),
+      target: this.overviewState.target.clone(),
+      up: this.overviewState.up.clone(),
       fov: this.overviewState.fov,
     };
   }
@@ -136,9 +136,9 @@ export class CameraController<T extends RenderTypes = RenderTypes> {
    */
   getCurrentState(): CameraState<T> {
     return {
-      position: this.camera.position.clone() as T['Vector3'],
-      target: this.currentTarget.clone() as T['Vector3'],
-      up: this.camera.up.clone() as T['Vector3'],
+      position: this.camera.position.clone(),
+      target: this.currentTarget.clone(),
+      up: this.camera.up.clone(),
       fov: this.camera.fov,
     };
   }

@@ -19,7 +19,7 @@ function lerpUpAndFov<T extends RenderTypes>(
   to: CameraState<T>,
   t: number,
 ): { up: T['Vector3']; fov: number } {
-  const up = backend.createVector3().lerpVectors(from.up, to.up, t).normalize() as T['Vector3'];
+  const up = backend.createVector3().lerpVectors(from.up, to.up, t).normalize();
   const fov = from.fov + (to.fov - from.fov) * t;
   return { up, fov };
 }
@@ -114,8 +114,8 @@ function calculateEarlyLookState<T extends RenderTypes>(
   const targetRaw = Math.min(rawT / 0.7, 1.0);
   const targetT = easeOutCubic(targetRaw);
 
-  const position = backend.createVector3().lerpVectors(from.position, to.position, posT) as T['Vector3'];
-  const target = backend.createVector3().lerpVectors(from.target, to.target, targetT) as T['Vector3'];
+  const position = backend.createVector3().lerpVectors(from.position, to.position, posT);
+  const target = backend.createVector3().lerpVectors(from.target, to.target, targetT);
   const { up, fov } = lerpUpAndFov(backend, from, to, posT);
 
   return { position, target, up, fov };
@@ -135,7 +135,7 @@ function calculateOrbitState<T extends RenderTypes>(
   const t = easeInOutCubic(rawT);
 
   // Linearly interpolate the look-at target
-  const target = backend.createVector3().lerpVectors(from.target, to.target, t) as T['Vector3'];
+  const target = backend.createVector3().lerpVectors(from.target, to.target, t);
 
   // For position: slerp around the midpoint of the two targets
   const midTarget = backend.createVector3().lerpVectors(from.target, to.target, 0.5);
@@ -148,15 +148,15 @@ function calculateOrbitState<T extends RenderTypes>(
   const currentLen = fromLen + (toLen - fromLen) * t;
 
   // Slerp direction
-  const fromDir = (fromOffset.clone() as T['Vector3']).normalize();
-  const toDir = (toOffset.clone() as T['Vector3']).normalize();
+  const fromDir = fromOffset.clone().normalize();
+  const toDir = toOffset.clone().normalize();
   const dot = clamp(fromDir.dot(toDir), -1, 1);
   const theta = Math.acos(dot);
 
   let position: T['Vector3'];
   if (theta < 0.001) {
     // Nearly parallel — fall back to lerp
-    position = backend.createVector3().lerpVectors(from.position, to.position, t) as T['Vector3'];
+    position = backend.createVector3().lerpVectors(from.position, to.position, t);
   } else {
     const sinTheta = Math.sin(theta);
     const a = Math.sin((1 - t) * theta) / sinTheta;
@@ -165,7 +165,7 @@ function calculateOrbitState<T extends RenderTypes>(
       .addScaledVector(fromDir, a)
       .addScaledVector(toDir, b)
       .normalize();
-    position = (midTarget.clone() as T['Vector3']).add(slerpedDir.multiplyScalar(currentLen));
+    position = midTarget.clone().add(slerpedDir.multiplyScalar(currentLen));
   }
 
   const { up, fov } = lerpUpAndFov(backend, from, to, t);

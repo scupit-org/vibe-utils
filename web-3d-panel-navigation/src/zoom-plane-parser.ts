@@ -425,9 +425,9 @@ function resolveTiledPlane<T extends RenderTypes>(
   const referenceRight = backend.createVector3(1, 0, 0).applyQuaternion(referenceQuaternion);
   const referenceUp = backend.createVector3(0, 1, 0).applyQuaternion(referenceQuaternion);
   const finalOffset = calculateErgonomicTileOffset(layout, definition, reference, scale);
-  const hingeOffset = (referenceRight.clone() as T['Vector3'])
+  const hingeOffset = referenceRight.clone()
     .multiplyScalar(finalOffset[0])
-    .add((referenceUp.clone() as T['Vector3']).multiplyScalar(finalOffset[1]));
+    .add(referenceUp.clone().multiplyScalar(finalOffset[1]));
 
   let relativeQuaternion: T['Quaternion'];
   let hinge: T['Vector3'];
@@ -436,32 +436,32 @@ function resolveTiledPlane<T extends RenderTypes>(
   // The hinge is the shared edge center. The final center is offset from that
   // hinge by half of the tiled plane's scaled size along its own rotated axis.
   if (layout.side === 'right') {
-    hinge = (referenceCenter.clone() as T['Vector3']).add(
-      (referenceRight.clone() as T['Vector3']).multiplyScalar(reference.width * scale / 2)
+    hinge = referenceCenter.clone().add(
+      referenceRight.clone().multiplyScalar(reference.width * scale / 2)
     );
     relativeQuaternion = backend.createQuaternion().setFromAxisAngle(
       backend.createVector3(0, 1, 0),
       -layout.angle
     );
   } else if (layout.side === 'left') {
-    hinge = (referenceCenter.clone() as T['Vector3']).add(
-      (referenceRight.clone() as T['Vector3']).multiplyScalar(-reference.width * scale / 2)
+    hinge = referenceCenter.clone().add(
+      referenceRight.clone().multiplyScalar(-reference.width * scale / 2)
     );
     relativeQuaternion = backend.createQuaternion().setFromAxisAngle(
       backend.createVector3(0, 1, 0),
       layout.angle
     );
   } else if (layout.side === 'top') {
-    hinge = (referenceCenter.clone() as T['Vector3']).add(
-      (referenceUp.clone() as T['Vector3']).multiplyScalar(reference.height * scale / 2)
+    hinge = referenceCenter.clone().add(
+      referenceUp.clone().multiplyScalar(reference.height * scale / 2)
     );
     relativeQuaternion = backend.createQuaternion().setFromAxisAngle(
       backend.createVector3(1, 0, 0),
       layout.angle
     );
   } else {
-    hinge = (referenceCenter.clone() as T['Vector3']).add(
-      (referenceUp.clone() as T['Vector3']).multiplyScalar(-reference.height * scale / 2)
+    hinge = referenceCenter.clone().add(
+      referenceUp.clone().multiplyScalar(-reference.height * scale / 2)
     );
     relativeQuaternion = backend.createQuaternion().setFromAxisAngle(
       backend.createVector3(1, 0, 0),
@@ -479,7 +479,7 @@ function resolveTiledPlane<T extends RenderTypes>(
       'XYZ'
     )
   );
-  const quaternion = (referenceQuaternion.clone() as T['Quaternion'])
+  const quaternion = referenceQuaternion.clone()
     .multiply(offsetQuaternion)
     .multiply(relativeQuaternion);
   const newRight = backend.createVector3(1, 0, 0).applyQuaternion(quaternion);

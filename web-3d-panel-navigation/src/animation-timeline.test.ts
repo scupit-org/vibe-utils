@@ -1,4 +1,5 @@
 import { AnimationTimeline, type TickCallback } from './animation-timeline';
+import { restoreGlobal } from './test-helpers';
 
 describe('AnimationTimeline', () => {
   let originalRequestAnimationFrame: typeof requestAnimationFrame | undefined;
@@ -22,9 +23,9 @@ describe('AnimationTimeline', () => {
     globalThis.requestAnimationFrame = ((callback: TickCallback): number => {
       frameCallbacks.push(callback);
       return frameCallbacks.length;
-    }) as unknown as typeof requestAnimationFrame;
+    });
 
-    globalThis.cancelAnimationFrame = jest.fn() as unknown as typeof cancelAnimationFrame;
+    globalThis.cancelAnimationFrame = jest.fn();
   });
 
   afterEach(() => {
@@ -33,17 +34,8 @@ describe('AnimationTimeline', () => {
       value: originalPerformance,
     });
 
-    if (originalRequestAnimationFrame) {
-      globalThis.requestAnimationFrame = originalRequestAnimationFrame;
-    } else {
-      delete (globalThis as typeof globalThis & { requestAnimationFrame?: typeof requestAnimationFrame }).requestAnimationFrame;
-    }
-
-    if (originalCancelAnimationFrame) {
-      globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
-    } else {
-      delete (globalThis as typeof globalThis & { cancelAnimationFrame?: typeof cancelAnimationFrame }).cancelAnimationFrame;
-    }
+    restoreGlobal('requestAnimationFrame', originalRequestAnimationFrame);
+    restoreGlobal('cancelAnimationFrame', originalCancelAnimationFrame);
   });
 
   function runNextFrame(ms: number): void {

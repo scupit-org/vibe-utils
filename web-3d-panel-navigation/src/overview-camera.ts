@@ -100,8 +100,8 @@ function calculateFocalElementMode<T extends RenderTypes>(
   // `centerPosition.clone()` is essential — without the clone, `.add(...)` would
   // mutate centerPosition itself, which we still want untouched for the `target`
   // field below.
-  const cameraPosition = (centerPosition.clone() as T['Vector3']).add(
-    (normal.clone() as T['Vector3']).multiplyScalar(requiredDistance)
+  const cameraPosition = centerPosition.clone().add(
+    normal.clone().multiplyScalar(requiredDistance)
   );
 
   // Aliasing note: `target` and the local `centerPosition` are the SAME object

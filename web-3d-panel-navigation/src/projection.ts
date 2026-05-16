@@ -64,7 +64,7 @@ export function projectToScreen<T extends RenderTypes>(
   viewportWidth: number,
   viewportHeight: number,
 ): { x: number; y: number } {
-  const projected = point.clone() as T['Vector3'];
+  const projected = point.clone();
   projected.project(camera);
 
   // NDC x: -1 = left edge, +1 = right edge
@@ -116,7 +116,7 @@ export function getPlaneWorldCorners<T extends RenderTypes>(
   );
 
   return localCorners.map((corner) => {
-    const worldCorner = corner.clone() as T['Vector3'];
+    const worldCorner = corner.clone();
     worldCorner.applyEuler(euler);
     worldCorner.add(position);
     return worldCorner;
