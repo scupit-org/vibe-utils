@@ -100,12 +100,16 @@ export class LiteSkyboxHost {
 
   start(): void {
     this.userIntendedRunning = true;
-    if (this.externalFrameLoop) return;
-    if (this.frameId !== null) return;
-    if (document.hidden) return;
+
+    if (this.externalFrameLoop || this.frameId !== null || document.hidden) return;
+
     const now = performance.now();
     this.lastTime = now;
-    if (this.startTime === 0) this.startTime = now;
+
+    if (this.startTime === 0) {
+      this.startTime = now;
+    }
+
     this.frameId = requestAnimationFrame(this.boundTick);
   }
 

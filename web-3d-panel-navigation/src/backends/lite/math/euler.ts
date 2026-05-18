@@ -1,6 +1,7 @@
 import type { Quaternion } from './quaternion';
 import { Matrix4 } from './matrix4';
 import { clamp } from '../../../math-helpers';
+import { assertUnreachable } from '../../../assert';
 
 export type EulerOrder = 'XYZ' | 'YXZ' | 'ZXY' | 'ZYX' | 'YZX' | 'XZY';
 
@@ -58,56 +59,62 @@ export class Euler {
           this.z = 0;
         }
         break;
-      case 'YXZ':
-        this.x = Math.asin(-clamp(m23, -1, 1));
-        if (Math.abs(m23) < 0.9999999) {
-          this.y = Math.atan2(m13, m33);
-          this.z = Math.atan2(m21, m22);
-        } else {
-          this.y = Math.atan2(-m31, m11);
-          this.z = 0;
-        }
-        break;
-      case 'ZXY':
-        this.x = Math.asin(clamp(m32, -1, 1));
-        if (Math.abs(m32) < 0.9999999) {
-          this.y = Math.atan2(-m31, m33);
-          this.z = Math.atan2(-m12, m22);
-        } else {
-          this.y = 0;
-          this.z = Math.atan2(m21, m11);
-        }
-        break;
-      case 'ZYX':
-        this.y = Math.asin(-clamp(m31, -1, 1));
-        if (Math.abs(m31) < 0.9999999) {
-          this.x = Math.atan2(m32, m33);
-          this.z = Math.atan2(m21, m11);
-        } else {
-          this.x = 0;
-          this.z = Math.atan2(-m12, m22);
-        }
-        break;
-      case 'YZX':
-        this.z = Math.asin(clamp(m21, -1, 1));
-        if (Math.abs(m21) < 0.9999999) {
-          this.x = Math.atan2(-m23, m22);
-          this.y = Math.atan2(-m31, m11);
-        } else {
-          this.x = 0;
-          this.y = Math.atan2(m13, m33);
-        }
-        break;
-      case 'XZY':
-        this.z = Math.asin(-clamp(m12, -1, 1));
-        if (Math.abs(m12) < 0.9999999) {
-          this.x = Math.atan2(m32, m22);
-          this.y = Math.atan2(m13, m11);
-        } else {
-          this.x = Math.atan2(-m23, m33);
-          this.y = 0;
-        }
-        break;
+      // Non-XYZ orders are unused in this project (only 'XYZ' call sites). Kept
+      // commented for possible three.js parity later; default hits assertUnreachable.
+      // case 'YXZ':
+      //   this.x = Math.asin(-clamp(m23, -1, 1));
+      //   if (Math.abs(m23) < 0.9999999) {
+      //     this.y = Math.atan2(m13, m33);
+      //     this.z = Math.atan2(m21, m22);
+      //   } else {
+      //     this.y = Math.atan2(-m31, m11);
+      //     this.z = 0;
+      //   }
+      //   break;
+      // case 'ZXY':
+      //   this.x = Math.asin(clamp(m32, -1, 1));
+      //   if (Math.abs(m32) < 0.9999999) {
+      //     this.y = Math.atan2(-m31, m33);
+      //     this.z = Math.atan2(-m12, m22);
+      //   } else {
+      //     this.y = 0;
+      //     this.z = Math.atan2(m21, m11);
+      //   }
+      //   break;
+      // case 'ZYX':
+      //   this.y = Math.asin(-clamp(m31, -1, 1));
+      //   if (Math.abs(m31) < 0.9999999) {
+      //     this.x = Math.atan2(m32, m33);
+      //     this.z = Math.atan2(m21, m11);
+      //   } else {
+      //     this.x = 0;
+      //     this.z = Math.atan2(-m12, m22);
+      //   }
+      //   break;
+      // case 'YZX':
+      //   this.z = Math.asin(clamp(m21, -1, 1));
+      //   if (Math.abs(m21) < 0.9999999) {
+      //     this.x = Math.atan2(-m23, m22);
+      //     this.y = Math.atan2(-m31, m11);
+      //   } else {
+      //     this.x = 0;
+      //     this.y = Math.atan2(m13, m33);
+      //   }
+      //   break;
+      // case 'XZY':
+      //   this.z = Math.asin(-clamp(m12, -1, 1));
+      //   if (Math.abs(m12) < 0.9999999) {
+      //     this.x = Math.atan2(m32, m22);
+      //     this.y = Math.atan2(m13, m11);
+      //   } else {
+      //     this.x = Math.atan2(-m23, m33);
+      //     this.y = 0;
+      //   }
+      //   break;
+      default:
+        assertUnreachable(
+          `Euler.setFromRotationMatrix: order "${order}" is not implemented; only XYZ is active (other orders are commented out).`
+        );
     }
     this.order = order;
     return this;

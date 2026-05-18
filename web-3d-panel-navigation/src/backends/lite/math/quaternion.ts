@@ -2,6 +2,7 @@ import type { Vector3 } from './vector3';
 import type { Euler, EulerOrder } from './euler';
 import type { Matrix4 } from './matrix4';
 import { clamp } from '../../../math-helpers';
+import { assertUnreachable } from '../../../assert';
 
 export class Quaternion {
   x: number;
@@ -76,36 +77,42 @@ export class Quaternion {
         this.z = c1 * c2 * s3 + s1 * s2 * c3;
         this.w = c1 * c2 * c3 - s1 * s2 * s3;
         break;
-      case 'YXZ':
-        this.x = s1 * c2 * c3 + c1 * s2 * s3;
-        this.y = c1 * s2 * c3 - s1 * c2 * s3;
-        this.z = c1 * c2 * s3 - s1 * s2 * c3;
-        this.w = c1 * c2 * c3 + s1 * s2 * s3;
-        break;
-      case 'ZXY':
-        this.x = s1 * c2 * c3 - c1 * s2 * s3;
-        this.y = c1 * s2 * c3 + s1 * c2 * s3;
-        this.z = c1 * c2 * s3 + s1 * s2 * c3;
-        this.w = c1 * c2 * c3 - s1 * s2 * s3;
-        break;
-      case 'ZYX':
-        this.x = s1 * c2 * c3 - c1 * s2 * s3;
-        this.y = c1 * s2 * c3 + s1 * c2 * s3;
-        this.z = c1 * c2 * s3 - s1 * s2 * c3;
-        this.w = c1 * c2 * c3 + s1 * s2 * s3;
-        break;
-      case 'YZX':
-        this.x = s1 * c2 * c3 + c1 * s2 * s3;
-        this.y = c1 * s2 * c3 + s1 * c2 * s3;
-        this.z = c1 * c2 * s3 - s1 * s2 * c3;
-        this.w = c1 * c2 * c3 - s1 * s2 * s3;
-        break;
-      case 'XZY':
-        this.x = s1 * c2 * c3 - c1 * s2 * s3;
-        this.y = c1 * s2 * c3 - s1 * c2 * s3;
-        this.z = c1 * c2 * s3 + s1 * s2 * c3;
-        this.w = c1 * c2 * c3 + s1 * s2 * s3;
-        break;
+      // Non-XYZ orders are unused in this project (only 'XYZ' call sites). Kept
+      // commented for possible three.js parity later; default hits assertUnreachable.
+      // case 'YXZ':
+      //   this.x = s1 * c2 * c3 + c1 * s2 * s3;
+      //   this.y = c1 * s2 * c3 - s1 * c2 * s3;
+      //   this.z = c1 * c2 * s3 - s1 * s2 * c3;
+      //   this.w = c1 * c2 * c3 + s1 * s2 * s3;
+      //   break;
+      // case 'ZXY':
+      //   this.x = s1 * c2 * c3 - c1 * s2 * s3;
+      //   this.y = c1 * s2 * c3 + s1 * c2 * s3;
+      //   this.z = c1 * c2 * s3 + s1 * s2 * c3;
+      //   this.w = c1 * c2 * c3 - s1 * s2 * s3;
+      //   break;
+      // case 'ZYX':
+      //   this.x = s1 * c2 * c3 - c1 * s2 * s3;
+      //   this.y = c1 * s2 * c3 + s1 * c2 * s3;
+      //   this.z = c1 * c2 * s3 - s1 * s2 * c3;
+      //   this.w = c1 * c2 * c3 + s1 * s2 * s3;
+      //   break;
+      // case 'YZX':
+      //   this.x = s1 * c2 * c3 + c1 * s2 * s3;
+      //   this.y = c1 * s2 * c3 + s1 * c2 * s3;
+      //   this.z = c1 * c2 * s3 - s1 * s2 * c3;
+      //   this.w = c1 * c2 * c3 - s1 * s2 * s3;
+      //   break;
+      // case 'XZY':
+      //   this.x = s1 * c2 * c3 - c1 * s2 * s3;
+      //   this.y = c1 * s2 * c3 - s1 * c2 * s3;
+      //   this.z = c1 * c2 * s3 + s1 * s2 * c3;
+      //   this.w = c1 * c2 * c3 + s1 * s2 * s3;
+      //   break;
+      default:
+        assertUnreachable(
+          `Quaternion.setFromEuler: order "${order}" is not implemented; only XYZ is active (other orders are commented out).`
+        );
     }
     return this;
   }
