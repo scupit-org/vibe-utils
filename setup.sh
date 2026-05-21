@@ -22,7 +22,7 @@ if ! curl -fsSL "$SCRIPT_DOWNLOAD_ROOT_URL/init-gpg.sh" | bash; then
 fi
 
 # Security: Clear sensitive environment variables to prevent exposure to subsequent
-# commands in the Cloud agent "install" step (e.g., npm install). This protects
+# commands in the Cloud agent "install" step (e.g., pnpm install). This protects
 # against malicious dependencies.
 echo "[Setup] Clearing sensitive environment variables..."
 unset SCRIPT_DOWNLOAD_ROOT_URL

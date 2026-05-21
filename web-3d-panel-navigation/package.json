@@ -52,7 +52,7 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/three": "^0.184.1",
-    "esbuild": "^0.25.5",
+    "esbuild": "^0.28.0",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.4.1",
     "sass": "^1.89.2",

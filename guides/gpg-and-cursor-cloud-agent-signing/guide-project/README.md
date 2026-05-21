@@ -8,6 +8,8 @@ Configured to work with Cursor Cloud Agents, including automatic GPG commit sign
 
 Before starting a cloud agent for this repository, you need to configure the required secrets in your Cursor Dashboard.
 
+For **local development**, install [pnpm](https://pnpm.io/installation) (v11+). This project uses `pnpm-lock.yaml` and `pnpm-workspace.yaml`, not npm or Yarn.
+
 ## Required Cursor Secrets
 
 Navigate to **Cursor Dashboard → Cloud Agents → Secrets** and add the following secrets:
@@ -36,29 +38,45 @@ gpg --armor --export-secret-keys YOUR_KEY_ID | base64 | tr -d '\n'; echo
 
 Copy the output (a single long string) and paste it as the value for `GPG_PRIVATE_KEY_BASE64` in Cursor Secrets.
 
+## Dependency installs and `allowBuilds`
+
+This project uses **pnpm** with `allowBuilds: false` in [`pnpm-workspace.yaml`](pnpm-workspace.yaml) for packages that run install scripts (currently `esbuild` and `@parcel/watcher`). That blocks postinstall code by default, which is the secure posture described in the [*securely-install-dependencies*](.cursor/skills/securely-install-dependencies/SKILL.md) skill.
+
+**Locally**, run `pnpm install` and follow that skill to audit and one-shot-approve any blocked builds (`pnpm ignored-builds`, flip entries to `true`, `pnpm rebuild`, flip back to `false`).
+
+**In Cursor Cloud Agents**, the [repository root `.cursor/environment.json`](../../../../.cursor/environment.json) must live at the repo root (not under this directory) because cloud agents clone the whole repository and the install hook must reach both the downloaded GPG scripts and this project path. That file temporarily flips `allowBuilds` entries to `true` in the VM only, then runs `pnpm install` so native postinstall steps execute. That bypasses the audit workflow on purpose for this demo; it is **insecure** (install-time supply-chain risk) and should not be copied into other projects.
+
 ## Local Development
 
-The `environment.json` configuration is **only used by Cursor Cloud Agents** - it does not affect your local development environment. When you run `npm install` locally, the GPG setup script is never executed.
+The [`environment.json`](../../../../.cursor/environment.json) configuration is **only used by Cursor Cloud Agents** — it does not affect your local environment. When you run `pnpm install` locally, the GPG setup script is never executed.
+
+```bash
+cd guides/gpg-and-cursor-cloud-agent-signing/guide-project
+pnpm install
+pnpm run dev
+```
+
+If install scripts were blocked, use the *securely-install-dependencies* workflow above before expecting tools like `esbuild` to work.
 
 If you manually run [init-gpg.sh](../../../init-gpg.sh) from the repository root, it will skip execution with a warning message unless `IS_RUNNING_CURSOR_CLOUD_AGENT=1` is set. This safety check prevents accidentally overwriting your local GPG configuration.
 
 ## Cloud Agent Behavior
 
-When a cloud agent starts:
+When a cloud agent starts on this repository:
 
-1. The `install` command in `environment.json` runs `init-gpg.sh`
-2. The script checks for `IS_RUNNING_CURSOR_CLOUD_AGENT` (set via Cursor secrets)
-3. GPG signing is configured using your private key
-4. `npm install` runs to install dependencies
-5. The dev server starts automatically in a terminal
+1. The `install` command in [`.cursor/environment.json`](../../../../.cursor/environment.json) downloads and runs `setup.sh` (which runs `init-gpg.sh`, then clears GPG secrets from the environment).
+2. `init-gpg.sh` checks for `IS_RUNNING_CURSOR_CLOUD_AGENT` (set via Cursor secrets) and configures GPG signing.
+3. The install hook `cd`s into this directory, temporarily allows blocked builds in `pnpm-workspace.yaml`, and runs `pnpm install`.
+4. The dev server starts automatically in a terminal (`pnpm run dev`).
 
 All commits made by the cloud agent will be GPG-signed with your key.
 
 ## Files
 
-- **[setup.sh](../../../setup.sh)**, **[init-gpg.sh](../../../init-gpg.sh)** - GPG setup scripts (in the repository root; downloaded during cloud agent install)
-- **`.cursor/environment.json`** - Cursor Cloud Agent configuration (example/template in this directory). The [root .cursor/environment.json](../../../../.cursor/environment.json) is used when running cloud agents on this repo.
-- **`package.json`** - Node.js dependencies and scripts
+- **[setup.sh](../../../setup.sh)**, **[init-gpg.sh](../../../init-gpg.sh)** — GPG setup scripts (repository root; downloaded during cloud agent install)
+- **[`.cursor/environment.json`](../../../../.cursor/environment.json)** — Cursor Cloud Agent configuration at the **repository root** (required so the install hook can reference both the root scripts URL and `guides/gpg-and-cursor-cloud-agent-signing/guide-project/`)
+- **`package.json`**, **`pnpm-lock.yaml`**, **`pnpm-workspace.yaml`** — Node.js dependencies and pnpm configuration
+- **`.cursor/skills/securely-install-dependencies/`** — Skill for auditing blocked install scripts locally
 
 ## Troubleshooting
 
@@ -69,6 +87,12 @@ Make sure the `SCRIPT_DOWNLOAD_ROOT_URL` secret is configured in your Cursor Das
 ### Cloud agent fails with "GPG_PRIVATE_KEY_BASE64 not set"
 
 Make sure all six secrets listed above are configured in your Cursor Dashboard under Cloud Agents → Secrets.
+
+### `pnpm install` fails with `ERR_PNPM_IGNORED_BUILDS` or "Ignored build scripts"
+
+**Locally:** `allowBuilds` is working as intended. Run `pnpm ignored-builds`, audit each package with the *securely-install-dependencies* skill, then approve with a one-shot flip/rebuild/flip-back.
+
+**Cloud agent:** The root `environment.json` should run `sed` to allow builds before `pnpm install`. If you forked that file and removed that step, restore it or approve builds manually in the agent session.
 
 ### Script runs locally and breaks my GPG config
 

@@ -39,7 +39,7 @@ if ! curl -fsSL "$SCRIPT_DOWNLOAD_ROOT_URL/init-gpg.sh" | bash; then
 fi
 
 # Security: Clear sensitive environment variables to prevent exposure to subsequent
-# commands in the Cloud agent "install" step (e.g., npm install). This protects
+# commands in the Cloud agent "install" step (e.g., pnpm install). This protects
 # against malicious dependencies.
 echo "[Setup] Clearing sensitive environment variables..."
 unset SCRIPT_DOWNLOAD_ROOT_URL
@@ -179,11 +179,11 @@ Example .cursor/environment.json</summary>
 
 ```json
 {
-  "install": "{ [[ -n \"${SCRIPT_DOWNLOAD_ROOT_URL:-}\" ]] || { echo \"ERROR: SCRIPT_DOWNLOAD_ROOT_URL not set in Cursor Secrets\" >&2; false; }; } && { echo \"[Setup] Downloading from: $SCRIPT_DOWNLOAD_ROOT_URL/setup.sh\" && _setup_script=$(curl -fsSL \"$SCRIPT_DOWNLOAD_ROOT_URL/setup.sh\") && source /dev/stdin <<< \"$_setup_script\"; } && npm install",
+  "install": "{ [[ -n \"${SCRIPT_DOWNLOAD_ROOT_URL:-}\" ]] || { echo \"ERROR: SCRIPT_DOWNLOAD_ROOT_URL not set in Cursor Secrets\" >&2; false; }; } && { echo \"[Setup] Downloading from: $SCRIPT_DOWNLOAD_ROOT_URL/setup.sh\" && _setup_script=$(curl -fsSL \"$SCRIPT_DOWNLOAD_ROOT_URL/setup.sh\") && source /dev/stdin <<< \"$_setup_script\"; } && cd guides/gpg-and-cursor-cloud-agent-signing/guide-project && sed -i 's/: false$/: true/' pnpm-workspace.yaml && pnpm install",
   "terminals": [
     {
       "name": "Dev Server",
-      "command": "npm run dev"
+      "command": "cd guides/gpg-and-cursor-cloud-agent-signing/guide-project && pnpm run dev"
     }
   ]
 }
@@ -218,7 +218,9 @@ gpg --list-secret-keys --keyid-format=long
 gpg --armor --export-secret-keys YOUR_KEY_ID | base64 | tr -d '\n'; echo
 ```
 
-And a quick note about the cloud agent environment file, the `&& npm install` is the actual init command for the project. Everything before that is part of the setup to call *setup.sh* properly. Feel free to change that and the terminal list as needed to fit your project.
+And a quick note about the cloud agent environment file: everything after sourcing *setup.sh* is the project init (in vibe-utils, `cd` into guide-project, then `pnpm install`). Everything before that is part of the setup to call *setup.sh* properly. Feel free to change the paths and terminal list as needed to fit your project.
+
+For vibe-utils, `pnpm-workspace.yaml` sets `allowBuilds: false` for packages with install scripts (see the *securely-install-dependencies* skill). The install hook temporarily flips those entries to `true` so native postinstall steps run in the cloud VM. That is intentionally insecure and only appropriate for this demo repo; do not copy that pattern into production projects.
 
 ---
 
