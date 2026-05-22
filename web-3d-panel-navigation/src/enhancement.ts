@@ -29,6 +29,26 @@ export const ENHANCED_CLASS = 'w3dpn-enhanced';
 export const LITE_VERSION_CLASS = 'lite-version';
 
 /**
+ * Class added to `<html>` only while the camera is in flight — i.e. while the
+ * navigation state is `zooming-in` or `zooming-out`. It is removed the instant
+ * motion stops (at rest in `overview` / `section`) and on `destroy()`.
+ *
+ * The library ships **no styling** of its own for this class; it is a stable,
+ * public signal a consumer can key off to suspend expensive visual effects
+ * (drop-shadows, glows, running animations) that are cheap when static but
+ * stutter when a large CSS3D surface is recomposited every frame during a 3D
+ * transform. Restore them at rest by scoping the effect outside this class.
+ *
+ * ```css
+ * .my-card { box-shadow: 0 0 20px rgba(0,0,0,.5); }
+ * html.w3dpn-is-moving .my-card { box-shadow: none; }
+ * ```
+ *
+ * See `docs/issue-reference/homepage-rendering-performance/` for the rationale.
+ */
+export const IS_PANEL_IN_MOTION_CSS_CLASS = 'w3dpn-is-moving';
+
+/**
  * Whether the interactive 3D experience should run. Returns `false` when the
  * document is flagged as a lite presentation (`<html class="lite-version">`).
  *

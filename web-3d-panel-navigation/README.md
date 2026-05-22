@@ -152,7 +152,56 @@ The `lite.` subdomain pattern (`lite.example.com`) is a common way to offer this
 
 - `shouldEnhance(doc?)` — `false` when `<html>` carries `lite-version`; gate navigator construction with it.
 - `markEnhanced(doc?)` — adds `w3dpn-enhanced`; called by the navigator, exposed for custom bootstrapping.
-- `ENHANCED_CLASS` / `LITE_VERSION_CLASS` — the class-name constants.
+- `ENHANCED_CLASS` / `LITE_VERSION_CLASS` / `IS_PANEL_IN_MOTION_CSS_CLASS` — the class-name constants.
+
+## Shedding expensive effects during camera flight (the motion hook)
+
+While the camera is flying into or out of a panel, the navigator adds the class
+`w3dpn-is-moving` to `<html>`, and removes it the instant motion stops (at rest
+in overview/section) and on `destroy()`. The exact value is exported as the
+constant **`IS_PANEL_IN_MOTION_CSS_CLASS`** so you can reference it symbolically
+instead of hard-coding the string.
+
+The library ships **no styling of its own** for this class — it is a stable,
+public signal you can key off to suspend effects that are cheap when static but
+expensive to recomposite every frame while a large CSS3D surface is transformed
+through 3D space (drop-shadows, glows, running keyframe animations). Restore
+them at rest by leaving the un-prefixed rule in place:
+
+```css
+.my-card  { box-shadow: 0 0 20px rgba(0,0,0,.5); transition: box-shadow .2s; }
+/* dropped only while the camera is moving, restored automatically at rest */
+html.w3dpn-is-moving .my-card { box-shadow: none; transition: none; }
+```
+
+`example-theme.css` demonstrates the pattern on its own `.zoom-plane` shadow.
+The performance rationale is documented in
+`docs/issue-reference/homepage-rendering-performance/homepage-rendering-performance-postmortem.md`.
+
+## Back button visibility
+
+Render the back button as `class="back-button hidden"`. It must stay hidden in
+overview, no-JS, and lite, and appear only while a section is open. The library
+owns this:
+
+- `base.css` hides it with `.back-button.hidden { display: none }`. Keying on
+  `.hidden` (specificity `0,2,0`) is deliberate — a bare `.back-button { display: none }`
+  would tie the most natural rule a consumer writes for this element,
+  `.back-button { display: flex }` (to center an icon + label), and lose to it
+  on load order, leaking the button into every mode. The `.hidden`-keyed hide
+  outranks that, so an ordinary `display` rule can't defeat it by accident. It
+  is correct in every mode because the runtime only strips `.hidden` while a
+  section is open.
+- `engine.css` reveals it (when enhanced and a section is open) via
+  `html.w3dpn-enhanced .back-button:not(.hidden)`, with the revealed `display`
+  routed through a token:
+
+  ```css
+  :root { --w3dpn-back-button-display: flex; }  /* defaults to block if unset */
+  ```
+
+  Set `--w3dpn-back-button-display` in your theme to choose the layout instead
+  of duplicating the gated selector or touching the bare `.back-button` rule.
 
 ## Public API
 
@@ -162,7 +211,7 @@ Main entry (`@scupit/web-3d-panel-navigation`):
 - `DEFAULT_CONFIG`
 - `resolveContainerRefs()`
 - `REQUIRED_CONTAINER_IDS`
-- `shouldEnhance()`, `markEnhanced()`, `ENHANCED_CLASS`, `LITE_VERSION_CLASS`
+- `shouldEnhance()`, `markEnhanced()`, `ENHANCED_CLASS`, `LITE_VERSION_CLASS`, `IS_PANEL_IN_MOTION_CSS_CLASS`
 - `ContainerRefs`
 - `NavigationConfig`
 - `NavigationState`

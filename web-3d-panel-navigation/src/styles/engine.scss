@@ -106,10 +106,16 @@ html.w3dpn-enhanced {
   }
 
   // Reveal the back button only while a section is open (the runtime toggles
-  // the `.hidden` class). The `base` layer's `display: none` keeps it hidden in
-  // every other case, including lite / no-JS.
+  // the `.hidden` class). The `base` layer's `.back-button.hidden` rule keeps it
+  // hidden in every other case, including lite / no-JS.
+  //
+  // The revealed `display` is routed through a token so a consumer can choose
+  // its layout (e.g. `flex`/`inline-flex` to center an icon + label) via the
+  // supported `--w3dpn-*` contract instead of duplicating this whole gated
+  // selector or fighting the bare `.back-button` rule. Defaults to `block`,
+  // which preserves the historical behavior when shown.
   .back-button:not(.hidden) {
-    display: block;
+    display: var(--w3dpn-back-button-display, block);
     position: fixed;
     top: 2rem;
     left: 2rem;

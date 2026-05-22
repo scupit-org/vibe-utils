@@ -2,7 +2,7 @@ export { ZoomPlaneNavigator } from './zoom-navigation';
 export { SceneGraph } from './scene-graph';
 export { DEFAULT_CONFIG } from './types';
 export { resolveContainerRefs, REQUIRED_CONTAINER_IDS } from './container-refs';
-export { shouldEnhance, markEnhanced, ENHANCED_CLASS, LITE_VERSION_CLASS } from './enhancement';
+export { shouldEnhance, markEnhanced, ENHANCED_CLASS, LITE_VERSION_CLASS, IS_PANEL_IN_MOTION_CSS_CLASS } from './enhancement';
 
 export type {
   CameraState,

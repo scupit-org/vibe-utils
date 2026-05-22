@@ -8,7 +8,7 @@ import { getCenteredPlaneRect, lerpScreenRect, fullViewportRect } from './projec
 import { remap } from './easing';
 import { calculateTransitionState } from './camera-transitions';
 import { HashUrlSync } from './url-hash-sync';
-import { LITE_VERSION_CLASS, markEnhanced, shouldEnhance } from './enhancement';
+import { IS_PANEL_IN_MOTION_CSS_CLASS, LITE_VERSION_CLASS, markEnhanced, shouldEnhance } from './enhancement';
 import type { RenderBackend, RenderTypes } from './render-contract';
 import type {
   NavigationState, NavigationConfig, NavigationEventType,
@@ -205,7 +205,7 @@ export class ZoomPlaneNavigator<T extends RenderTypes = RenderTypes> {
 
   private updateMotionClass(): void {
     document.documentElement.classList.toggle(
-      'w3dpn-is-moving',
+      IS_PANEL_IN_MOTION_CSS_CLASS,
       this._state === 'zooming-in' || this._state === 'zooming-out'
     );
   }
@@ -592,7 +592,7 @@ export class ZoomPlaneNavigator<T extends RenderTypes = RenderTypes> {
       window.cancelAnimationFrame(this.renderFrameId);
       this.renderFrameId = null;
     }
-    document.documentElement.classList.remove('w3dpn-is-moving');
+    document.documentElement.classList.remove(IS_PANEL_IN_MOTION_CSS_CLASS);
 
     for (const [planeId, handler] of this.planeClickHandlers) {
       this.sceneGraph.getZoomPlane(planeId)?.element.removeEventListener('click', handler);

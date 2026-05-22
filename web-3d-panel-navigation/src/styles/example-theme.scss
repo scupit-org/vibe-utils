@@ -31,6 +31,11 @@
   --w3dpn-backdrop-background-hover: rgba(50, 50, 80, 0.95);
   --w3dpn-backdrop-border: 1px solid rgba(255, 255, 255, 0.2);
   --w3dpn-backdrop-border-hover: rgba(90, 122, 255, 0.5);
+
+  // `display` applied to the back button while a section is open (engine layer).
+  // Override to `flex` / `inline-flex` to center an icon + label. Declared here
+  // for discoverability; the engine falls back to `block` if it is unset.
+  --w3dpn-back-button-display: block;
 }
 
 html,
@@ -56,6 +61,23 @@ body {
 .zoom-plane:hover {
   border-color: var(--w3dpn-plane-border-hover-color);
   box-shadow: var(--w3dpn-plane-hover-inset-shadow), var(--w3dpn-plane-hover-shadow);
+}
+
+// Demonstrates the public motion hook (`IS_PANEL_IN_MOTION_CSS_CLASS`). The
+// runtime adds `w3dpn-is-moving` to <html> only while the camera is flying into
+// or out of a panel, and removes it the instant motion stops. Recompositing
+// shadows/filters/animations every frame while a large CSS3D surface is
+// transformed through 3D space is expensive, so we drop them during flight and
+// let them restore automatically at rest.
+//
+// This is a *theme-layer* concern: the engine ships no rules for this class.
+// Copy the pattern for any expensive effect your own theme adds (text-shadow
+// glows, drop-shadow filters, running keyframe animations, …).
+html.w3dpn-is-moving {
+  .zoom-plane {
+    box-shadow: none;
+    transition: none;
+  }
 }
 
 .plane-label {

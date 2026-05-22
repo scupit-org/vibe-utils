@@ -22,6 +22,17 @@
 
 // The back button is full-experience-only chrome. Hidden by default in every
 // mode; `engine.css` reveals it (while a section is open) only when enhanced.
-.back-button {
+//
+// The hide is keyed on `.hidden` (specificity 0,2,0) rather than the bare
+// `.back-button` (0,1,0) on purpose: a bare hide ties the single most natural
+// rule a consumer writes for this element — `.back-button { display: flex }` to
+// center an icon + label — and loses to it on load order, leaking the button
+// into every mode. Keying on `.hidden` outranks that rule so it can't defeat
+// the hide by accident. This is safe in every mode because the contract
+// requires the button to ship as `class="back-button hidden"`, so the class is
+// present whenever the button should be hidden (overview, no-JS, lite); the
+// runtime only strips `.hidden` while a section is open, where `engine.css`
+// then reveals it.
+.back-button.hidden {
   display: none;
 }

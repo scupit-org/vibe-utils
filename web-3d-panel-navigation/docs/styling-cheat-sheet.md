@@ -116,8 +116,15 @@ them in your own `:root` block after importing the package stylesheet.
 | `--w3dpn-backdrop-background-hover` | `rgba(50, 50, 80, 0.95)` | `.back-button:hover` background |
 | `--w3dpn-backdrop-border` | `1px solid rgba(255, 255, 255, 0.2)` | `.back-button` border (full shorthand) |
 | `--w3dpn-backdrop-border-hover` | `rgba(90, 122, 255, 0.5)` | `.back-button:hover` and `.project-card:hover` border-color |
+| `--w3dpn-back-button-display` | `block` | `display` applied to the back button while a section is open (the `engine.css` reveal). Set to `flex` / `inline-flex` to center an icon + label. |
 
 > `--w3dpn-backdrop-border` is the full border shorthand. `--w3dpn-backdrop-border-hover` is only the color value (applied via `border-color`).
+>
+> `--w3dpn-back-button-display` lives on the gated reveal rule
+> (`html.w3dpn-enhanced .back-button:not(.hidden)`), so it only affects the
+> button while a section is open. Use it instead of writing a bare
+> `.back-button { display: … }` rule — the bare rule would defeat the default
+> hide (see §5).
 
 ### What Is *Not* Exposed as a Variable
 
@@ -261,6 +268,16 @@ changes. You should not toggle them manually during normal use — with one
 documented exception below (`.back-button.hidden`), which is also the correct
 **initial** state to render in your HTML.
 
+### On `<html>`
+
+| Class | Lifecycle | Effect |
+|-------|-----------|--------|
+| `w3dpn-is-moving` | Added only while the camera is in flight (state `zooming-in` / `zooming-out`); removed at rest (`overview` / `section`) and on `destroy()`. | None shipped. A **public hook** (exported as `IS_PANEL_IN_MOTION_CSS_CLASS`) for suspending expensive effects during motion — see the README "motion hook" section. |
+
+> `w3dpn-enhanced` (the activation class) and `lite-version` (the author-set
+> opt-out) also live on `<html>` but are not per-navigation-state toggles; see
+> the README enhancement helpers.
+
 ### On `#scene-container`
 
 | Class | Effect |
@@ -287,8 +304,8 @@ documented exception below (`.back-button.hidden`), which is also the correct
 
 | Class | Effect |
 |-------|--------|
-| `.hidden` | `display: none` |
-| *(no class)* | Shown — but only in the full experience. `base.css` hides the button by default in every mode and `engine.css` reveals it via `html.w3dpn-enhanced .back-button:not(.hidden)`, so it never appears in lite / no-JS. |
+| `.hidden` | `display: none` — via `base.css`'s `.back-button.hidden { display: none }` (specificity `0,2,0`, so a bare consumer `.back-button { display: flex }` can't defeat it). Present in overview / no-JS / lite. |
+| *(no class)* | Shown — but only in the full experience. `engine.css` reveals it via `html.w3dpn-enhanced .back-button:not(.hidden)` with `display: var(--w3dpn-back-button-display, block)`, so it never appears in lite / no-JS. Choose its layout with the token, not a bare `.back-button` rule. |
 
 > **Initial state note:** Render the back button with `class="back-button hidden"`
 > in your HTML. The page loads in overview mode, so the button should start

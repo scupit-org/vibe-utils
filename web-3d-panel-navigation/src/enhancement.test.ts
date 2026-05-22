@@ -3,11 +3,15 @@
  */
 import {
   ENHANCED_CLASS,
+  IS_PANEL_IN_MOTION_CSS_CLASS,
   LITE_VERSION_CLASS,
   markEnhanced,
   shouldEnhance,
 } from './enhancement';
+import * as packageEntry from './index';
 import { ZoomPlaneNavigator } from './zoom-navigation';
+import { liteBackend } from './backends/lite';
+import { resolveContainerRefs } from './container-refs';
 
 describe('enhancement helpers', () => {
   afterEach(() => {
@@ -58,5 +62,80 @@ describe('ZoomPlaneNavigator lite guard', () => {
     // throws on the invalid arguments.
     expect(() => new ZoomPlaneNavigator(null as never, null as never)).toThrow();
     expect(document.documentElement.classList.contains(ENHANCED_CLASS)).toBe(true);
+  });
+});
+
+describe('motion hook (IS_PANEL_IN_MOTION_CSS_CLASS)', () => {
+  // This class is public contract: a consumer keys off it to shed expensive
+  // visual effects during camera flight. These tests pin both its value and the
+  // runtime lifecycle so a future refactor cannot silently break consumers.
+
+  it('has the documented value', () => {
+    expect(IS_PANEL_IN_MOTION_CSS_CLASS).toBe('w3dpn-is-moving');
+  });
+
+  it('is re-exported from the package entry point', () => {
+    expect(packageEntry.IS_PANEL_IN_MOTION_CSS_CLASS).toBe(IS_PANEL_IN_MOTION_CSS_CLASS);
+  });
+
+  describe('runtime lifecycle', () => {
+    let nav: ZoomPlaneNavigator | null = null;
+
+    function buildDom(): void {
+      document.body.innerHTML = `
+        <div id="zoom-planes-source">
+          <div class="zoom-plane"
+               data-zoom-plane="main"
+               data-section="page-main"
+               data-width="1600"
+               data-height="900"
+               data-position="0, 0, 0"
+               data-rotation="0, 0, 0"
+               data-zoom-center>
+            <span class="plane-label">Main</span>
+          </div>
+        </div>
+        <div id="scene-container"></div>
+        <div id="page-content-container">
+          <section id="page-main" class="page-section"><h1>Main</h1></section>
+        </div>
+        <button id="back-button" class="back-button hidden">Back</button>
+      `;
+    }
+
+    beforeEach(() => {
+      buildDom();
+      // Disable URL-hash sync so the test doesn't depend on window.location.
+      nav = new ZoomPlaneNavigator(resolveContainerRefs(), liteBackend, { syncUrlHash: false });
+    });
+
+    afterEach(() => {
+      nav?.destroy();
+      nav = null;
+      document.body.innerHTML = '';
+      document.documentElement.classList.remove(ENHANCED_CLASS, IS_PANEL_IN_MOTION_CSS_CLASS);
+    });
+
+    it('is absent at overview rest immediately after construction', () => {
+      expect(document.documentElement.classList.contains(IS_PANEL_IN_MOTION_CSS_CLASS)).toBe(false);
+    });
+
+    it('is added synchronously when a zoom begins', () => {
+      // `zoomInto` sets state to `zooming-in` (which toggles the class on) before
+      // awaiting the animation, so the class is present without driving rAF.
+      // The returned promise is intentionally not awaited; swallow it so a
+      // jsdom-only failure in the downstream camera math can't fail this test.
+      void nav!.zoomInto('main').catch(() => {});
+      expect(nav!.state).toBe('zooming-in');
+      expect(document.documentElement.classList.contains(IS_PANEL_IN_MOTION_CSS_CLASS)).toBe(true);
+    });
+
+    it('is removed on destroy()', () => {
+      void nav!.zoomInto('main').catch(() => {});
+      expect(document.documentElement.classList.contains(IS_PANEL_IN_MOTION_CSS_CLASS)).toBe(true);
+      nav!.destroy();
+      nav = null;
+      expect(document.documentElement.classList.contains(IS_PANEL_IN_MOTION_CSS_CLASS)).toBe(false);
+    });
   });
 });
