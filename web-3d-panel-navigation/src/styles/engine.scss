@@ -1,0 +1,118 @@
+// Engine (functional 3D) stylesheet for @scupit/web-3d-panel-navigation.
+//
+// This is the CSS half of the runtime mechanism. The navigator sets inline
+// `clip-path` / `opacity` / `transform` and toggles state classes
+// (`.active`, `.fully-visible`, `.hidden`, `.fully-hidden`), all of which are
+// meaningless without the matching structural rules and the correct *initial*
+// clipped / hidden states defined here.
+//
+// Because these same rules are exactly what would blank the page when the 3D
+// experience is NOT running, every rule below is scoped under
+// `html.w3dpn-enhanced`. That class is only present when the navigator is
+// active (added before paint by the documented `<head>` snippet, and again
+// defensively by the navigator constructor).
+//
+// The always-on structural hides (`#zoom-planes-source`, `.back-button`
+// default) live in the `base` layer, forwarded here so a full consumer that
+// imports only `engine.css` still gets them. A lite presentation imports
+// `base` + a theme directly and skips this engine layer.
+@forward "base";
+
+html.w3dpn-enhanced {
+  // Viewport ownership. This is what prevents the document from scrolling and
+  // is the single most destructive rule for a plain-flow fallback, hence
+  // gated.
+  &,
+  body {
+    overflow: hidden;
+    height: 100%;
+  }
+
+  #scene-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    z-index: 1;
+    transition: opacity 0.3s ease-in-out;
+  }
+
+  #scene-container.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  #scene-container.fully-hidden {
+    display: none;
+  }
+
+  #page-content-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 10;
+    overflow: hidden;
+    clip-path: inset(50% 50% 50% 50%);
+    opacity: 0;
+    pointer-events: none;
+    transform-origin: top left;
+    will-change: transform, opacity;
+  }
+
+  #page-content-container.visible {
+    pointer-events: auto;
+  }
+
+  #page-content-container.fully-visible {
+    clip-path: none;
+    transform: none;
+    overflow-y: auto;
+  }
+
+  .w3dpn-content-transform-inner {
+    min-height: 100%;
+    transform-origin: top left;
+    will-change: transform;
+  }
+
+  // Layout primitives the CSS3D plane surfaces depend on. The `.zoom-plane`
+  // elements are cloned into the scene under this enhanced root, so the rules
+  // apply to the live planes. Cosmetic plane styling lives in the theme.
+  .zoom-plane {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    visibility: visible;
+    cursor: pointer;
+  }
+
+  // In the 3D experience, sections are hidden until revealed by `.active`, and
+  // a revealed section fills the viewport. In lite / no-JS these rules are
+  // absent, so sections render as a normal stacked, naturally-sized document.
+  .page-section {
+    display: none;
+    min-height: 100vh;
+    padding: 4rem;
+    box-sizing: border-box;
+  }
+
+  .page-section.active {
+    display: block;
+  }
+
+  // Reveal the back button only while a section is open (the runtime toggles
+  // the `.hidden` class). The `base` layer's `display: none` keeps it hidden in
+  // every other case, including lite / no-JS.
+  .back-button:not(.hidden) {
+    display: block;
+    position: fixed;
+    top: 2rem;
+    left: 2rem;
+    z-index: 1000;
+  }
+}

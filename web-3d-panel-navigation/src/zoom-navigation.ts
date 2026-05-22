@@ -8,6 +8,7 @@ import { getCenteredPlaneRect, lerpScreenRect, fullViewportRect } from './projec
 import { remap } from './easing';
 import { calculateTransitionState } from './camera-transitions';
 import { HashUrlSync } from './url-hash-sync';
+import { LITE_VERSION_CLASS, markEnhanced, shouldEnhance } from './enhancement';
 import type { RenderBackend, RenderTypes } from './render-contract';
 import type {
   NavigationState, NavigationConfig, NavigationEventType,
@@ -60,6 +61,20 @@ export class ZoomPlaneNavigator<T extends RenderTypes = RenderTypes> {
     backend: RenderBackend<T>,
     config: Partial<NavigationConfig> = {},
   ) {
+    // Defensive guard: the navigator must not build a 3D scene over a lite
+    // presentation. Correct usage gates construction with `shouldEnhance()`
+    // (so this never throws); the throw is a safety net for a full bundle
+    // accidentally loaded on a `<html class="lite-version">` page.
+    if (!shouldEnhance()) {
+      throw new Error(
+        `ZoomPlaneNavigator: refusing to start because <html> has the ` +
+        `"${LITE_VERSION_CLASS}" class. Gate construction with shouldEnhance().`,
+      );
+    }
+    // Activate the gated engine CSS. The recommended `<head>` snippet should
+    // already have done this before paint; this is the idempotent fallback.
+    markEnhanced();
+
     this.refs = refs;
     this.backend = backend;
     this.config = Object.freeze({ ...DEFAULT_CONFIG, ...config });

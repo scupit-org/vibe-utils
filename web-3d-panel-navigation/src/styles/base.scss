@@ -1,0 +1,27 @@
+// Base (always-on structural) layer for @scupit/web-3d-panel-navigation.
+//
+// These rules hide DOM that is meaningless outside the 3D experience, and they
+// must hold in EVERY mode — full, no-JS, and lite. They are deliberately
+// ungated (no `html.w3dpn-enhanced` scope):
+//
+//   - The full experience imports `engine.css`, which `@forward`s this layer,
+//     so it inherits these rules automatically.
+//   - A lite presentation imports `base.css` (this layer) + a theme, and
+//     skips `engine.css` entirely — but still needs these hides so the page
+//     doesn't show the raw plane templates or the back button.
+//
+// Keep this layer separate from the theme: a consumer is expected to rewrite
+// the theme, but these structural hides must always be present.
+
+// The plane *templates* exist only to be parsed and cloned into the 3D scene.
+// Their labels duplicate the section headings, so they are noise in every mode.
+// (Hidden elements are still queryable, so the parser is unaffected.)
+#zoom-planes-source {
+  display: none;
+}
+
+// The back button is full-experience-only chrome. Hidden by default in every
+// mode; `engine.css` reveals it (while a section is open) only when enhanced.
+.back-button {
+  display: none;
+}

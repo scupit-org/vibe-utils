@@ -11,7 +11,9 @@
     "LICENSE"
   ],
   "sideEffects": [
-    "./dist/styles.css"
+    "./dist/base.css",
+    "./dist/engine.css",
+    "./dist/example-theme.css"
   ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -33,11 +35,13 @@
       "types": "./src/backends/three/index.ts",
       "import": "./dist/three-backend.js"
     },
-    "./styles.css": "./dist/styles.css"
+    "./base.css": "./dist/base.css",
+    "./engine.css": "./dist/engine.css",
+    "./example-theme.css": "./dist/example-theme.css"
   },
   "scripts": {
     "build": "node ./scripts/build.mjs",
-    "example:build": "npm run build && node ./scripts/build-example.mjs",
+    "example:build": "pnpm run build && node ./scripts/build-example.mjs",
     "test": "jest --runInBand",
     "typecheck": "tsc --noEmit"
   },

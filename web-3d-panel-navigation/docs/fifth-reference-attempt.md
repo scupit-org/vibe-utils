@@ -48,7 +48,7 @@ The fourth and fifth reference attempts were originally developed inside the Ele
 Current source of truth:
 
 - Package runtime: `web-3d-panel-navigation/src/`
-- Package stylesheet source: `web-3d-panel-navigation/src/styles.scss`
+- Package stylesheet sources: `web-3d-panel-navigation/src/styles/` (`base.scss`, `engine.scss`, `example-theme.scss`)
 - Example app: `web-3d-panel-navigation/example/`
 - Developer docs: `web-3d-panel-navigation/docs/`
 
@@ -62,7 +62,8 @@ npm install @scupit/web-3d-panel-navigation three
 
 ```ts
 import { ZoomPlaneNavigator } from '@scupit/web-3d-panel-navigation';
-import '@scupit/web-3d-panel-navigation/styles.css';
+import '@scupit/web-3d-panel-navigation/engine.css';
+import '@scupit/web-3d-panel-navigation/example-theme.css';
 ```
 
 `three` is a peer dependency. The package expects to run in the browser.
@@ -105,13 +106,37 @@ const navigation = new ZoomPlaneNavigator(resolveContainerRefs());
 
 ### Styling Model
 
-The package ships the crucial structural CSS and the default visual styling for planes, sections, cards, and the back button. Consumers should import the package stylesheet and then override CSS variables for theming.
+The package ships **three** stylesheet layers, split by concern so the same
+build-time markup can render as the full 3D experience, a no-JS document, or a
+lite presentation — and so a lite page never has to load the 3D CSS:
+
+- **`base.css`** — always-on structural hides (the plane templates and the
+  back button). Needed in every mode. `engine.css` `@forward`s it.
+- **`engine.css`** — the functional CSS required by the runtime (clip-path
+  reveal, fixed/fullscreen containers, section show/hide, viewport scroll-lock).
+  Every rule is scoped under `html.w3dpn-enhanced`, the activation class, so the
+  rules only apply while the 3D experience is active. Without that class (JS
+  disabled, or `<html class="lite-version">`) the rules stay inert and the page
+  degrades to plain document flow.
+- **`example-theme.css`** — a **reference** look for planes, sections, cards,
+  and the back button, plus the `--w3dpn-*` variable contract. Reference only:
+  copy it and write your own. Authored to render fine in normal flow.
 
 High-level rule:
 
-- Import `@scupit/web-3d-panel-navigation/styles.css`
+- **Full page:** import `@scupit/web-3d-panel-navigation/engine.css` (it
+  includes `base`) + your theme (start from `/example-theme.css`).
+- **Lite page:** import `@scupit/web-3d-panel-navigation/base.css` + your theme;
+  skip `engine.css`. Set `<html class="lite-version">`.
+- Activate the engine layer before paint with the documented `<head>` snippet,
+  and gate navigator construction with `shouldEnhance()`
 - Keep the default selectors unless you are intentionally replacing the package CSS contract
 - Customize colors, gradients, fonts, and surfaces via CSS custom properties
+- See the "Lite and no-JS rendering" section of the README for the full model
+
+> The **lite presentation** (no-3D fallback) is distinct from the **lite
+> backend** (`/lite-backend`), a small three-free renderer for the full
+> experience.
 
 Example theme override:
 
@@ -466,7 +491,12 @@ The runtime is split into focused modules with clear ownership boundaries.
 web-3d-panel-navigation/
 |-- src/
 |   |-- index.ts
-|   |-- styles.scss
+|   |-- styles/
+|   |   |-- base.scss          # always-on structural hides
+|   |   |-- engine.scss        # gated 3D layer (forwards base)
+|   |   `-- example-theme.scss # reference cosmetic look + CSS variables
+|   |-- container-refs.ts
+|   |-- enhancement.ts    # shouldEnhance / markEnhanced / class constants
 |   |-- types.ts
 |   |-- easing.ts
 |   |-- animation-timeline.ts
@@ -659,7 +689,8 @@ zoom-navigation.ts
 
 ```ts
 import { ZoomPlaneNavigator, resolveContainerRefs } from '@scupit/web-3d-panel-navigation';
-import '@scupit/web-3d-panel-navigation/styles.css';
+import '@scupit/web-3d-panel-navigation/engine.css';
+import '@scupit/web-3d-panel-navigation/example-theme.css';
 
 const zoomNav = new ZoomPlaneNavigator(
   resolveContainerRefs(),
@@ -878,22 +909,31 @@ The runtime merges config once, freezes it, and shares that single reference acr
 
 ## CSS and Theming Contract
 
-### Import the Package Stylesheet
+### Import the Package Stylesheets
 
-The easiest and intended setup is:
+A full page imports the engine layer + a theme:
 
 ```ts
-import '@scupit/web-3d-panel-navigation/styles.css';
+import '@scupit/web-3d-panel-navigation/engine.css';
+import '@scupit/web-3d-panel-navigation/example-theme.css';
 ```
 
-That stylesheet contains both:
+- **`base.css`** carries the always-on structural hides (plane templates, back
+  button). `engine.css` `@forward`s it, so full pages get it automatically; a
+  lite page imports `base.css` directly instead of `engine.css`.
+- **`engine.css`** carries the crucial structural rules required for the
+  navigation system to function. Every rule is gated under
+  `html.w3dpn-enhanced` (added by the navigator / the `<head>` snippet) so it
+  self-disables without JS or in lite mode — that gating is what makes the
+  no-JS and lite presentations degrade to plain document flow.
+- **`example-theme.css`** carries a reference look for the planes and sections
+  plus the `--w3dpn-*` variables. Reference only — copy and replace.
 
-- The crucial structural rules required for the navigation system to function
-- The default look of the demo-style planes and sections
+### Structural Selectors Used by the Engine + Base CSS
 
-### Structural Selectors Used by the Shipped CSS
-
-The shipped stylesheet assumes these selectors and state classes:
+The stylesheets assume these selectors and state classes. `#zoom-planes-source`
+and the back-button default live in `base.css` (always on); the rest are scoped
+under `html.w3dpn-enhanced` in `engine.css`:
 
 - `#zoom-planes-source`
 - `#scene-container`
@@ -989,7 +1029,7 @@ These are not current package guarantees, but they remain sensible follow-up are
 - A more formal styling API beyond CSS variable theming
 - Generated declaration files in published output
 - More explicit public extension points for advanced integrations
-- A mobile-oriented fallback strategy documented alongside the fullscreen system
+- ~~A mobile-oriented fallback strategy documented alongside the fullscreen system~~ — implemented via the gated `engine.css` + `lite-version` / no-JS model (see "Styling Model" and the README's "Lite and no-JS rendering")
 
 ---
 

@@ -4,7 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>web-3d-panel-navigation Example</title>
-    <link rel="stylesheet" href="./dist/styles.css">
+    <!-- Activate the gated engine CSS before first paint (skipped in lite
+         mode), so the full experience loads without a flash of plain content. -->
+    <script>
+      if (!document.documentElement.classList.contains('lite-version'))
+        document.documentElement.classList.add('w3dpn-enhanced');
+    </script>
+    <link rel="stylesheet" href="./dist/full.css">
   </head>
   <body>
     <div id="zoom-planes-source">

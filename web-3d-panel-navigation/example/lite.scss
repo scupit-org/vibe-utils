@@ -1,0 +1,7 @@
+// Consumer stylesheet for the LITE example page (lite.html).
+//
+// A lite page never runs the 3D experience, so it skips the engine layer
+// entirely. It forwards only the `base` structural layer (to hide the plane
+// templates + back button) and a theme. Swap `example-theme` for your own.
+@forward "../src/styles/base";
+@forward "../src/styles/example-theme";

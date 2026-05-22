@@ -1,3 +1,13 @@
+// Example theme for @scupit/web-3d-panel-navigation.
+//
+// This is a REFERENCE theme, not a dependency. It documents the full
+// `--w3dpn-*` custom-property contract and shows one cosmetic treatment of the
+// planes, sections, cards, and back button. The intended workflow is to copy
+// it and write your own — nothing here is load-bearing, so dropping or
+// replacing it leaves the 3D mechanism (engine layer) fully working, just
+// unstyled. Every rule is safe in normal document flow, so the same theme
+// serves the full, no-JS, and lite presentations alike.
+
 :root {
   --w3dpn-font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   --w3dpn-page-background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
@@ -27,8 +37,6 @@ html,
 body {
   margin: 0;
   padding: 0;
-  overflow: hidden;
-  height: 100%;
 }
 
 body {
@@ -37,23 +45,10 @@ body {
   color: var(--w3dpn-text-color);
 }
 
-#zoom-planes-source {
-  position: absolute;
-  visibility: hidden;
-  pointer-events: none;
-}
-
 .zoom-plane {
   background: var(--w3dpn-plane-background);
   border: 8px solid var(--w3dpn-plane-border-color);
   border-radius: 4px;
-  box-sizing: border-box;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  visibility: visible;
   box-shadow: var(--w3dpn-plane-inset-shadow), var(--w3dpn-plane-shadow);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -72,66 +67,12 @@ body {
   pointer-events: none;
 }
 
-#scene-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100vh;
-  z-index: 1;
-  transition: opacity 0.3s ease-in-out;
-}
-
-#scene-container.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-
-#scene-container.fully-hidden {
-  display: none;
-}
-
-#page-content-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 10;
-  overflow: hidden;
-  clip-path: inset(50% 50% 50% 50%);
-  opacity: 0;
-  pointer-events: none;
-  transform-origin: top left;
-  will-change: transform, opacity;
-}
-
-#page-content-container.visible {
-  pointer-events: auto;
-}
-
-#page-content-container.fully-visible {
-  clip-path: none;
-  transform: none;
-  overflow-y: auto;
-}
-
-.w3dpn-content-transform-inner {
-  min-height: 100%;
-  transform-origin: top left;
-  will-change: transform;
-}
-
+// Section content. Base padding here keeps the lite / no-JS document readable;
+// the engine layer overrides padding and adds `min-height: 100vh` only inside
+// the full experience (higher specificity, so no `!important` needed).
 .page-section {
-  display: none;
-  min-height: 100vh;
-  padding: 4rem;
-  box-sizing: border-box;
+  padding: 2rem 1.5rem;
   background: var(--w3dpn-page-background);
-}
-
-.page-section.active {
-  display: block;
 }
 
 .page-section h1 {
@@ -218,11 +159,9 @@ body {
   margin: 0.75rem 0;
 }
 
+// Back-button appearance. Positioning / visibility is owned by the engine
+// layer; these are cosmetics that only become visible when it is shown.
 .back-button {
-  position: fixed;
-  top: 2rem;
-  left: 2rem;
-  z-index: 1000;
   padding: 0.875rem 1.75rem;
   background: var(--w3dpn-backdrop-background);
   border: var(--w3dpn-backdrop-border);
@@ -244,8 +183,4 @@ body {
 
 .back-button:active {
   transform: translateY(0);
-}
-
-.back-button.hidden {
-  display: none;
 }

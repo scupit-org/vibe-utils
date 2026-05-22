@@ -9,13 +9,52 @@
 
 ## 1. Setup
 
+Full (3D) page:
+
 ```ts
-import '@scupit/web-3d-panel-navigation/styles.css';
+import '@scupit/web-3d-panel-navigation/engine.css';         // 3D layer (includes base structural hides)
+import '@scupit/web-3d-panel-navigation/example-theme.css';  // reference theme — copy & replace
 ```
 
-The package stylesheet supplies both structural rules (required for the system
-to work at all) and default visual styling. Always import it before your own
-overrides.
+The package ships **three** stylesheet layers, split so a lite page never has
+to load the 3D CSS:
+
+- **`base.css`** — always-on structural hides (plane templates, back button).
+  Needed in every mode; `engine.css` already includes it.
+- **`engine.css`** — the functional rules for the 3D experience (clip-path
+  reveal, fixed containers, section show/hide, scroll-lock). Every rule is
+  scoped under `html.w3dpn-enhanced`, so it only applies while the experience
+  is active. `@forward`s `base.css`. Import for full pages.
+- **`example-theme.css`** — a **reference** cosmetic look plus the `--w3dpn-*`
+  variable contract. Safe in plain document flow. Copy it and write your own;
+  nothing here is load-bearing.
+
+For a flash-free load, activate the engine layer before paint with a `<head>`
+snippet:
+
+```html
+<script>
+  if (!document.documentElement.classList.contains('lite-version'))
+    document.documentElement.classList.add('w3dpn-enhanced');
+</script>
+```
+
+### Lite / no-JS
+
+A **lite page** imports `base.css` + a theme (no `engine.css`) and sets
+`<html class="lite-version">`:
+
+```ts
+import '@scupit/web-3d-panel-navigation/base.css';
+import './your-theme.css';
+```
+
+With JavaScript **disabled** on a full page, or on a lite page, the
+`w3dpn-enhanced` class is never added, the gated `engine.css` rules stay inert
+(and a lite page never even loads them), and the same markup renders as a
+plain, scrollable document. Gate navigator construction with `shouldEnhance()`
+so the backend never boots in lite mode. (This "lite presentation" is unrelated
+to the "lite backend" renderer.)
 
 ---
 
@@ -177,26 +216,27 @@ These IDs and classes are **required by the package** — both `resolveContainer
 
 ### Global Document Rules (Applied Automatically)
 
-The stylesheet also applies these structural rules to the document root:
+`example-theme.css` applies a baseline reset (`html, body { margin: 0; padding: 0 }`).
+The **viewport ownership** rules live in `engine.css` and are gated, so they
+only apply in the full experience:
 
 ```css
-html, body {
-  margin: 0;
-  padding: 0;
+html.w3dpn-enhanced, html.w3dpn-enhanced body {
   overflow: hidden;
   height: 100%;
 }
 ```
 
-This is **required** behavior: the package owns the viewport, disables page
-scrolling, and fills the screen. If you need scrolling inside a section, it
-happens inside `#page-content-container` once `.fully-visible` is applied.
+This is **required** behavior for the 3D mode: the package owns the viewport,
+disables page scrolling, and fills the screen. Section scrolling then happens
+inside `#page-content-container` once `.fully-visible` is applied. In lite /
+no-JS mode these rules are absent, so the document scrolls normally.
 
 ### Container IDs
 
 | Element ID | Purpose |
 |------------|---------|
-| `#zoom-planes-source` | Holds plane definition elements. Hidden from layout via `position: absolute; visibility: hidden; pointer-events: none`. |
+| `#zoom-planes-source` | Holds plane definition elements. Hidden in every mode via `display: none` (a `base.css` rule, so it applies even on lite pages that skip `engine.css`). |
 | `#scene-container` | The CSS3D scene root. Fixed fullscreen, `z-index: 1`. |
 | `#page-content-container` | Content reveal target. Fixed fullscreen, `z-index: 10`, starts with `clip-path: inset(50% 50% 50% 50%)` and `opacity: 0`. |
 
@@ -248,7 +288,7 @@ documented exception below (`.back-button.hidden`), which is also the correct
 | Class | Effect |
 |-------|--------|
 | `.hidden` | `display: none` |
-| *(no class)* | Button is shown |
+| *(no class)* | Shown — but only in the full experience. `base.css` hides the button by default in every mode and `engine.css` reveals it via `html.w3dpn-enhanced .back-button:not(.hidden)`, so it never appears in lite / no-JS. |
 
 > **Initial state note:** Render the back button with `class="back-button hidden"`
 > in your HTML. The page loads in overview mode, so the button should start
@@ -366,7 +406,12 @@ const nav = new ZoomPlaneNavigator(refs, {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="...styles.css">
+  <script>
+    if (!document.documentElement.classList.contains('lite-version'))
+      document.documentElement.classList.add('w3dpn-enhanced');
+  </script>
+  <link rel="stylesheet" href="...engine.css">
+  <link rel="stylesheet" href="...example-theme.css">
 </head>
 <body>
 
@@ -403,10 +448,13 @@ const nav = new ZoomPlaneNavigator(refs, {
 ```
 
 ```ts
-import { ZoomPlaneNavigator, resolveContainerRefs } from '@scupit/web-3d-panel-navigation';
-import '@scupit/web-3d-panel-navigation/styles.css';
+import { ZoomPlaneNavigator, resolveContainerRefs, shouldEnhance } from '@scupit/web-3d-panel-navigation';
+import '@scupit/web-3d-panel-navigation/engine.css';
+import '@scupit/web-3d-panel-navigation/example-theme.css';
 
-const nav = new ZoomPlaneNavigator(resolveContainerRefs());
+if (shouldEnhance()) {
+  const nav = new ZoomPlaneNavigator(resolveContainerRefs());
+}
 ```
 
 ---

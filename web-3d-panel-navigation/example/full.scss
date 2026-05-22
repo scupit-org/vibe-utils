@@ -1,0 +1,8 @@
+// Consumer stylesheet for the FULL (3D) example page (index.html).
+//
+// A real consumer composes the vendored engine layer with their own theme.
+// Here we forward the package engine (which itself forwards the `base`
+// structural layer) and the reference theme. Swap `example-theme` for your own
+// theme entry, or add `--w3dpn-*` overrides below.
+@forward "../src/styles/engine";
+@forward "../src/styles/example-theme";

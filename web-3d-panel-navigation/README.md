@@ -49,14 +49,30 @@ Most three-backend cost is three.js itself, so adding skyboxes to a three naviga
 ## Usage
 
 ```ts
-import { ZoomPlaneNavigator, resolveContainerRefs } from '@scupit/web-3d-panel-navigation';
+import { ZoomPlaneNavigator, resolveContainerRefs, shouldEnhance } from '@scupit/web-3d-panel-navigation';
 import { liteBackend } from '@scupit/web-3d-panel-navigation/lite-backend';
-import '@scupit/web-3d-panel-navigation/styles.css';
+import '@scupit/web-3d-panel-navigation/engine.css';         // 3D layer (includes the base structural hides)
+import '@scupit/web-3d-panel-navigation/example-theme.css';  // reference theme — copy & replace with your own
 
-const navigation = new ZoomPlaneNavigator(resolveContainerRefs(), liteBackend);
+// `shouldEnhance()` is false on a lite presentation (see below); gating here
+// keeps the heavy backend from booting in that case.
+if (shouldEnhance()) {
+  new ZoomPlaneNavigator(resolveContainerRefs(), liteBackend);
+}
+```
+
+For a flash-free load, also add this snippet in `<head>` (before the stylesheets) so the engine layer activates before first paint:
+
+```html
+<script>
+  if (!document.documentElement.classList.contains('lite-version'))
+    document.documentElement.classList.add('w3dpn-enhanced');
+</script>
 ```
 
 Swap `liteBackend` for `threeBackend` (imported from `/three-backend`) to use the three.js path instead. Everything else stays identical.
+
+> **Note on "lite":** the **lite presentation** described here (a no-3D fallback) is a different concept from the **lite backend** (`/lite-backend`), which is a small three-free *renderer* for the full 3D experience. You can run the full 3D experience with either backend; the lite presentation runs no navigator at all.
 
 The host page **must** include elements with the IDs `scene-container`, `page-content-container`, `zoom-planes-source`, and (optional) `back-button`. Both `resolveContainerRefs()` and the bundled stylesheet rely on these names — they are part of the package contract, not configurable. Advanced consumers that need to construct a `ContainerRefs` manually (e.g. for testing) can still pass one directly to `ZoomPlaneNavigator`.
 
@@ -92,6 +108,52 @@ Tiled planes attach one edge to a reference plane edge. Positive `data-tile-angl
 
 Tiled defaults are `data-tile-gap="0"`, `data-tile-align="center"`, `data-tile-align-offset="0"`, `data-tile-offset="0, 0"`, and `data-tile-rotation-offset="0, 0, 0"`. The final hinge offset is computed from gap/alignment first, then `data-tile-align-offset`, then the manual `data-tile-offset`.
 
+## Lite and no-JS rendering
+
+Because the whole site is generated at build time, every section's content is already plain HTML in the served document. The library is structured so that same markup renders three ways with **no markup changes** — only a stylesheet split and one `<html>` class:
+
+| Mode | Trigger | What renders |
+| --- | --- | --- |
+| **Full** | JS runs, `<html>` gets `w3dpn-enhanced` | The interactive 3D navigation |
+| **No-JS** | JavaScript disabled / fails | Plain, scrollable document of all sections |
+| **Lite presentation** | `<html class="lite-version">` (e.g. served at `lite.example.com`) | Same plain document, even with JS available |
+
+This works through two pieces:
+
+1. **Three vendored stylesheet layers**, so a lite page never has to ship the 3D CSS:
+
+   | Layer | Contents | Imported by |
+   | --- | --- | --- |
+   | `base.css` | always-on structural hides (plane templates, back button) | full **and** lite |
+   | `engine.css` | the gated 3D functional rules (clip-path reveal, fixed containers, section show/hide, scroll-lock); scoped under `html.w3dpn-enhanced`. **Includes `base.css`** | full only |
+   | `example-theme.css` | reference cosmetic look + the `--w3dpn-*` variable contract; safe in normal flow. **Reference only — copy and replace** | everyone |
+
+   So the import per page is:
+   - **Full / no-JS-capable page:** `engine.css` + your theme (start from `example-theme.css`). Engine already pulls in `base`, and is inert without the activation class — so the same page degrades correctly when JS is off.
+   - **Lite page:** `base.css` + your theme. No 3D CSS at all; the structural hides still apply.
+
+2. **An activation hook.** The class `w3dpn-enhanced` is added to `<html>` only when the experience should run — by the recommended `<head>` snippet (before paint) and again by the navigator constructor. The class `lite-version` opts out: the snippet won't add `w3dpn-enhanced`, `shouldEnhance()` returns `false`, and the navigator throws if constructed anyway (so gate it with `shouldEnhance()`).
+
+### Building a lite variant
+
+Serve the **identical** body markup with `class="lite-version"` on the root element, and link the lite stylesheet pair:
+
+```html
+<html lang="en" class="lite-version">
+  <head>
+    <link rel="stylesheet" href="…/base.css">
+    <link rel="stylesheet" href="…/your-theme.css">
+  </head>
+```
+
+The `lite.` subdomain pattern (`lite.example.com`) is a common way to offer this for slow connections, mirroring how some news sites ship a stripped-down variant. A full page with JS **disabled** degrades to the same plain document automatically — no `lite-version` class needed, since `engine.css` is inert without the activation hook.
+
+### Enhancement helpers
+
+- `shouldEnhance(doc?)` — `false` when `<html>` carries `lite-version`; gate navigator construction with it.
+- `markEnhanced(doc?)` — adds `w3dpn-enhanced`; called by the navigator, exposed for custom bootstrapping.
+- `ENHANCED_CLASS` / `LITE_VERSION_CLASS` — the class-name constants.
+
 ## Public API
 
 Main entry (`@scupit/web-3d-panel-navigation`):
@@ -100,6 +162,7 @@ Main entry (`@scupit/web-3d-panel-navigation`):
 - `DEFAULT_CONFIG`
 - `resolveContainerRefs()`
 - `REQUIRED_CONTAINER_IDS`
+- `shouldEnhance()`, `markEnhanced()`, `ENHANCED_CLASS`, `LITE_VERSION_CLASS`
 - `ContainerRefs`
 - `NavigationConfig`
 - `NavigationState`
@@ -132,7 +195,7 @@ By default the navigator mirrors the active panel into the URL fragment so reloa
 - Browser back/forward → triggers the normal zoom-out / zoom-in animations
 - Returning to overview → URL fragment is cleared
 
-The same fragments still work as plain anchor links in any future non-3D fallback rendering, since the browser will natively scroll to `<section id="quick-links">` with no JS at all.
+The same fragments still work as plain anchor links in the lite / no-JS rendering (see below), since the browser natively scrolls to `<section id="quick-links">` with no JS at all.
 
 Disable with `syncUrlHash: false`:
 

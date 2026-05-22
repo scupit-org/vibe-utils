@@ -12,8 +12,13 @@ const outDir = path.join(exampleDir, 'dist');
 await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });
 
-const css = sass.compile(path.join(exampleDir, 'styles.scss'));
-await writeFile(path.join(outDir, 'styles.css'), css.css);
+// One bundle per page, the way a real consumer composes the vendored layers:
+//   - full.css  = engine (gated 3D, forwards base) + reference theme   [index]
+//   - lite.css  = base (structural hides only)     + reference theme   [lite]
+for (const page of ['full', 'lite']) {
+  const compiled = sass.compile(path.join(exampleDir, `${page}.scss`));
+  await writeFile(path.join(outDir, `${page}.css`), compiled.css);
+}
 
 const sharedExampleOptions = {
   bundle: true,
@@ -73,6 +78,23 @@ const SKYBOX_VARIANTS = [
 ];
 
 const indexSource = await readFile(path.join(exampleDir, 'index.html'), 'utf8');
+
+// Lite presentation: byte-for-byte the same body markup as index.html, only
+// differing by `class="lite-version"` on <html>. The head activation snippet
+// is kept verbatim — it is a no-op here because it checks for lite-version —
+// proving the "identical markup, one class differs" model. The navigator
+// script also stays; main.ts gates itself with shouldEnhance() and so never
+// builds. Result: plain document flow even with JS enabled.
+{
+  let html = indexSource;
+  html = html.replace(/<html lang="en">/, '<html lang="en" class="lite-version">');
+  html = html.replace(/<title>[^<]*<\/title>/, '<title>web-3d-panel-navigation — lite presentation</title>');
+  // Lite skips the engine layer entirely: swap full.css → lite.css.
+  html = html.replace('./dist/full.css', './dist/lite.css');
+  html = html.replace(/(["'(])\.\/dist\//g, '$1./');
+  await writeFile(path.join(outDir, 'lite.html'), html);
+}
+
 for (const variant of SKYBOX_VARIANTS) {
   let html = indexSource;
   html = html.replace(/<title>[^<]*<\/title>/, `<title>${variant.title}</title>`);

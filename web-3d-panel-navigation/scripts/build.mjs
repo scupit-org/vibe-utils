@@ -79,5 +79,15 @@ for (const shim of DTS_SHIMS) {
   );
 }
 
-const css = sass.compile(path.join(rootDir, 'src', 'styles.scss'));
-await writeFile(path.join(distDir, 'styles.css'), css.css);
+// Three stylesheets, split by concern:
+//   - base.css: always-on structural hides (plane templates + back button).
+//   - engine.css: gated 3D functional layer (scoped under `html.w3dpn-enhanced`
+//     so it self-disables without JS / in lite mode). `@forward`s base, so a
+//     full consumer can import engine.css alone.
+//   - example-theme.css: reference cosmetic theme + the CSS-variable contract.
+// Compiled separately because Sass does not tree-shake — a lite consumer ships
+// base + a theme and must be able to skip the engine layer entirely.
+for (const name of ['base', 'engine', 'example-theme']) {
+  const compiled = sass.compile(path.join(rootDir, 'src', 'styles', `${name}.scss`));
+  await writeFile(path.join(distDir, `${name}.css`), compiled.css);
+}
