@@ -97,7 +97,7 @@ describe('HashUrlSync', () => {
 
   afterEach(() => {
     if (originalWindow === undefined) {
-      delete (globalThis as typeof globalThis & { window?: Window }).window;
+      Reflect.deleteProperty(globalThis, 'window');
     } else {
       Object.defineProperty(globalThis, 'window', {
         configurable: true,
