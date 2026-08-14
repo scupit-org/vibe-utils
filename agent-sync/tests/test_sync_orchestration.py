@@ -123,14 +123,14 @@ class TestErrorsAbort:
         # No output written.
         assert not (repo / ".claude" / "skills").exists()
 
-    def test_unknown_model_in_nested_asset_aborts(self, fixture_repo):
+    def test_unknown_model_in_nested_asset_is_ignored(self, fixture_repo):
+        # Skill models (nested assets included) are ignored, not validated.
         repo = fixture_repo("nested_skill_unknown_model")
         orch = SyncOrchestrator(repo, source_tool="cursor")
         result = orch.run_sync()
 
-        assert not result.success
-        codes = [d.code for d in result.errors]
-        assert "E005" in codes
+        assert result.success
+        assert "E005" not in [d.code for d in result.errors]
 
 
 class TestStagingSafety:
@@ -267,8 +267,8 @@ class TestClaudeSourceSync:
 
         cursor_agent = repo / ".cursor" / "agents" / "reviewer.md"
         fm, _ = split_frontmatter(cursor_agent.read_text())
-        # claude-opus-4-6 should resolve to the priority Cursor model name.
-        assert fm["model"] == "claude-4.6-opus-high-thinking"
+        # claude-opus-5 (powerful tier) resolves to Cursor's powerful model.
+        assert fm["model"] == "grok-4.6"
 
 
 class TestCodexSourceSync:
@@ -300,7 +300,8 @@ class TestCodexSourceSync:
 
         cursor_agent = repo / ".cursor" / "agents" / "analyzer.md"
         fm, _ = split_frontmatter(cursor_agent.read_text())
-        assert fm["model"] == "gpt-5.4-high"
+        # gpt-5.6-sol + high effort becomes a bracket param on grok-4.6.
+        assert fm["model"] == "grok-4.6[effort=high]"
 
     def test_codex_source_missing_dirs(self, fixture_repo):
         repo = fixture_repo("missing_source")

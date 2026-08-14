@@ -60,7 +60,56 @@ class TestParseSkillWithModel:
     def test_model_preserved(self, fixture_repo):
         repo = fixture_repo("skill_with_model")
         m = parse_cursor_source(repo)
-        assert m.skills[0].model == "claude-4.6-opus-high"
+        assert m.skills[0].model == "grok-4.6"
+
+
+class TestParseSubagentModelBrackets:
+    def test_effort_extracted_from_bracket(self, fixture_repo):
+        repo = fixture_repo("subagent_with_gpt_model")
+        m = parse_cursor_source(repo)
+        assert not m.has_errors
+
+        a = m.subagents[0]
+        assert a.model == "grok-4.6"
+        assert a.source_reasoning_effort == "high"
+        assert a.ignored_model_params == {}
+
+    def test_extra_params_preserved_silently(self, fixture_repo):
+        repo = fixture_repo("cursor_subagent_bracket_params")
+        m = parse_cursor_source(repo)
+        assert not m.has_errors
+
+        a = m.subagents[0]
+        assert a.model == "grok-4.6"
+        assert a.source_reasoning_effort == "medium"
+        assert a.ignored_model_params == {"fast": "true"}
+        # Unrecognized bracket params never surface as warnings.
+        assert m.warnings == []
+
+    def test_bare_model_without_brackets(self, fixture_repo):
+        repo = fixture_repo("subagent_with_claude_model")
+        m = parse_cursor_source(repo)
+        assert not m.has_errors
+
+        a = m.subagents[0]
+        assert a.model == "composer-2.5"
+        assert a.source_reasoning_effort is None
+
+    def test_malformed_bracket_kept_verbatim(self, tmp_path):
+        agents_dir = tmp_path / ".cursor" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "bad.md").write_text(
+            "---\n"
+            "name: bad\n"
+            "description: Malformed bracket syntax\n"
+            "model: grok-4.6[effort\n"
+            "---\n"
+            "Body.\n"
+        )
+        m = parse_cursor_source(tmp_path)
+        assert not m.has_errors  # E005 is a validation-stage concern
+        assert m.subagents[0].model == "grok-4.6[effort"
+        assert m.subagents[0].source_reasoning_effort is None
 
 
 class TestParseBasicSubagent:

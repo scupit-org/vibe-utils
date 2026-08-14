@@ -164,7 +164,7 @@ class TestCliSourceTool:
             "validate", "--repo-root", str(repo), "--source-tool", "codex",
         )
         assert result.returncode == 1
-        assert ".agents\\skills" in result.stderr
+        assert str(Path(".agents") / "skills") in result.stderr
 
 
 class TestCliHelp:

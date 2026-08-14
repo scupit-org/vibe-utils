@@ -72,9 +72,20 @@ class TestParseCodexSubagentWithModel:
         assert not m.has_errors
 
         a = m.subagents[0]
-        assert a.model == "gpt-5.4"
+        assert a.model == "gpt-5.6-sol"
+        assert a.model_specified_as_alias is False
         assert a.source_reasoning_effort == "high"
         assert a.source_tool == "codex"
+
+    def test_alias_normalized(self, fixture_repo):
+        repo = fixture_repo("codex_subagent_with_alias")
+        m = parse_codex_source(repo)
+        assert not m.has_errors
+
+        a = m.subagents[0]
+        assert a.model == "gpt-5.6-sol"
+        assert a.model_specified_as_alias is True
+        assert a.source_reasoning_effort is None
 
 
 class TestParseCodexMalformedToml:

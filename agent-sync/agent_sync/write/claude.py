@@ -9,7 +9,7 @@ from agent_sync.write.common import (
     copy_skill_assets,
     generate_skill_md,
     generate_subagent_md,
-    resolve_model,
+    resolve_subagent_model,
 )
 
 
@@ -28,7 +28,6 @@ class ClaudeSkillWriter:
             skill.source_skill_dir,
             out_dir,
             skill.copied_asset_paths,
-            source_tool=skill.source_tool,
             target_tool="claude",
         )
 
@@ -56,14 +55,14 @@ class ClaudeSubagentWriter:
     def write_subagent(self, subagent: SubagentSpec) -> Path:
         self.output_root.mkdir(parents=True, exist_ok=True)
 
+        resolved = resolve_subagent_model(subagent, "claude")
+
         content = generate_subagent_md(
             name=subagent.name,
             description=subagent.description,
             prompt_markdown=subagent.prompt_markdown,
-            model=resolve_model(
-                subagent.source_tool, subagent.model, "claude",
-                subagent.source_reasoning_effort,
-            ),
+            model=resolved.written_model,
+            effort=resolved.effort,
         )
         out_path = self.output_root / f"{subagent.filename_stem}.md"
         out_path.write_text(content, encoding="utf-8")

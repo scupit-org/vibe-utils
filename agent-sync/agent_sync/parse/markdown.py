@@ -8,6 +8,7 @@ YAML frontmatter share this parsing logic.  Tool-specific entry points (e.g.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path, PurePosixPath
 
 from agent_sync.domain.diagnostics import (
@@ -20,6 +21,7 @@ from agent_sync.domain.diagnostics import (
 )
 from agent_sync.domain.models import Diagnostic, SkillSpec, SubagentSpec, ToolName
 from agent_sync.parse.frontmatter import FrontmatterParseError, split_frontmatter
+from agent_sync.transform.model_map import normalize_model
 
 
 # ── Skills ───────────────────────────────────────────────────────────────
@@ -152,12 +154,35 @@ def _parse_single_subagent(
     readonly = frontmatter.pop("readonly", None)
     is_background = frontmatter.pop("is_background", None)
 
+    reasoning_effort: str | None = None
+    if source_tool == "claude":
+        reasoning_effort = frontmatter.pop("effort", None)
+
     if name is None:
         diagnostics.append(e003_missing_name(path))
     if description is None:
         diagnostics.append(e004_missing_description(path))
     if any(d.severity == "error" for d in diagnostics):
         return None, diagnostics
+
+    model_specified_as_alias = False
+    ignored_model_params: dict[str, str] = {}
+    if isinstance(model, str):
+        if source_tool == "cursor":
+            # Cursor encodes parameters in the model string:
+            # "grok-4.6[effort=high,fast=true]".  Effort is consumed; other
+            # params are preserved silently for forward compatibility.
+            model, params = _split_cursor_model(model)
+            reasoning_effort = params.pop("effort", None)
+            ignored_model_params = params
+        elif source_tool == "claude" and model == "inherit":
+            # "inherit" means "use the session model": same as omitting it.
+            model = None
+        if model is not None:
+            normalized = normalize_model(source_tool, model)
+            if normalized is not None:
+                # Unknown models keep the raw text so E005 can report it.
+                model, model_specified_as_alias = normalized
 
     stem = path.stem
     if stem != name:
@@ -178,11 +203,37 @@ def _parse_single_subagent(
         description=description,
         prompt_markdown=body,
         model=model,
+        source_reasoning_effort=reasoning_effort,
+        model_specified_as_alias=model_specified_as_alias,
+        ignored_model_params=ignored_model_params,
         readonly=readonly,
         is_background=is_background,
         extra_frontmatter=extra,
     )
     return spec, diagnostics
+
+
+def _split_cursor_model(raw: str) -> tuple[str, dict[str, str]]:
+    """Split a Cursor model string into ``(base, params)``.
+
+    Accepts ``base`` or ``base[k1=v1,k2=v2]`` (one bracket group,
+    comma-separated ``key=value`` pairs).  Any malformation returns the raw
+    string with no params, which then fails model validation verbatim.
+    """
+    match = re.fullmatch(r"(?P<base>[^\[\]]+)\[(?P<params>[^\[\]]*)\]\s*", raw)
+    if match is None:
+        return raw, {}
+    base = match.group("base").strip()
+    if not base:
+        return raw, {}
+    params: dict[str, str] = {}
+    for pair in match.group("params").split(","):
+        key, sep, value = pair.partition("=")
+        key = key.strip()
+        if not sep or not key:
+            return raw, {}
+        params[key] = value.strip()
+    return base, params
 
 
 # ── Shared helpers ───────────────────────────────────────────────────────

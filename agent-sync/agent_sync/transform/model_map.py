@@ -1,178 +1,171 @@
-"""Unified model mapping registry and resolver.
+"""Model registry and tier-based cross-tool resolution.
 
-Each known model variant is a :class:`CrossToolModelRow` carrying the
-:class:`ModelEntry` for every tool.  Lookup dictionaries are built
-programmatically from the registry so adding a new parser later only
-requires adding rows — not a cross-product of new dicts.
+Each supported model is a :class:`ModelInfo` describing the tool that hosts
+it, its capability tier, the reasoning-effort levels it accepts, and any
+aliases users may write for it.  No model exists on more than one tool, so
+cross-tool translation maps by *tier*: a source model resolves to the target
+tool's model at the same tier, walking up a tier whenever the target tool has
+no model at that level (e.g. moderate -> Cursor, which has no moderate model,
+resolves to the powerful ``grok-4.6``).
+
+Within a (tool, tier) pair, registry order defines target preference:
+``claude-opus-5`` precedes ``claude-fable-5`` so inbound powerful-tier
+mappings pick Opus over the costlier Fable.
+
+Reasoning effort is a parameter orthogonal to model identity.  The canonical
+scale is :data:`EFFORT_SCALE`; each model declares the subset it supports and
+:func:`clamp_effort` converts a requested level to the closest supported one.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
-from agent_sync.domain.models import ALL_TOOL_NAMES, ToolName
+from agent_sync.domain.models import ToolName
+
+Tier = Literal["small", "moderate", "powerful"]
+
+# Tiers to try, in order, when resolving a source tier on a target tool.
+TIER_WALK_UP: dict[Tier, tuple[Tier, ...]] = {
+    "powerful": ("powerful",),
+    "moderate": ("moderate", "powerful"),
+    "small": ("small", "moderate", "powerful"),
+}
+
+# Canonical reasoning-effort scale, ordered weakest to strongest.
+EFFORT_SCALE: tuple[str, ...] = ("low", "medium", "high", "xhigh", "max")
+
+_FULL_EFFORT: tuple[str, ...] = EFFORT_SCALE
+_NO_MAX_EFFORT: tuple[str, ...] = ("low", "medium", "high", "xhigh")
 
 
 @dataclass(frozen=True, slots=True)
-class ModelEntry:
-    """A model identifier for a single tool."""
+class ModelInfo:
+    """A single supported model."""
 
-    model_name: str
-    reasoning_effort: str | None = None
-    takes_priority_for_overlaps: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class CrossToolModelRow:
-    """Maps a single model variant across all supported tools."""
-
-    cursor: ModelEntry | None = None
-    claude: ModelEntry | None = None
-    codex: ModelEntry | None = None
-
-    def get(self, tool: ToolName) -> ModelEntry | None:
-        return getattr(self, tool)
+    tool: ToolName
+    model_id: str
+    tier: Tier
+    # Supported effort levels, a subset of EFFORT_SCALE in canonical order.
+    # Empty means the model takes no reasoning-effort parameter.
+    effort_levels: tuple[str, ...] = ()
+    # Accepted shorthand names; the first entry is the primary alias used
+    # when writing alias-preferring output.
+    aliases: tuple[str, ...] = ()
 
 
 # ── Single source of truth ───────────────────────────────────────────────
 
-MODEL_ROWS: list[CrossToolModelRow] = [
-    # Composer (Cursor-only, no cross-tool mapping)
-    CrossToolModelRow(
-        cursor=ModelEntry("composer-1.5"),
-    ),
-    CrossToolModelRow(
-        cursor=ModelEntry("composer-2"),
-    ),
+MODELS: tuple[ModelInfo, ...] = (
+    # Cursor
+    ModelInfo("cursor", "grok-4.6", "powerful", effort_levels=_NO_MAX_EFFORT),
+    ModelInfo("cursor", "composer-2.5", "small"),
 
-    # Claude Sonnet family
-    CrossToolModelRow(
-        cursor=ModelEntry("claude-4.6-sonnet-medium"),
-        claude=ModelEntry("claude-sonnet-4-6"),
-    ),
-    CrossToolModelRow(
-        cursor=ModelEntry("claude-4.6-sonnet-medium-thinking",
-                          takes_priority_for_overlaps=True),
-        claude=ModelEntry("claude-sonnet-4-6"),
-    ),
+    # Claude Code (Opus before Fable: preferred inbound powerful target)
+    ModelInfo("claude", "claude-opus-5", "powerful",
+              effort_levels=_FULL_EFFORT, aliases=("opus",)),
+    ModelInfo("claude", "claude-fable-5", "powerful",
+              effort_levels=_FULL_EFFORT, aliases=("fable",)),
+    ModelInfo("claude", "claude-sonnet-5", "moderate",
+              effort_levels=_FULL_EFFORT, aliases=("sonnet",)),
 
-    # Claude Opus family
-    CrossToolModelRow(
-        cursor=ModelEntry("claude-4.6-opus-high"),
-        claude=ModelEntry("claude-opus-4-6"),
-    ),
-    CrossToolModelRow(
-        cursor=ModelEntry("claude-4.6-opus-max"),
-        claude=ModelEntry("claude-opus-4-6"),
-    ),
-    CrossToolModelRow(
-        cursor=ModelEntry("claude-4.6-opus-high-thinking",
-                          takes_priority_for_overlaps=True),
-        claude=ModelEntry("claude-opus-4-6"),
-    ),
-    CrossToolModelRow(
-        cursor=ModelEntry("claude-4.6-opus-max-thinking"),
-        claude=ModelEntry("claude-opus-4-6"),
-    ),
-
-    # Claude Haiku family
-    CrossToolModelRow(
-        cursor=ModelEntry("claude-4.5-haiku"),
-        claude=ModelEntry("claude-haiku-4-5"),
-    ),
-    CrossToolModelRow(
-        cursor=ModelEntry("claude-4.5-haiku-thinking",
-                          takes_priority_for_overlaps=True),
-        claude=ModelEntry("claude-haiku-4-5"),
-    ),
-
-    # GPT family
-    CrossToolModelRow(
-        cursor=ModelEntry("gpt-5.4-low"),
-        codex=ModelEntry("gpt-5.4", reasoning_effort="low"),
-    ),
-    CrossToolModelRow(
-        cursor=ModelEntry("gpt-5.4-medium"),
-        codex=ModelEntry("gpt-5.4", reasoning_effort="medium"),
-    ),
-    CrossToolModelRow(
-        cursor=ModelEntry("gpt-5.4-high"),
-        codex=ModelEntry("gpt-5.4", reasoning_effort="high"),
-    ),
-    CrossToolModelRow(
-        cursor=ModelEntry("gpt-5.4-xhigh"),
-        codex=ModelEntry("gpt-5.4", reasoning_effort="xhigh"),
-    ),
-]
+    # Codex
+    ModelInfo("codex", "gpt-5.6-sol", "powerful",
+              effort_levels=_FULL_EFFORT, aliases=("gpt-5.6",)),
+    ModelInfo("codex", "gpt-5.6-terra", "moderate", effort_levels=_FULL_EFFORT),
+    ModelInfo("codex", "gpt-5.6-luna", "small", effort_levels=_FULL_EFFORT),
+)
 
 
 # ── Programmatically built lookups ───────────────────────────────────────
 
-def _make_key(model_name: str, reasoning_effort: str | None) -> str:
-    """Build a lookup key from model name and reasoning effort."""
-    return f"{model_name}::{reasoning_effort or 'unknown'}"
+def _build_name_index(
+    models: tuple[ModelInfo, ...],
+) -> dict[ToolName, dict[str, ModelInfo]]:
+    """Index every model ID and alias per tool.
 
-
-def _row_has_priority(row: CrossToolModelRow) -> bool:
-    """Return True if any entry in *row* has ``takes_priority_for_overlaps``."""
-    for tool in ALL_TOOL_NAMES:
-        entry = row.get(tool)
-        if entry is not None and entry.takes_priority_for_overlaps:
-            return True
-    return False
-
-
-def _build_lookup(tool: ToolName) -> dict[str, CrossToolModelRow]:
-    """Build a ``{key: row}`` dict for *tool*.
-
-    When multiple rows produce the same key for a given *tool* (many-to-one
-    mappings), the row with ``takes_priority_for_overlaps=True`` on any of
-    its entries wins.  Otherwise the first row encountered is kept.
+    Raises :class:`ValueError` if any name text (ID or alias) resolves to
+    more than one model within the same tool.
     """
-    result: dict[str, CrossToolModelRow] = {}
-    for row in MODEL_ROWS:
-        entry = row.get(tool)
-        if entry is None:
-            continue
-        key = _make_key(entry.model_name, entry.reasoning_effort)
-        if key not in result or _row_has_priority(row):
-            result[key] = row
-    return result
+    index: dict[ToolName, dict[str, ModelInfo]] = {}
+    for info in models:
+        per_tool = index.setdefault(info.tool, {})
+        for name in (info.model_id, *info.aliases):
+            existing = per_tool.get(name)
+            if existing is not None:
+                raise ValueError(
+                    f"Model name '{name}' for tool '{info.tool}' maps to both "
+                    f"'{existing.model_id}' and '{info.model_id}'"
+                )
+            per_tool[name] = info
+    return index
 
 
-_BY_TOOL: dict[ToolName, dict[str, CrossToolModelRow]] = {
-    tool: _build_lookup(tool) for tool in ALL_TOOL_NAMES
-}
+_BY_TOOL_NAME: dict[ToolName, dict[str, ModelInfo]] = _build_name_index(MODELS)
 
-def lookup(
-    tool: ToolName,
-    model_name: str,
-    reasoning_effort: str | None,
-) -> CrossToolModelRow | None:
-    """Look up a model by *tool*, *model_name*, and *reasoning_effort*.
 
-    Returns the :class:`CrossToolModelRow` or ``None`` if not found.
+# ── Public API ───────────────────────────────────────────────────────────
+
+def find_model(tool: ToolName, name: str) -> ModelInfo | None:
+    """Look up a model by exact ID or alias for *tool*."""
+    return _BY_TOOL_NAME.get(tool, {}).get(name)
+
+
+def normalize_model(tool: ToolName, raw: str) -> tuple[str, bool] | None:
+    """Resolve *raw* (ID or alias) to ``(model_id, was_alias)``.
+
+    Returns ``None`` when *raw* is not a known model for *tool*.
     """
-    return _BY_TOOL[tool].get(_make_key(model_name, reasoning_effort))
-
-
-def is_known_model(
-    tool: ToolName,
-    model_name: str,
-    reasoning_effort: str | None = None,
-) -> bool:
-    """Return ``True`` if *model_name* is registered for *tool*."""
-    return lookup(tool, model_name, reasoning_effort) is not None
-
-
-def get_target_model(
-    source_tool: ToolName,
-    source_model: str,
-    target_tool: ToolName,
-    reasoning_effort: str | None = None,
-) -> ModelEntry | None:
-    """Look up *source_model* from *source_tool* and return the entry for *target_tool*."""
-    row = lookup(source_tool, source_model, reasoning_effort)
-    if row is None:
+    info = find_model(tool, raw)
+    if info is None:
         return None
-    return row.get(target_tool)
+    return info.model_id, raw != info.model_id
+
+
+def is_known_model(tool: ToolName, name: str) -> bool:
+    """Return ``True`` if *name* is a registered model ID or alias for *tool*."""
+    return find_model(tool, name) is not None
+
+
+def resolve_target_model(source: ModelInfo, target_tool: ToolName) -> ModelInfo:
+    """Resolve *source* to the target tool's model at the same tier.
+
+    Walks up tiers when the target tool has no model at the source tier.
+    Every tool has a powerful model, so resolution always succeeds.
+    """
+    for tier in TIER_WALK_UP[source.tier]:
+        for info in MODELS:
+            if info.tool == target_tool and info.tier == tier:
+                return info
+    raise AssertionError(
+        f"No model found for tool '{target_tool}' at or above tier '{source.tier}'"
+    )
+
+
+def clamp_effort(effort: str | None, target: ModelInfo | None) -> str | None:
+    """Clamp *effort* to the closest level *target* supports.
+
+    Rules: keep the requested level if supported; otherwise use the highest
+    supported level below it, falling back to the lowest supported level.
+    Returns ``None`` when no effort was requested or the target model takes
+    no effort parameter.  A ``None`` target clamps against the full canonical
+    scale (a model-less effort passes through unchanged).
+    """
+    if effort is None:
+        return None
+    supported = EFFORT_SCALE if target is None else target.effort_levels
+    if not supported:
+        return None
+    if effort in supported:
+        return effort
+    requested_idx = EFFORT_SCALE.index(effort)
+    below = [lvl for lvl in supported if EFFORT_SCALE.index(lvl) < requested_idx]
+    return below[-1] if below else supported[0]
+
+
+def written_model_name(info: ModelInfo, *, prefer_alias: bool) -> str:
+    """Return the name to emit for *info*: primary alias or exact ID."""
+    if prefer_alias and info.aliases:
+        return info.aliases[0]
+    return info.model_id

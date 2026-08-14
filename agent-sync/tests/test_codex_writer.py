@@ -71,7 +71,7 @@ class TestCodexSkillWriter:
         skill = _skill({
             "source_skill_dir": src,
             "relative_skill_dir": PurePosixPath("smart"),
-            "model": "claude-4.6-opus-high",
+            "model": "grok-4.6",
         })
         writer = CodexSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
@@ -164,7 +164,7 @@ class TestCodexSkillWriter:
             "name: reference\n"
             "description: Example reference skill\n"
             "disable-model-invocation: true\n"
-            "model: claude-4.6-opus-high\n"
+            "model: grok-4.6\n"
             "---\n"
             "Reference body.\n"
         )
@@ -202,28 +202,67 @@ class TestCodexSubagentWriter:
         assert data["description"] == "Analyzes data"
         assert "analyze data" in data["developer_instructions"].lower()
 
-    def test_gpt_model_and_reasoning(self, tmp_path):
-        sub = _subagent({"model": "gpt-5.4-high"})
+    def test_grok_model_and_reasoning(self, tmp_path):
+        sub = _subagent({"model": "grok-4.6", "source_reasoning_effort": "high"})
         writer = CodexSubagentWriter(tmp_path / "out")
         writer.write_subagent(sub)
 
         out_file = tmp_path / "out" / ".codex" / "agents" / "analyzer.toml"
         data = tomllib.loads(out_file.read_text())
-        assert data["model"] == "gpt-5.4"
+        assert data["model"] == "gpt-5.6-sol"
         assert data["model_reasoning_effort"] == "high"
 
-    def test_claude_model_omitted(self, tmp_path):
-        sub = _subagent({"model": "claude-4.6-sonnet-medium"})
+    def test_claude_model_tier_maps(self, tmp_path):
+        sub = _subagent({"source_tool": "claude", "model": "claude-sonnet-5"})
+        writer = CodexSubagentWriter(tmp_path / "out")
+        writer.write_subagent(sub)
+
+        out_file = tmp_path / "out" / ".codex" / "agents" / "analyzer.toml"
+        data = tomllib.loads(out_file.read_text())
+        assert data["model"] == "gpt-5.6-terra"
+        assert "model_reasoning_effort" not in data
+
+    def test_alias_source_writes_codex_alias(self, tmp_path):
+        # A source that used an alias (e.g. Claude "opus") gets Sol's alias.
+        sub = _subagent({
+            "source_tool": "claude",
+            "model": "claude-opus-5",
+            "model_specified_as_alias": True,
+        })
+        writer = CodexSubagentWriter(tmp_path / "out")
+        writer.write_subagent(sub)
+
+        out_file = tmp_path / "out" / ".codex" / "agents" / "analyzer.toml"
+        data = tomllib.loads(out_file.read_text())
+        assert data["model"] == "gpt-5.6"
+
+    def test_alias_source_without_target_alias_writes_exact_id(self, tmp_path):
+        # Terra has no alias, so alias preference falls back to the exact ID.
+        sub = _subagent({
+            "source_tool": "claude",
+            "model": "claude-sonnet-5",
+            "model_specified_as_alias": True,
+        })
+        writer = CodexSubagentWriter(tmp_path / "out")
+        writer.write_subagent(sub)
+
+        out_file = tmp_path / "out" / ".codex" / "agents" / "analyzer.toml"
+        data = tomllib.loads(out_file.read_text())
+        assert data["model"] == "gpt-5.6-terra"
+
+    def test_model_less_effort_still_emitted(self, tmp_path):
+        # model_reasoning_effort is valid without a model in Codex.
+        sub = _subagent({"source_tool": "claude", "source_reasoning_effort": "max"})
         writer = CodexSubagentWriter(tmp_path / "out")
         writer.write_subagent(sub)
 
         out_file = tmp_path / "out" / ".codex" / "agents" / "analyzer.toml"
         data = tomllib.loads(out_file.read_text())
         assert "model" not in data
-        assert "model_reasoning_effort" not in data
+        assert data["model_reasoning_effort"] == "max"
 
     def test_toml_field_order(self, tmp_path):
-        sub = _subagent({"model": "gpt-5.4-medium"})
+        sub = _subagent({"model": "grok-4.6", "source_reasoning_effort": "medium"})
         writer = CodexSubagentWriter(tmp_path / "out")
         writer.write_subagent(sub)
 

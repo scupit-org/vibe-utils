@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import shutil
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 import yaml
 
-from agent_sync.domain.models import ToolName
+from agent_sync.domain.models import SubagentSpec, ToolName
 from agent_sync.parse.frontmatter import FrontmatterParseError, split_frontmatter
-from agent_sync.transform.model_map import ModelEntry, get_target_model
+from agent_sync.transform.model_map import (
+    clamp_effort,
+    find_model,
+    resolve_target_model,
+    written_model_name,
+)
 PathPartsTuple = tuple[str, ...]
 _FRONTMATTER_WIDTH = 2_147_483_647
 
@@ -94,11 +100,14 @@ def generate_subagent_md(
     prompt_markdown: str,
     *,
     model: str | None = None,
+    effort: str | None = None,
 ) -> str:
     """Render a complete subagent ``.md`` file."""
     fields: dict[str, Any] = {"name": name, "description": description}
     if model is not None:
         fields["model"] = model
+    if effort is not None:
+        fields["effort"] = effort
 
     frontmatter = generate_yaml_frontmatter(fields)
     return frontmatter + prompt_markdown
@@ -106,19 +115,40 @@ def generate_subagent_md(
 
 # ── Model resolution ─────────────────────────────────────────────────────
 
-def resolve_model(
-    source_tool: ToolName,
-    source_model: str | None,
+@dataclass(frozen=True, slots=True)
+class ResolvedSubagentModel:
+    """Model/effort pair ready to emit for a target tool."""
+
+    written_model: str | None  # alias or exact ID; None = omit model
+    effort: str | None         # clamped for the target model; None = omit
+
+
+def resolve_subagent_model(
+    subagent: SubagentSpec,
     target_tool: ToolName,
-    reasoning_effort: str | None = None,
-) -> str | None:
-    """Resolve a source model string to a target tool's model name, or ``None``."""
-    if source_model is None:
-        return None
-    entry: ModelEntry | None = get_target_model(
-        source_tool, source_model, target_tool, reasoning_effort,
+) -> ResolvedSubagentModel:
+    """Resolve a subagent's model and effort for *target_tool*.
+
+    Tier-maps the source model to the target tool and clamps the source
+    effort to what the target model supports.  A model-less subagent passes
+    its effort through unchanged; each writer decides whether a model-less
+    effort is expressible.  Unknown source models resolve to nothing
+    (validation reports them before writers run).
+    """
+    if subagent.model is None:
+        return ResolvedSubagentModel(None, subagent.source_reasoning_effort)
+
+    source_info = find_model(subagent.source_tool, subagent.model)
+    if source_info is None:
+        return ResolvedSubagentModel(None, None)
+
+    target_info = resolve_target_model(source_info, target_tool)
+    return ResolvedSubagentModel(
+        written_model=written_model_name(
+            target_info, prefer_alias=subagent.model_specified_as_alias,
+        ),
+        effort=clamp_effort(subagent.source_reasoning_effort, target_info),
     )
-    return entry.model_name if entry else None
 
 
 # ── Asset copying ────────────────────────────────────────────────────────
@@ -128,7 +158,6 @@ def copy_skill_assets(
     dest_dir: Path,
     asset_paths: list[PurePosixPath],
     *,
-    source_tool: ToolName,
     target_tool: ToolName,
 ) -> None:
     """Copy manifest-declared skill assets into *dest_dir*."""
@@ -139,7 +168,7 @@ def copy_skill_assets(
 
         if src_path.name == "SKILL.md":
             _write_transformed_skill_asset(
-                src_path, dst_path, source_tool=source_tool, target_tool=target_tool,
+                src_path, dst_path, target_tool=target_tool,
             )
         else:
             shutil.copy2(src_path, dst_path)
@@ -149,7 +178,6 @@ def _write_transformed_skill_asset(
     source_path: Path,
     dest_path: Path,
     *,
-    source_tool: ToolName,
     target_tool: ToolName,
 ) -> None:
     """Transform nested SKILL.md assets when possible, else preserve verbatim."""
@@ -168,36 +196,22 @@ def _write_transformed_skill_asset(
         return
 
     disable_model_invocation = bool(frontmatter.get("disable-model-invocation", False))
-    source_model = frontmatter.get("model")
 
-    if target_tool == "cursor":
-        # Cursor preserves both model and disable-model-invocation.
-        # Resolve the source model to a Cursor model name.
-        resolved_model: str | None = None
-        if isinstance(source_model, str):
-            entry = get_target_model(source_tool, source_model, "cursor")
-            resolved_model = entry.model_name if entry else None
+    # Skill model metadata is intentionally ignored for every target.
+    if target_tool == "codex":
+        # Codex also drops disable-model-invocation from SKILL.md.
         transformed = generate_skill_md(
             name=name,
             description=description,
             body_markdown=body,
-            disable_model_invocation=disable_model_invocation,
-            model=resolved_model,
-        )
-    elif target_tool == "claude":
-        # Claude supports disable-model-invocation but drops model.
-        transformed = generate_skill_md(
-            name=name,
-            description=description,
-            body_markdown=body,
-            disable_model_invocation=disable_model_invocation,
         )
     else:
-        # Codex drops both model and disable-model-invocation from SKILL.md.
+        # Cursor and Claude preserve disable-model-invocation.
         transformed = generate_skill_md(
             name=name,
             description=description,
             body_markdown=body,
+            disable_model_invocation=disable_model_invocation,
         )
 
     dest_path.write_text(transformed, encoding="utf-8")

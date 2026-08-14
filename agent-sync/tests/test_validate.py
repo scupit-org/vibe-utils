@@ -50,11 +50,12 @@ def _subagent(
 
 
 class TestUnknownModel:
-    def test_skill_unknown_model(self):
+    def test_skill_model_is_ignored(self):
+        # Skill model is parsed for compatibility but never validated.
         m = SyncManifest(skills=[_skill(override={"model": "llama-3-70b"})])
         diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
-        assert "E005" in codes
+        assert "E005" not in codes
 
     def test_subagent_unknown_model(self):
         m = SyncManifest(subagents=[_subagent(override={"model": "llama-3-70b"})])
@@ -62,9 +63,23 @@ class TestUnknownModel:
         codes = [d.code for d in diags]
         assert "E005" in codes
 
-    def test_known_model_no_error(self):
-        m = SyncManifest(skills=[_skill(override={"model": "claude-4.6-opus-high"})])
+    def test_old_model_id_is_unknown(self):
+        m = SyncManifest(subagents=[_subagent(override={"model": "claude-4.6-opus-high"})])
         diags = validate_manifest(m, source_tool="cursor")
+        codes = [d.code for d in diags]
+        assert "E005" in codes
+
+    def test_known_model_no_error(self):
+        m = SyncManifest(subagents=[_subagent(override={"model": "grok-4.6"})])
+        diags = validate_manifest(m, source_tool="cursor")
+        error_codes = [d.code for d in diags if d.severity == "error"]
+        assert "E005" not in error_codes
+
+    def test_alias_is_known(self):
+        m = SyncManifest(subagents=[
+            _subagent(override={"source_tool": "claude", "model": "opus"}),
+        ])
+        diags = validate_manifest(m, source_tool="claude")
         error_codes = [d.code for d in diags if d.severity == "error"]
         assert "E005" not in error_codes
 
@@ -188,8 +203,9 @@ class TestCleanManifest:
         assert len(errors) == 0
 
 
-class TestNestedAssetModels:
-    def test_unknown_model_in_nested_skill_md(self, fixture_repo):
+class TestNestedAssets:
+    def test_nested_skill_model_is_ignored(self, fixture_repo):
+        # Nested SKILL.md models are no longer validated (skill model is ignored).
         repo = fixture_repo("nested_skill_unknown_model")
         skill = _skill(override={
             "source_skill_dir": repo / ".cursor" / "skills" / "parent",
@@ -200,21 +216,20 @@ class TestNestedAssetModels:
         m = SyncManifest(skills=[skill])
         diags = validate_manifest(m, source_tool="cursor")
         codes = [d.code for d in diags]
-        assert "E005" in codes
+        assert "E005" not in codes
 
-    def test_known_model_in_nested_skill_md(self, fixture_repo):
+    def test_wellformed_nested_skill_md_no_warning(self, fixture_repo):
         repo = fixture_repo("nested_skill_reference")
         skill = _skill(override={
             "source_skill_dir": repo / ".cursor" / "skills" / "packages" / "parent",
             "relative_skill_dir": PurePosixPath("packages/parent"),
             "entrypoint_path": repo / ".cursor" / "skills" / "packages" / "parent" / "SKILL.md",
-            "model": "claude-4.6-opus-high",
             "copied_asset_paths": [PurePosixPath("references/example/SKILL.md")],
         })
         m = SyncManifest(skills=[skill])
         diags = validate_manifest(m, source_tool="cursor")
-        error_codes = [d.code for d in diags if d.severity == "error"]
-        assert "E005" not in error_codes
+        assert "W005" not in [d.code for d in diags]
+        assert "E005" not in [d.code for d in diags]
 
     def test_malformed_nested_skill_emits_warning(self, fixture_repo):
         repo = fixture_repo("nested_skill_malformed")
@@ -230,10 +245,85 @@ class TestNestedAssetModels:
         assert "W005" in codes
 
 
+class TestEffortValues:
+    def test_unrecognized_effort_level(self):
+        m = SyncManifest(subagents=[
+            _subagent(override={
+                "source_tool": "claude",
+                "model": "claude-opus-5",
+                "source_reasoning_effort": "banana",
+            }),
+        ])
+        diags = validate_manifest(m, source_tool="claude")
+        assert "E011" in [d.code for d in diags]
+
+    def test_effort_unsupported_by_model(self):
+        # grok-4.6 tops out at xhigh.
+        m = SyncManifest(subagents=[
+            _subagent(override={
+                "model": "grok-4.6",
+                "source_reasoning_effort": "max",
+            }),
+        ])
+        diags = validate_manifest(m, source_tool="cursor")
+        assert "E011" in [d.code for d in diags]
+
+    def test_effort_on_model_without_effort_support(self):
+        m = SyncManifest(subagents=[
+            _subagent(override={
+                "model": "composer-2.5",
+                "source_reasoning_effort": "high",
+            }),
+        ])
+        diags = validate_manifest(m, source_tool="cursor")
+        assert "E011" in [d.code for d in diags]
+
+    def test_supported_effort_no_error(self):
+        m = SyncManifest(subagents=[
+            _subagent(override={
+                "model": "grok-4.6",
+                "source_reasoning_effort": "xhigh",
+            }),
+        ])
+        diags = validate_manifest(m, source_tool="cursor")
+        assert "E011" not in [d.code for d in diags]
+
+    def test_model_less_effort_validates_against_canonical_scale(self):
+        valid = SyncManifest(subagents=[
+            _subagent(override={
+                "source_tool": "claude",
+                "source_reasoning_effort": "max",
+            }),
+        ])
+        diags = validate_manifest(valid, source_tool="claude")
+        assert "E011" not in [d.code for d in diags]
+
+        invalid = SyncManifest(subagents=[
+            _subagent(override={
+                "source_tool": "claude",
+                "source_reasoning_effort": "ultra",
+            }),
+        ])
+        diags = validate_manifest(invalid, source_tool="claude")
+        assert "E011" in [d.code for d in diags]
+
+    def test_unknown_model_skips_effort_check(self):
+        m = SyncManifest(subagents=[
+            _subagent(override={
+                "model": "llama-3-70b",
+                "source_reasoning_effort": "banana",
+            }),
+        ])
+        diags = validate_manifest(m, source_tool="cursor")
+        codes = [d.code for d in diags]
+        assert "E005" in codes
+        assert "E011" not in codes
+
+
 class TestNonCursorSourceTool:
     def test_claude_model_known_with_claude_source(self):
         m = SyncManifest(subagents=[
-            _subagent(override={"source_tool": "claude", "model": "claude-opus-4-6"}),
+            _subagent(override={"source_tool": "claude", "model": "claude-opus-5"}),
         ])
         diags = validate_manifest(m, source_tool="claude")
         error_codes = [d.code for d in diags if d.severity == "error"]
@@ -242,7 +332,7 @@ class TestNonCursorSourceTool:
     def test_claude_model_unknown_with_cursor_source(self):
         """A Claude model name is invalid when source is Cursor."""
         m = SyncManifest(subagents=[
-            _subagent(override={"model": "claude-opus-4-6"}),
+            _subagent(override={"model": "claude-opus-5"}),
         ])
         diags = validate_manifest(m, source_tool="cursor")
         error_codes = [d.code for d in diags if d.severity == "error"]
@@ -252,7 +342,7 @@ class TestNonCursorSourceTool:
         m = SyncManifest(subagents=[
             _subagent(override={
                 "source_tool": "codex",
-                "model": "gpt-5.4",
+                "model": "gpt-5.6-sol",
                 "source_reasoning_effort": "high",
             }),
         ])
@@ -260,13 +350,14 @@ class TestNonCursorSourceTool:
         error_codes = [d.code for d in diags if d.severity == "error"]
         assert "E005" not in error_codes
 
-    def test_codex_model_without_reasoning_effort_is_unknown(self):
+    def test_codex_model_without_reasoning_effort_is_valid(self):
+        # Effort is orthogonal to model identity now.
         m = SyncManifest(subagents=[
-            _subagent(override={"source_tool": "codex", "model": "gpt-5.4"}),
+            _subagent(override={"source_tool": "codex", "model": "gpt-5.6-sol"}),
         ])
         diags = validate_manifest(m, source_tool="codex")
         error_codes = [d.code for d in diags if d.severity == "error"]
-        assert "E005" in error_codes
+        assert "E005" not in error_codes
 
     def test_duplicate_output_paths_with_claude_source(self):
         """With claude source, targets include cursor — check for cursor output conflicts."""

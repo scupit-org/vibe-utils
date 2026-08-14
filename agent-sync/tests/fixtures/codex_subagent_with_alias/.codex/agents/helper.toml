@@ -1,0 +1,4 @@
+name = "helper"
+description = "A helper agent using a model alias"
+model = "gpt-5.6"
+developer_instructions = "You are a helpful assistant.\n"

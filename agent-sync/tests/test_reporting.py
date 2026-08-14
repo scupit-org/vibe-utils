@@ -45,7 +45,7 @@ def _subagent(override: SubagentSpecOverride | None = None) -> SubagentSpec:
 
 class TestDroppedFieldReporting:
     def test_skill_model_counted_for_both_targets(self):
-        manifest = SyncManifest(skills=[_skill({"model": "claude-4.6-opus-high"})])
+        manifest = SyncManifest(skills=[_skill({"model": "grok-4.6"})])
 
         dropped = collect_dropped_fields(manifest, source_tool="cursor")
         summary = {
@@ -73,9 +73,9 @@ class TestDroppedFieldReporting:
     def test_empty_manifest_has_no_dropped_fields(self):
         assert collect_dropped_fields(SyncManifest(), source_tool="cursor") == []
 
-    def test_cursor_target_does_not_drop_skill_model(self):
-        """When source is claude, cursor is a target but it preserves skill model."""
-        manifest = SyncManifest(skills=[_skill({"source_tool": "claude", "model": "claude-opus-4-6"})])
+    def test_skill_model_dropped_for_all_targets(self):
+        """Skill model is intentionally ignored by every target writer."""
+        manifest = SyncManifest(skills=[_skill({"source_tool": "claude", "model": "claude-opus-5"})])
 
         dropped = collect_dropped_fields(manifest, source_tool="claude")
         summary = {
@@ -83,10 +83,8 @@ class TestDroppedFieldReporting:
             for item in dropped
         }
 
-        # Codex target drops skill model.
         assert summary[("codex", "skill", "model")] == 1
-        # Cursor target does NOT drop skill model.
-        assert ("cursor", "skill", "model") not in summary
+        assert summary[("cursor", "skill", "model")] == 1
 
     def test_deferred_fields_counted_for_all_targets(self):
         """readonly/is_background are dropped for all active targets."""

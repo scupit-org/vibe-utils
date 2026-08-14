@@ -71,6 +71,12 @@ class SubagentSpec:
     prompt_markdown: str
     model: str | None = None
     source_reasoning_effort: str | None = None
+    # True when the source wrote a model alias (e.g. "opus", "gpt-5.6")
+    # rather than the exact ID; targets then prefer their own aliases.
+    model_specified_as_alias: bool = False
+    # Cursor bracket params other than effort (e.g. fast=true): preserved
+    # but never emitted or warned about.
+    ignored_model_params: dict[str, str] = field(default_factory=dict)
     readonly: bool | None = None
     is_background: bool | None = None
     extra_frontmatter: dict[str, Any] = field(default_factory=dict)
@@ -87,6 +93,8 @@ class SubagentSpecOverride(TypedDict, total=False):
     prompt_markdown: str
     model: str | None
     source_reasoning_effort: str | None
+    model_specified_as_alias: bool
+    ignored_model_params: dict[str, str]
     readonly: bool | None
     is_background: bool | None
     extra_frontmatter: dict[str, Any]

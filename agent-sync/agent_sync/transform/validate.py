@@ -11,12 +11,13 @@ from agent_sync.domain.diagnostics import (
     e007_duplicate_subagent_name,
     e008_duplicate_output_path,
     e010_codex_skill_root_conflict,
+    e011_invalid_reasoning_effort,
     w004_unknown_frontmatter_keys,
     w005_malformed_nested_skill,
 )
 from agent_sync.domain.models import Diagnostic, SyncManifest, ToolName
 from agent_sync.parse.frontmatter import FrontmatterParseError, split_frontmatter
-from agent_sync.transform.model_map import is_known_model
+from agent_sync.transform.model_map import EFFORT_SCALE, find_model, is_known_model
 from agent_sync.write.common import get_skill_output_roots, get_subagent_output_targets
 
 
@@ -32,7 +33,8 @@ def validate_manifest(
     diagnostics: list[Diagnostic] = []
 
     _check_unknown_models(manifest, diagnostics, source_tool)
-    _check_nested_asset_models(manifest, diagnostics, source_tool)
+    _check_effort_values(manifest, diagnostics, source_tool)
+    _check_nested_assets(manifest, diagnostics)
     _check_duplicate_skill_names(manifest, diagnostics)
     _check_duplicate_subagent_names(manifest, diagnostics)
     _check_duplicate_output_paths(manifest, diagnostics, source_tool)
@@ -46,24 +48,48 @@ def _check_unknown_models(
     diagnostics: list[Diagnostic],
     source_tool: ToolName,
 ) -> None:
-    """E005: Unknown model string not in allowed vocabulary."""
-    for skill in manifest.skills:
-        if skill.model is not None and not is_known_model(source_tool, skill.model):
-            diagnostics.append(e005_unknown_model(skill.entrypoint_path, skill.model))
+    """E005: Unknown model string not in allowed vocabulary.
 
+    Skill ``model`` is parsed for compatibility but intentionally ignored,
+    so only subagent models are validated.
+    """
     for sub in manifest.subagents:
-        if sub.model is not None and not is_known_model(
-            source_tool, sub.model, sub.source_reasoning_effort,
-        ):
+        if sub.model is not None and not is_known_model(source_tool, sub.model):
             diagnostics.append(e005_unknown_model(sub.source_path, sub.model))
 
 
-def _check_nested_asset_models(
+def _check_effort_values(
     manifest: SyncManifest,
     diagnostics: list[Diagnostic],
     source_tool: ToolName,
 ) -> None:
-    """E005/W005: Validate nested SKILL.md companion assets."""
+    """E011: Reasoning effort not supported by the source model.
+
+    A subagent without a model validates against the full canonical scale.
+    Subagents with an unknown model are skipped (E005 already covers them).
+    """
+    for sub in manifest.subagents:
+        effort = sub.source_reasoning_effort
+        if effort is None:
+            continue
+        if sub.model is None:
+            allowed = EFFORT_SCALE
+        else:
+            info = find_model(source_tool, sub.model)
+            if info is None:
+                continue
+            allowed = info.effort_levels
+        if effort not in allowed:
+            diagnostics.append(
+                e011_invalid_reasoning_effort(sub.source_path, effort, sub.model, allowed)
+            )
+
+
+def _check_nested_assets(
+    manifest: SyncManifest,
+    diagnostics: list[Diagnostic],
+) -> None:
+    """W005: Warn on nested SKILL.md companion assets that can't be parsed."""
     for skill in manifest.skills:
         for rel_asset in skill.copied_asset_paths:
             if rel_asset.name != "SKILL.md":
@@ -77,13 +103,9 @@ def _check_nested_asset_models(
                 diagnostics.append(w005_malformed_nested_skill(asset_path, str(exc)))
                 continue
             try:
-                fm, _ = split_frontmatter(text)
+                split_frontmatter(text)
             except FrontmatterParseError as exc:
                 diagnostics.append(w005_malformed_nested_skill(asset_path, str(exc)))
-                continue
-            model = fm.get("model")
-            if isinstance(model, str) and not is_known_model(source_tool, model):
-                diagnostics.append(e005_unknown_model(asset_path, model))
 
 
 def _check_duplicate_skill_names(

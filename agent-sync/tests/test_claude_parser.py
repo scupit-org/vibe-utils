@@ -61,8 +61,27 @@ class TestParseClaudeSubagentWithModel:
         repo = fixture_repo("claude_subagent_with_model")
         m = parse_claude_source(repo)
         assert not m.has_errors
-        assert m.subagents[0].model == "claude-opus-4-6"
+        assert m.subagents[0].model == "claude-opus-5"
+        assert m.subagents[0].model_specified_as_alias is False
         assert m.subagents[0].source_tool == "claude"
+
+    def test_alias_normalized_and_effort_parsed(self, fixture_repo):
+        repo = fixture_repo("claude_subagent_with_alias")
+        m = parse_claude_source(repo)
+        assert not m.has_errors
+
+        a = m.subagents[0]
+        assert a.model == "claude-opus-5"
+        assert a.model_specified_as_alias is True
+        assert a.source_reasoning_effort == "high"
+        # "effort" is a consumed frontmatter key, not an unknown extra.
+        assert "effort" not in a.extra_frontmatter
+
+    def test_inherit_treated_as_omitted(self, fixture_repo):
+        repo = fixture_repo("claude_subagent_inherit")
+        m = parse_claude_source(repo)
+        assert not m.has_errors
+        assert m.subagents[0].model is None
 
 
 class TestParseMissingClaudeSource:

@@ -32,10 +32,38 @@ Source (any one tool)          Canonical model           Targets (all other tool
 ```
 
 1. **Parse** — read the source tool's definitions into tool-agnostic canonical objects (`SkillSpec`, `SubagentSpec`).
-2. **Validate** — check for duplicate names, unknown model strings, missing required fields, and other structural issues.
-3. **Translate models** — resolve model names across tools via a unified mapping registry (e.g. Cursor's `claude-4.6-sonnet-medium` becomes Claude's `claude-sonnet-4-6`; unsupported cross-family models inherit by omission).
+2. **Validate** — check for duplicate names, unknown model strings, invalid reasoning-effort levels, missing required fields, and other structural issues.
+3. **Translate models** — map the source model to each target tool's model at the same capability tier (see [Supported models](#supported-models)), carrying reasoning effort across as a parameter.
 4. **Write** — emit target-format files for every tool except the source, handling format differences like Codex's TOML subagents and `agents/openai.yaml` invocation policy.
 5. **Replace** — atomically swap only the managed output directories, leaving tool settings (`CLAUDE.md`, `AGENTS.md`, `settings.json`, `config.toml`, etc.) untouched.
+
+## Supported models
+
+No model is offered by more than one tool anymore, so cross-tool translation maps by **capability tier**: the source model resolves to the target tool's model at the same tier, walking *up* a tier when the target has no model at that level. When mapping into Claude at the powerful tier, `claude-opus-5` is preferred over `claude-fable-5` (Fable is accepted as input but never auto-selected, due to cost).
+
+| Tier | Cursor | Claude Code | Codex |
+|---|---|---|---|
+| Powerful | `grok-4.6` | `claude-opus-5` (alias `opus`), `claude-fable-5` (alias `fable`) | `gpt-5.6-sol` (alias `gpt-5.6`) |
+| Moderate | — (walks up to `grok-4.6`) | `claude-sonnet-5` (alias `sonnet`) | `gpt-5.6-terra` |
+| Small | `composer-2.5` | — (walks up to `claude-sonnet-5`) | `gpt-5.6-luna` |
+
+Any other model string (including retired IDs like `gpt-5.4` or `claude-opus-4-6`, and `haiku`, which has no Claude 5 equivalent) is an unrecognized-model error. Fast variants (`claude-opus-5-fast`, `gpt-5.6-sol-fast`, Cursor's `fast` param) are not yet supported.
+
+**Aliases** are accepted on input and normalized. Whether the source wrote an alias or an exact ID is preserved as a preference: an aliased source (e.g. Codex `gpt-5.6`) writes each target's primary alias when one exists (Claude gets `opus`), and the exact ID otherwise. Claude's `model: inherit` is treated the same as omitting the model.
+
+### Reasoning effort
+
+Effort is a parameter on every provider rather than part of the model ID:
+
+| Tool | Syntax | Supported levels |
+|---|---|---|
+| Cursor | bracket param on the model string: `grok-4.6[effort=high]` | `low`–`xhigh` on `grok-4.6`; none on `composer-2.5` |
+| Claude Code | `effort` frontmatter key | `low`, `medium`, `high`, `xhigh`, `max` |
+| Codex | `model_reasoning_effort` TOML key | `low`, `medium`, `high`, `xhigh`, `max` |
+
+If the source specifies an effort, every generated target specifies the same effort, clamped to the closest level its model supports (e.g. Claude `max` becomes `xhigh` on `grok-4.6`; `composer-2.5` takes none, so it's omitted). If the source specifies no effort, no target does either. An effort the source model doesn't support is a validation error.
+
+Cursor bracket params are comma-separated (`grok-4.6[effort=high,fast=true]`); params other than `effort` are tolerated on parse but silently ignored and never carried into generated output.
 
 ## Format differences handled
 
@@ -44,8 +72,8 @@ Source (any one tool)          Canonical model           Targets (all other tool
 | Skill definition | `.cursor/skills/**/SKILL.md` (YAML frontmatter + Markdown) | `.claude/skills/**/SKILL.md` (YAML frontmatter + Markdown) | `.agents/skills/**/SKILL.md` (YAML frontmatter + Markdown) |
 | Skill invocation policy | `disable-model-invocation` in frontmatter | `disable-model-invocation` in frontmatter | `agents/openai.yaml` sidecar with `policy.allow_implicit_invocation` |
 | Subagent definition | `.cursor/agents/*.md` (YAML frontmatter + Markdown) | `.claude/agents/*.md` (YAML frontmatter + Markdown) | `.codex/agents/*.toml` (TOML with `developer_instructions`) |
-| Model field (subagents) | Cursor model names | Claude model aliases | Codex model name + `model_reasoning_effort` |
-| Model field (skills) | Stored in frontmatter | Not emitted (inherited) | Not emitted (inherited) |
+| Model field (subagents) | Model ID with bracket params (`grok-4.6[effort=high]`) | Model ID or alias + `effort` key | Model ID or alias + `model_reasoning_effort` |
+| Model field (skills) | *(no model field)* | Parsed but ignored | *(no model field)* |
 
 ## Build, test, and install
 
@@ -203,7 +231,8 @@ Errors (block generation):
 - Missing source directory
 - Malformed YAML frontmatter
 - Missing required `name` or `description` fields
-- Unrecognized model string
+- Unrecognized model string (subagents)
+- Reasoning effort the source model doesn't support
 - Duplicate skill or subagent names
 - Duplicate output file paths
 - Skill directory with files but no `SKILL.md`
@@ -211,7 +240,7 @@ Errors (block generation):
 Warnings (reported, generation continues):
 
 - Subagent filename doesn't match its frontmatter `name`
-- Skill model will be dropped for a target that doesn't support per-skill models
+- Skill model metadata is parsed but ignored for every target
 - `readonly` or `is_background` fields stored but not yet emitted
 - Unknown frontmatter keys not consumed by any writer
 

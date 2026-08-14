@@ -15,7 +15,7 @@ class TestGenerateSkillMd:
             name="greeting",
             description=description,
             body_markdown="Body.\n",
-            model="claude-4.6-opus-high",
+            model="grok-4.6",
         )
 
         assert f"description: {description}\n" in content
@@ -34,7 +34,7 @@ class TestGenerateSubagentMd:
             name="reviewer",
             description=description,
             prompt_markdown="Prompt.\n",
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5",
         )
 
         assert f"description: {description}\n" in content

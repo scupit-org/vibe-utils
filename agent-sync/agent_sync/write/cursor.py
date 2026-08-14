@@ -9,7 +9,7 @@ from agent_sync.write.common import (
     copy_skill_assets,
     generate_skill_md,
     generate_subagent_md,
-    resolve_model,
+    resolve_subagent_model,
 )
 
 
@@ -28,19 +28,15 @@ class CursorSkillWriter:
             skill.source_skill_dir,
             out_dir,
             skill.copied_asset_paths,
-            source_tool=skill.source_tool,
             target_tool="cursor",
         )
 
-        # Cursor preserves skill model (unlike Claude/Codex which drop it).
-        resolved_model = resolve_model(skill.source_tool, skill.model, "cursor")
-
+        # Skill model metadata is intentionally ignored for every target.
         content = generate_skill_md(
             name=skill.name,
             description=skill.description,
             body_markdown=skill.body_markdown,
             disable_model_invocation=skill.disable_model_invocation,
-            model=resolved_model,
         )
         (out_dir / "SKILL.md").write_text(content, encoding="utf-8")
         return out_dir
@@ -58,18 +54,19 @@ class CursorSubagentWriter:
     def write_subagent(self, subagent: SubagentSpec) -> Path:
         self.output_root.mkdir(parents=True, exist_ok=True)
 
-        resolved_model = resolve_model(
-            subagent.source_tool,
-            subagent.model,
-            "cursor",
-            subagent.source_reasoning_effort,
-        )
+        resolved = resolve_subagent_model(subagent, "cursor")
+
+        # Cursor expresses effort as a bracket param on the model string;
+        # a model-less effort has no Cursor representation and is dropped.
+        model: str | None = resolved.written_model
+        if model is not None and resolved.effort is not None:
+            model = f"{model}[effort={resolved.effort}]"
 
         content = generate_subagent_md(
             name=subagent.name,
             description=subagent.description,
             prompt_markdown=subagent.prompt_markdown,
-            model=resolved_model,
+            model=model,
         )
         out_path = self.output_root / f"{subagent.filename_stem}.md"
         out_path.write_text(content, encoding="utf-8")

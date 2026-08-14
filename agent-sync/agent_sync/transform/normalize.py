@@ -12,11 +12,6 @@ from agent_sync.domain.models import (
     ToolName,
 )
 
-# Skill model is intentionally preserved by the Cursor writer but dropped by
-# Claude and Codex writers.
-_TOOLS_THAT_DROP_SKILL_MODEL: set[ToolName] = {"claude", "codex"}
-
-
 def collect_dropped_fields(
     manifest: SyncManifest,
     source_tool: ToolName,
@@ -24,9 +19,9 @@ def collect_dropped_fields(
     """Aggregate intentionally omitted fields across generated targets.
 
     Skill ``model`` is parsed for compatibility, but intentionally ignored
-    by Claude and Codex writers (Cursor preserves it).  Deferred subagent
-    fields (``readonly``, ``is_background``) remain canonical-only in v1
-    and are reported here for all active targets.
+    by every writer.  Deferred subagent fields (``readonly``,
+    ``is_background``) remain canonical-only in v1 and are reported here
+    for all active targets.
     """
     target_tools: list[ToolName] = [tool for tool in ALL_TOOL_NAMES if tool != source_tool]
     counts: dict[tuple[ToolName, EntityKind, str], int] = defaultdict(int)
@@ -34,8 +29,7 @@ def collect_dropped_fields(
     for skill in manifest.skills:
         if skill.model is not None:
             for tool in target_tools:
-                if tool in _TOOLS_THAT_DROP_SKILL_MODEL:
-                    counts[(tool, "skill", "model")] += 1
+                counts[(tool, "skill", "model")] += 1
 
     for subagent in manifest.subagents:
         if subagent.readonly is not None:

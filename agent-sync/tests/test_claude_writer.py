@@ -69,7 +69,7 @@ class TestClaudeSkillWriter:
         skill = _skill({
             "source_skill_dir": src,
             "relative_skill_dir": PurePosixPath("smart"),
-            "model": "claude-4.6-opus-high",
+            "model": "grok-4.6",
         })
         writer = ClaudeSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
@@ -114,9 +114,10 @@ class TestClaudeSkillWriter:
         (src / "SKILL.md").write_text("")
 
         skill = _skill({
+            "source_tool": "codex",
             "source_skill_dir": src,
             "relative_skill_dir": PurePosixPath("gpt"),
-            "model": "gpt-5.4-high",
+            "model": "gpt-5.6-sol",
         })
         writer = ClaudeSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
@@ -170,7 +171,7 @@ class TestClaudeSkillWriter:
             "name: reference\n"
             "description: Example reference skill\n"
             "disable-model-invocation: true\n"
-            "model: claude-4.6-opus-high\n"
+            "model: grok-4.6\n"
             "---\n"
             "Reference body.\n"
         )
@@ -208,14 +209,79 @@ class TestClaudeSubagentWriter:
         assert fm["description"] == "Reviews code"
         assert "review code" in body.lower()
 
-    def test_subagent_with_model(self, tmp_path):
-        sub = _subagent({"model": "claude-4.6-sonnet-medium"})
+    def test_subagent_with_powerful_model_prefers_opus(self, tmp_path):
+        sub = _subagent({"model": "grok-4.6"})
         writer = ClaudeSubagentWriter(tmp_path / "out")
         writer.write_subagent(sub)
 
         out_file = tmp_path / "out" / ".claude" / "agents" / "reviewer.md"
         fm, _ = split_frontmatter(out_file.read_text())
-        assert fm["model"] == "claude-sonnet-4-6"
+        assert fm["model"] == "claude-opus-5"
+
+    def test_small_tier_walks_up_to_sonnet(self, tmp_path):
+        sub = _subagent({"model": "composer-2.5"})
+        writer = ClaudeSubagentWriter(tmp_path / "out")
+        writer.write_subagent(sub)
+
+        out_file = tmp_path / "out" / ".claude" / "agents" / "reviewer.md"
+        fm, _ = split_frontmatter(out_file.read_text())
+        assert fm["model"] == "claude-sonnet-5"
+
+    def test_effort_is_emitted(self, tmp_path):
+        sub = _subagent({"model": "grok-4.6", "source_reasoning_effort": "xhigh"})
+        writer = ClaudeSubagentWriter(tmp_path / "out")
+        writer.write_subagent(sub)
+
+        out_file = tmp_path / "out" / ".claude" / "agents" / "reviewer.md"
+        fm, _ = split_frontmatter(out_file.read_text())
+        assert fm["model"] == "claude-opus-5"
+        assert fm["effort"] == "xhigh"
+
+    def test_no_effort_omits_field(self, tmp_path):
+        sub = _subagent({"model": "grok-4.6"})
+        writer = ClaudeSubagentWriter(tmp_path / "out")
+        writer.write_subagent(sub)
+
+        out_file = tmp_path / "out" / ".claude" / "agents" / "reviewer.md"
+        fm, _ = split_frontmatter(out_file.read_text())
+        assert "effort" not in fm
+
+    def test_alias_source_writes_claude_alias(self, tmp_path):
+        sub = _subagent({
+            "source_tool": "codex",
+            "model": "gpt-5.6-sol",
+            "model_specified_as_alias": True,
+        })
+        writer = ClaudeSubagentWriter(tmp_path / "out")
+        writer.write_subagent(sub)
+
+        out_file = tmp_path / "out" / ".claude" / "agents" / "reviewer.md"
+        fm, _ = split_frontmatter(out_file.read_text())
+        assert fm["model"] == "opus"
+
+    def test_exact_id_source_writes_exact_id(self, tmp_path):
+        sub = _subagent({
+            "source_tool": "codex",
+            "model": "gpt-5.6-sol",
+            "model_specified_as_alias": False,
+        })
+        writer = ClaudeSubagentWriter(tmp_path / "out")
+        writer.write_subagent(sub)
+
+        out_file = tmp_path / "out" / ".claude" / "agents" / "reviewer.md"
+        fm, _ = split_frontmatter(out_file.read_text())
+        assert fm["model"] == "claude-opus-5"
+
+    def test_model_less_effort_still_emitted(self, tmp_path):
+        # Claude's effort field is valid without a model.
+        sub = _subagent({"source_tool": "codex", "source_reasoning_effort": "high"})
+        writer = ClaudeSubagentWriter(tmp_path / "out")
+        writer.write_subagent(sub)
+
+        out_file = tmp_path / "out" / ".claude" / "agents" / "reviewer.md"
+        fm, _ = split_frontmatter(out_file.read_text())
+        assert "model" not in fm
+        assert fm["effort"] == "high"
 
     def test_subagent_no_model_omits_field(self, tmp_path):
         sub = _subagent()

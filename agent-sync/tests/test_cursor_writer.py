@@ -60,8 +60,8 @@ class TestCursorSkillWriter:
         assert fm["description"] == "A greeting skill"
         assert "hello" in body.lower()
 
-    def test_skill_model_preserved_from_claude(self, tmp_path):
-        """Model from Claude source resolves to a Cursor model name."""
+    def test_skill_model_is_ignored(self, tmp_path):
+        """Skill model metadata is intentionally ignored for every target."""
         src = tmp_path / "src" / "smart"
         src.mkdir(parents=True)
         (src / "SKILL.md").write_text("")
@@ -70,15 +70,14 @@ class TestCursorSkillWriter:
             "source_tool": "claude",
             "source_skill_dir": src,
             "relative_skill_dir": PurePosixPath("smart"),
-            "model": "claude-opus-4-6",
+            "model": "claude-opus-5",
         })
         writer = CursorSkillWriter(tmp_path / "out")
         writer.write_skill(skill)
 
         out_file = tmp_path / "out" / ".cursor" / "skills" / "smart" / "SKILL.md"
         fm, _ = split_frontmatter(out_file.read_text())
-        # Should resolve to the priority Cursor model name.
-        assert fm["model"] == "claude-4.6-opus-high-thinking"
+        assert "model" not in fm
 
     def test_skill_no_model_omits_field(self, tmp_path):
         src = tmp_path / "src" / "basic"
@@ -158,7 +157,7 @@ class TestCursorSkillWriter:
             "name: reference\n"
             "description: Example reference skill\n"
             "disable-model-invocation: true\n"
-            "model: claude-opus-4-6\n"
+            "model: claude-opus-5\n"
             "---\n"
             "Reference body.\n"
         )
@@ -180,8 +179,8 @@ class TestCursorSkillWriter:
         assert fm["name"] == "reference"
         assert fm["description"] == "Example reference skill"
         assert fm["disable-model-invocation"] is True
-        # Claude model should be resolved to the priority Cursor model name.
-        assert fm["model"] == "claude-4.6-opus-high-thinking"
+        # Skill model metadata is intentionally ignored for every target.
+        assert "model" not in fm
         assert "Reference body." in body
 
 
@@ -199,18 +198,19 @@ class TestCursorSubagentWriter:
         assert "review code" in body.lower()
 
     def test_subagent_with_claude_model(self, tmp_path):
-        sub = _subagent({"source_tool": "claude", "model": "claude-sonnet-4-6"})
+        # Moderate tier: Cursor has no moderate model, walks up to grok-4.6.
+        sub = _subagent({"source_tool": "claude", "model": "claude-sonnet-5"})
         writer = CursorSubagentWriter(tmp_path / "out")
         writer.write_subagent(sub)
 
         out_file = tmp_path / "out" / ".cursor" / "agents" / "reviewer.md"
         fm, _ = split_frontmatter(out_file.read_text())
-        assert fm["model"] == "claude-4.6-sonnet-medium-thinking"
+        assert fm["model"] == "grok-4.6"
 
     def test_subagent_codex_model_with_reasoning(self, tmp_path):
         sub = _subagent({
             "source_tool": "codex",
-            "model": "gpt-5.4",
+            "model": "gpt-5.6-sol",
             "source_reasoning_effort": "high",
         })
         writer = CursorSubagentWriter(tmp_path / "out")
@@ -218,7 +218,45 @@ class TestCursorSubagentWriter:
 
         out_file = tmp_path / "out" / ".cursor" / "agents" / "reviewer.md"
         fm, _ = split_frontmatter(out_file.read_text())
-        assert fm["model"] == "gpt-5.4-high"
+        assert fm["model"] == "grok-4.6[effort=high]"
+
+    def test_effort_max_clamps_to_xhigh(self, tmp_path):
+        sub = _subagent({
+            "source_tool": "claude",
+            "model": "claude-opus-5",
+            "source_reasoning_effort": "max",
+        })
+        writer = CursorSubagentWriter(tmp_path / "out")
+        writer.write_subagent(sub)
+
+        out_file = tmp_path / "out" / ".cursor" / "agents" / "reviewer.md"
+        fm, _ = split_frontmatter(out_file.read_text())
+        assert fm["model"] == "grok-4.6[effort=xhigh]"
+
+    def test_small_tier_maps_to_composer_and_drops_effort(self, tmp_path):
+        # composer-2.5 takes no effort parameter: effort is omitted entirely.
+        sub = _subagent({
+            "source_tool": "codex",
+            "model": "gpt-5.6-luna",
+            "source_reasoning_effort": "medium",
+        })
+        writer = CursorSubagentWriter(tmp_path / "out")
+        writer.write_subagent(sub)
+
+        out_file = tmp_path / "out" / ".cursor" / "agents" / "reviewer.md"
+        fm, _ = split_frontmatter(out_file.read_text())
+        assert fm["model"] == "composer-2.5"
+
+    def test_model_less_effort_is_dropped(self, tmp_path):
+        # Effort is only expressible as a model bracket param in Cursor.
+        sub = _subagent({"source_tool": "claude", "source_reasoning_effort": "high"})
+        writer = CursorSubagentWriter(tmp_path / "out")
+        writer.write_subagent(sub)
+
+        out_file = tmp_path / "out" / ".cursor" / "agents" / "reviewer.md"
+        fm, _ = split_frontmatter(out_file.read_text())
+        assert "model" not in fm
+        assert "effort" not in fm
 
     def test_subagent_no_model_omits_field(self, tmp_path):
         sub = _subagent()

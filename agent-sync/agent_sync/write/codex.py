@@ -8,8 +8,11 @@ from typing import Any
 import tomli_w
 
 from agent_sync.domain.models import SkillSpec, SubagentSpec, SyncManifest
-from agent_sync.transform.model_map import get_target_model
-from agent_sync.write.common import copy_skill_assets, generate_yaml_frontmatter
+from agent_sync.write.common import (
+    copy_skill_assets,
+    generate_yaml_frontmatter,
+    resolve_subagent_model,
+)
 
 
 class CodexSkillWriter:
@@ -27,7 +30,6 @@ class CodexSkillWriter:
             skill.source_skill_dir,
             out_dir,
             skill.copied_asset_paths,
-            source_tool=skill.source_tool,
             target_tool="codex",
         )
 
@@ -65,22 +67,17 @@ class CodexSubagentWriter:
         self.output_root.mkdir(parents=True, exist_ok=True)
 
         # Resolve source model → Codex target.
-        codex_entry = None
-        if subagent.model is not None:
-            codex_entry = get_target_model(
-                subagent.source_tool, subagent.model, "codex",
-                subagent.source_reasoning_effort,
-            )
+        resolved = resolve_subagent_model(subagent, "codex")
 
         # Build TOML fields in specified order.
         data: dict[str, Any] = {
             "name": subagent.name,
             "description": subagent.description,
         }
-        if codex_entry is not None:
-            data["model"] = codex_entry.model_name
-            if codex_entry.reasoning_effort is not None:
-                data["model_reasoning_effort"] = codex_entry.reasoning_effort
+        if resolved.written_model is not None:
+            data["model"] = resolved.written_model
+        if resolved.effort is not None:
+            data["model_reasoning_effort"] = resolved.effort
         data["developer_instructions"] = subagent.prompt_markdown
 
         content = tomli_w.dumps(data)

@@ -105,6 +105,25 @@ def e010_codex_skill_root_conflict(name: str, paths: list[Path]) -> Diagnostic:
     )
 
 
+def e011_invalid_reasoning_effort(
+    path: Path,
+    effort: str,
+    model: str | None,
+    allowed: tuple[str, ...],
+) -> Diagnostic:
+    target = f"model '{model}'" if model is not None else "a subagent with no model"
+    return Diagnostic(
+        severity="error",
+        code="E011",
+        message=(
+            f"Invalid reasoning effort '{effort}' for {target}; "
+            f"allowed: {', '.join(allowed) if allowed else '(none)'}"
+        ),
+        source_path=path,
+        context={"effort": effort, "model": model, "allowed": list(allowed)},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Warnings
 # ---------------------------------------------------------------------------

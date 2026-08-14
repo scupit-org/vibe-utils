@@ -1,6 +1,6 @@
 ---
 name: smart_skill
 description: A skill that specifies a model
-model: claude-4.6-opus-high
+model: grok-4.6
 ---
 Use the most capable model for this task.

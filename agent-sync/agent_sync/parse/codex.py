@@ -17,6 +17,7 @@ from agent_sync.domain.diagnostics import (
 )
 from agent_sync.domain.models import Diagnostic, SkillSpec, SubagentSpec, SyncManifest
 from agent_sync.parse.markdown import parse_skills_from_md
+from agent_sync.transform.model_map import normalize_model
 
 
 # ── Skills ───────────────────────────────────────────────────────────────
@@ -158,6 +159,14 @@ def _parse_single_codex_subagent(
     readonly = data.get("readonly")
     is_background = data.get("is_background")
 
+    model_specified_as_alias = False
+    if isinstance(model, str):
+        # Accept aliases like "gpt-5.6" (-> "gpt-5.6-sol"); unknown models
+        # keep the raw text so E005 can report it.
+        normalized = normalize_model("codex", model)
+        if normalized is not None:
+            model, model_specified_as_alias = normalized
+
     assert isinstance(name, str), "name must be a string"
     assert isinstance(description, str), "description must be a string"
 
@@ -186,6 +195,7 @@ def _parse_single_codex_subagent(
         prompt_markdown=prompt,
         model=model,
         source_reasoning_effort=reasoning_effort,
+        model_specified_as_alias=model_specified_as_alias,
         readonly=readonly,
         is_background=is_background,
         extra_frontmatter=extra,
